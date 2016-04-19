@@ -39,6 +39,11 @@ void schedule_cut_signal(int ignored)
 	global_mixer->schedule_cut();
 }
 
+void quit_signal(int ignored)
+{
+	global_mixer->quit();
+}
+
 }  // namespace
 
 MainWindow *global_mainwindow = nullptr;
@@ -150,6 +155,12 @@ void MainWindow::mixer_created(Mixer *mixer)
 	act.sa_handler = schedule_cut_signal;
 	act.sa_flags = SA_RESTART;
 	sigaction(SIGHUP, &act, nullptr);
+
+	// Mostly for debugging. Don't override SIGINT, that's so evil if
+	// shutdown isn't instant.
+	act.sa_handler = quit_signal;
+	act.sa_flags = SA_RESTART;
+	sigaction(SIGUSR1, &act, nullptr);
 }
 
 void MainWindow::mixer_shutting_down()
