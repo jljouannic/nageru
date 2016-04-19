@@ -2145,6 +2145,7 @@ void H264EncoderImpl::shutdown()
 		storage_task_queue_changed.notify_all();
 	}
 	storage_thread.join();
+	encode_remaining_audio();
 
 	release_encode();
 	deinit_va();
@@ -2267,7 +2268,6 @@ void H264EncoderImpl::encode_thread_func()
 				// but nobody else uses it at this point, since we're shutting down,
 				// so there's no contention.
 				encode_remaining_frames_as_p(encoding_frame_num, gop_start_display_frame_num, last_dts);
-				encode_remaining_audio();
 				return;
 			} else {
 				frame = move(pending_video_frames[display_frame_num]);
