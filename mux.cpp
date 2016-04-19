@@ -94,9 +94,11 @@ void Mux::add_packet(const AVPacket &pkt, int64_t pts, int64_t dts)
 	if (pkt.stream_index == 0) {
 		pkt_copy.pts = av_rescale_q(pts, AVRational{1, TIMEBASE}, avstream_video->time_base);
 		pkt_copy.dts = av_rescale_q(dts, AVRational{1, TIMEBASE}, avstream_video->time_base);
+		pkt_copy.duration = av_rescale_q(pkt.duration, AVRational{1, TIMEBASE}, avstream_video->time_base);
 	} else if (pkt.stream_index == 1) {
 		pkt_copy.pts = av_rescale_q(pts, AVRational{1, TIMEBASE}, avstream_audio->time_base);
 		pkt_copy.dts = av_rescale_q(dts, AVRational{1, TIMEBASE}, avstream_audio->time_base);
+		pkt_copy.duration = av_rescale_q(pkt.duration, AVRational{1, TIMEBASE}, avstream_audio->time_base);
 	} else {
 		assert(false);
 	}
