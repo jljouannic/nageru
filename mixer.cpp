@@ -676,9 +676,10 @@ void Mixer::thread_func()
 			}
 		}
 
-		render_one_frame();
+		int64_t duration = new_frames[master_card_index].length;
+		render_one_frame(duration);
 		++frame;
-		pts_int += new_frames[master_card_index].length;
+		pts_int += duration;
 
 		clock_gettime(CLOCK_MONOTONIC, &now);
 		double elapsed = now.tv_sec - start.tv_sec +
@@ -774,7 +775,7 @@ void Mixer::schedule_audio_resampling_tasks(unsigned dropped_frames, int num_sam
 	}
 }
 
-void Mixer::render_one_frame()
+void Mixer::render_one_frame(int64_t duration)
 {
 	// Get the main chain from the theme, and set its state immediately.
 	Theme::Chain theme_main_chain = theme->get_chain(0, pts(), WIDTH, HEIGHT, input_state);
@@ -805,7 +806,7 @@ void Mixer::render_one_frame()
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
 
 	const int64_t av_delay = TIMEBASE / 10;  // Corresponds to the fixed delay in resampling_queue.h. TODO: Make less hard-coded.
-	RefCountedGLsync fence = h264_encoder->end_frame(pts_int + av_delay, theme_main_chain.input_frames);
+	RefCountedGLsync fence = h264_encoder->end_frame(pts_int + av_delay, duration, theme_main_chain.input_frames);
 
 	// The live frame just shows the RGBA texture we just rendered.
 	// It owns rgba_tex now.

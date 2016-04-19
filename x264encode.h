@@ -41,11 +41,11 @@ public:
 
 	// <data> is taken to be raw NV12 data of WIDTHxHEIGHT resolution.
 	// Does not block.
-	void add_frame(int64_t pts, const uint8_t *data);
+	void add_frame(int64_t pts, int64_t duration, const uint8_t *data);
 
 private:
 	struct QueuedFrame {
-		int64_t pts;
+		int64_t pts, duration;
 		uint8_t *data;
 	};
 	void encoder_thread_func();

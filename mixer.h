@@ -356,7 +356,7 @@ private:
 	void place_rectangle(movit::Effect *resample_effect, movit::Effect *padding_effect, float x0, float y0, float x1, float y1);
 	void thread_func();
 	void schedule_audio_resampling_tasks(unsigned dropped_frames, int num_samples_per_frame, int length_per_frame);
-	void render_one_frame();
+	void render_one_frame(int64_t duration);
 	void send_audio_level_callback();
 	void audio_thread_func();
 	void process_audio_one_frame(int64_t frame_pts_int, int num_samples);

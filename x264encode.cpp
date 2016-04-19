@@ -30,10 +30,11 @@ X264Encoder::~X264Encoder()
 	encoder_thread.join();
 }
 
-void X264Encoder::add_frame(int64_t pts, const uint8_t *data)
+void X264Encoder::add_frame(int64_t pts, int64_t duration, const uint8_t *data)
 {
 	QueuedFrame qf;
 	qf.pts = pts;
+	qf.duration = duration;
 
 	{
 		lock_guard<mutex> lock(mu);
@@ -113,6 +114,7 @@ void X264Encoder::encoder_thread_func()
 				queued_frames.pop();
 			} else {
 				qf.pts = -1;
+				qf.duration = -1;
 				qf.data = nullptr;
 			}
 
@@ -149,6 +151,7 @@ void X264Encoder::encode_frame(X264Encoder::QueuedFrame qf)
 		pic.img.i_stride[0] = WIDTH;
 		pic.img.plane[1] = qf.data + WIDTH * HEIGHT;
 		pic.img.i_stride[1] = WIDTH / 2 * sizeof(uint16_t);
+		pic.opaque = reinterpret_cast<void *>(intptr_t(qf.duration));
 
 		x264_encoder_encode(x264, &nal, &num_nal, &pic, &pic);
 	} else {
@@ -181,6 +184,7 @@ void X264Encoder::encode_frame(X264Encoder::QueuedFrame qf)
 	} else {
 		pkt.flags = 0;
 	}
+	pkt.duration = reinterpret_cast<intptr_t>(pic.opaque);
 
 	mux->add_packet(pkt, pic.i_pts, pic.i_dts);
-}	
+}

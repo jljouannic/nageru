@@ -133,14 +133,22 @@ class FrameReorderer {
 public:
 	FrameReorderer(unsigned queue_length, int width, int height);
 
+	struct Frame {
+		int64_t pts, duration;
+		uint8_t *data;
+
+		// Invert to get the smallest pts first.
+		bool operator< (const Frame &other) const { return pts > other.pts; }
+	};
+
 	// Returns the next frame to insert with its pts, if any. Otherwise -1 and nullptr.
 	// Does _not_ take ownership of data; a copy is taken if needed.
 	// The returned pointer is valid until the next call to reorder_frame, or destruction.
 	// As a special case, if queue_length == 0, will just return pts and data (no reordering needed).
-	pair<int64_t, const uint8_t *> reorder_frame(int64_t pts, const uint8_t *data);
+	Frame reorder_frame(int64_t pts, int64_t duration, uint8_t *data);
 
 	// The same as reorder_frame, but without inserting anything. Used to empty the queue.
-	pair<int64_t, const uint8_t *> get_first_frame();
+	Frame get_first_frame();
 
 	bool empty() const { return frames.empty(); }
 
@@ -148,7 +156,7 @@ private:
 	unsigned queue_length;
 	int width, height;
 
-	priority_queue<pair<int64_t, uint8_t *>> frames;
+	priority_queue<Frame> frames;
 	stack<uint8_t *> freelist;  // Includes the last value returned from reorder_frame.
 
 	// Owns all the pointers. Normally, freelist and frames could do this themselves,
@@ -165,33 +173,32 @@ FrameReorderer::FrameReorderer(unsigned queue_length, int width, int height)
 	}
 }
 
-pair<int64_t, const uint8_t *> FrameReorderer::reorder_frame(int64_t pts, const uint8_t *data)
+FrameReorderer::Frame FrameReorderer::reorder_frame(int64_t pts, int64_t duration, uint8_t *data)
 {
 	if (queue_length == 0) {
-		return make_pair(pts, data);
+		return Frame{pts, duration, data};
 	}
 
 	assert(!freelist.empty());
 	uint8_t *storage = freelist.top();
 	freelist.pop();
 	memcpy(storage, data, width * height * 2);
-	frames.emplace(-pts, storage);  // Invert pts to get smallest first.
+	frames.push(Frame{pts, duration, storage});
 
 	if (frames.size() >= queue_length) {
 		return get_first_frame();
 	} else {
-		return make_pair(-1, nullptr);
+		return Frame{-1, -1, nullptr};
 	}
 }
 
-pair<int64_t, const uint8_t *> FrameReorderer::get_first_frame()
+FrameReorderer::Frame FrameReorderer::get_first_frame()
 {
 	assert(!frames.empty());
-	pair<int64_t, uint8_t *> storage = frames.top();
+	Frame storage = frames.top();
 	frames.pop();
-	int64_t pts = storage.first;
-	freelist.push(storage.second);
-	return make_pair(-pts, storage.second);  // Re-invert pts (see reorder_frame()).
+	freelist.push(storage.data);
+	return storage;
 }
 
 class H264EncoderImpl : public KeyFrameSignalReceiver {
@@ -200,7 +207,7 @@ public:
 	~H264EncoderImpl();
 	void add_audio(int64_t pts, vector<float> audio);
 	bool begin_frame(GLuint *y_tex, GLuint *cbcr_tex);
-	RefCountedGLsync end_frame(int64_t pts, const vector<RefCountedFrame> &input_frames);
+	RefCountedGLsync end_frame(int64_t pts, int64_t duration, const vector<RefCountedFrame> &input_frames);
 	void shutdown();
 	void open_output_file(const std::string &filename);
 	void close_output_file();
@@ -214,12 +221,12 @@ private:
 		unsigned long long display_order;
 		int frame_type;
 		vector<float> audio;
-		int64_t pts, dts;
+		int64_t pts, dts, duration;
 	};
 	struct PendingFrame {
 		RefCountedGLsync fence;
 		vector<RefCountedFrame> input_frames;
-		int64_t pts;
+		int64_t pts, duration;
 	};
 
 	// So we never get negative dts.
@@ -229,9 +236,9 @@ private:
 
 	void encode_thread_func();
 	void encode_remaining_frames_as_p(int encoding_frame_num, int gop_start_display_frame_num, int64_t last_dts);
-	void add_packet_for_uncompressed_frame(int64_t pts, const uint8_t *data);
+	void add_packet_for_uncompressed_frame(int64_t pts, int64_t duration, const uint8_t *data);
 	void encode_frame(PendingFrame frame, int encoding_frame_num, int display_frame_num, int gop_start_display_frame_num,
-	                  int frame_type, int64_t pts, int64_t dts);
+	                  int frame_type, int64_t pts, int64_t dts, int64_t duration);
 	void storage_task_thread();
 	void encode_audio(const vector<float> &audio,
 	                  vector<float> *audio_queue,
@@ -1671,7 +1678,7 @@ void H264EncoderImpl::save_codeddata(storage_task task)
 		} else {
 			pkt.flags = 0;
 		}
-		//pkt.duration = 1;
+		pkt.duration = task.duration;
 		if (file_mux) {
 			file_mux->add_packet(pkt, task.pts + global_delay(), task.dts + global_delay());
 		}
@@ -2079,7 +2086,7 @@ void H264EncoderImpl::add_audio(int64_t pts, vector<float> audio)
 	frame_queue_nonempty.notify_all();
 }
 
-RefCountedGLsync H264EncoderImpl::end_frame(int64_t pts, const vector<RefCountedFrame> &input_frames)
+RefCountedGLsync H264EncoderImpl::end_frame(int64_t pts, int64_t duration, const vector<RefCountedFrame> &input_frames)
 {
 	assert(!is_shutdown);
 
@@ -2118,7 +2125,7 @@ RefCountedGLsync H264EncoderImpl::end_frame(int64_t pts, const vector<RefCounted
 
 	{
 		unique_lock<mutex> lock(frame_queue_mutex);
-		pending_video_frames[current_storage_frame] = PendingFrame{ fence, input_frames, pts };
+		pending_video_frames[current_storage_frame] = PendingFrame{ fence, input_frames, pts, duration };
 		++current_storage_frame;
 	}
 	frame_queue_nonempty.notify_all();
@@ -2285,7 +2292,7 @@ void H264EncoderImpl::encode_thread_func()
 		}
 		last_dts = dts;
 
-		encode_frame(frame, encoding_frame_num, display_frame_num, gop_start_display_frame_num, frame_type, frame.pts, dts);
+		encode_frame(frame, encoding_frame_num, display_frame_num, gop_start_display_frame_num, frame_type, frame.pts, dts, frame.duration);
 	}
 }
 
@@ -2301,7 +2308,7 @@ void H264EncoderImpl::encode_remaining_frames_as_p(int encoding_frame_num, int g
 		PendingFrame frame = move(pending_frame.second);
 		int64_t dts = last_dts + (TIMEBASE / MAX_FPS);
 		printf("Finalizing encode: Encoding leftover frame %d as P-frame instead of B-frame.\n", display_frame_num);
-		encode_frame(frame, encoding_frame_num++, display_frame_num, gop_start_display_frame_num, FRAME_P, frame.pts, dts);
+		encode_frame(frame, encoding_frame_num++, display_frame_num, gop_start_display_frame_num, FRAME_P, frame.pts, dts, frame.duration);
 		last_dts = dts;
 	}
 
@@ -2309,12 +2316,12 @@ void H264EncoderImpl::encode_remaining_frames_as_p(int encoding_frame_num, int g
 	    global_flags.x264_video_to_http) {
 		// Add frames left in reorderer.
 		while (!reorderer->empty()) {
-			pair<int64_t, const uint8_t *> output_frame = reorderer->get_first_frame();
+			FrameReorderer::Frame output_frame = reorderer->get_first_frame();
 			if (global_flags.uncompressed_video_to_http) {
-				add_packet_for_uncompressed_frame(output_frame.first, output_frame.second);
+				add_packet_for_uncompressed_frame(output_frame.pts, output_frame.duration, output_frame.data);
 			} else {
 				assert(global_flags.x264_video_to_http);
-				x264_encoder->add_frame(output_frame.first, output_frame.second);
+				x264_encoder->add_frame(output_frame.pts, output_frame.duration, output_frame.data);
 			}
 		}
 	}
@@ -2346,7 +2353,7 @@ void H264EncoderImpl::encode_remaining_audio()
 	}
 }
 
-void H264EncoderImpl::add_packet_for_uncompressed_frame(int64_t pts, const uint8_t *data)
+void H264EncoderImpl::add_packet_for_uncompressed_frame(int64_t pts, int64_t duration, const uint8_t *data)
 {
 	AVPacket pkt;
 	memset(&pkt, 0, sizeof(pkt));
@@ -2355,6 +2362,7 @@ void H264EncoderImpl::add_packet_for_uncompressed_frame(int64_t pts, const uint8
 	pkt.size = frame_width * frame_height * 2;
 	pkt.stream_index = 0;
 	pkt.flags = AV_PKT_FLAG_KEY;
+	pkt.duration = duration;
 	stream_mux->add_packet(pkt, pts, pts);
 }
 
@@ -2376,7 +2384,7 @@ void memcpy_with_pitch(uint8_t *dst, const uint8_t *src, size_t src_width, size_
 }  // namespace
 
 void H264EncoderImpl::encode_frame(H264EncoderImpl::PendingFrame frame, int encoding_frame_num, int display_frame_num, int gop_start_display_frame_num,
-                                   int frame_type, int64_t pts, int64_t dts)
+                                   int frame_type, int64_t pts, int64_t dts, int64_t duration)
 {
 	// Wait for the GPU to be done with the frame.
 	GLenum sync_status;
@@ -2414,13 +2422,13 @@ void H264EncoderImpl::encode_frame(H264EncoderImpl::PendingFrame frame, int enco
 		    global_flags.x264_video_to_http) {
 			// Add uncompressed video. (Note that pts == dts here.)
 			// Delay needs to match audio.
-			pair<int64_t, const uint8_t *> output_frame = reorderer->reorder_frame(pts + global_delay(), reinterpret_cast<uint8_t *>(surf->y_ptr));
-			if (output_frame.second != nullptr) {
+			FrameReorderer::Frame output_frame = reorderer->reorder_frame(pts + global_delay(), duration, reinterpret_cast<uint8_t *>(surf->y_ptr));
+			if (output_frame.data != nullptr) {
 				if (global_flags.uncompressed_video_to_http) {
-					add_packet_for_uncompressed_frame(output_frame.first, output_frame.second);
+					add_packet_for_uncompressed_frame(output_frame.pts, output_frame.duration, output_frame.data);
 				} else {
 					assert(global_flags.x264_video_to_http);
-					x264_encoder->add_frame(output_frame.first, output_frame.second);
+					x264_encoder->add_frame(output_frame.pts, output_frame.duration, output_frame.data);
 				}
 			}
 		}
@@ -2457,6 +2465,7 @@ void H264EncoderImpl::encode_frame(H264EncoderImpl::PendingFrame frame, int enco
 	tmp.frame_type = frame_type;
 	tmp.pts = pts;
 	tmp.dts = dts;
+	tmp.duration = duration;
 	storage_task_enqueue(move(tmp));
 
 	update_ReferenceFrames(frame_type);
@@ -2479,9 +2488,9 @@ bool H264Encoder::begin_frame(GLuint *y_tex, GLuint *cbcr_tex)
 	return impl->begin_frame(y_tex, cbcr_tex);
 }
 
-RefCountedGLsync H264Encoder::end_frame(int64_t pts, const vector<RefCountedFrame> &input_frames)
+RefCountedGLsync H264Encoder::end_frame(int64_t pts, int64_t duration, const vector<RefCountedFrame> &input_frames)
 {
-	return impl->end_frame(pts, input_frames);
+	return impl->end_frame(pts, duration, input_frames);
 }
 
 void H264Encoder::shutdown()
