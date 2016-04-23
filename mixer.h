@@ -24,7 +24,7 @@
 #include "bmusb/bmusb.h"
 #include "alsa_output.h"
 #include "ebu_r128_proc.h"
-#include "h264encode.h"
+#include "quicksync_encode.h"
 #include "httpd.h"
 #include "pbo_frame_allocator.h"
 #include "ref_counted_frame.h"
@@ -37,7 +37,7 @@
 #include "input_state.h"
 #include "correlation_measurer.h"
 
-class H264Encoder;
+class QuickSyncEncoder;
 class QSurface;
 namespace movit {
 class Effect;
@@ -376,7 +376,7 @@ private:
 	GLuint cbcr_program_num;  // Owned by <resource_pool>.
 	GLuint cbcr_vbo;  // Holds position and texcoord data.
 	GLuint cbcr_position_attribute_index, cbcr_texcoord_attribute_index;
-	std::unique_ptr<H264Encoder> h264_encoder;
+	std::unique_ptr<QuickSyncEncoder> quicksync_encoder;
 
 	// Effects part of <display_chain>. Owned by <display_chain>.
 	movit::FlatInput *display_input;

@@ -33,7 +33,7 @@
 #include "decklink_capture.h"
 #include "defs.h"
 #include "flags.h"
-#include "h264encode.h"
+#include "quicksync_encode.h"
 #include "pbo_frame_allocator.h"
 #include "ref_counted_gl_sync.h"
 #include "timebase.h"
@@ -174,8 +174,8 @@ Mixer::Mixer(const QSurfaceFormat &format, unsigned num_cards)
 	display_chain->set_dither_bits(0);  // Don't bother.
 	display_chain->finalize();
 
-	h264_encoder.reset(new H264Encoder(h264_encoder_surface, global_flags.va_display, WIDTH, HEIGHT, &httpd));
-	h264_encoder->open_output_file(generate_local_dump_filename(/*frame=*/0).c_str());
+	quicksync_encoder.reset(new QuickSyncEncoder(h264_encoder_surface, global_flags.va_display, WIDTH, HEIGHT, &httpd));
+	quicksync_encoder->open_output_file(generate_local_dump_filename(/*frame=*/0).c_str());
 
 	// Start listening for clients only once H264Encoder has written its header, if any.
 	httpd.start(9095);
@@ -292,7 +292,7 @@ Mixer::~Mixer()
 		cards[card_index].capture->stop_dequeue_thread();
 	}
 
-	h264_encoder.reset(nullptr);
+	quicksync_encoder.reset(nullptr);
 }
 
 void Mixer::configure_card(unsigned card_index, const QSurfaceFormat &format, CaptureInterface *capture)
@@ -694,10 +694,10 @@ void Mixer::thread_func()
 		if (should_cut.exchange(false)) {  // Test and clear.
 			string filename = generate_local_dump_filename(frame);
 			printf("Starting new recording: %s\n", filename.c_str());
-			h264_encoder->close_output_file();
-			h264_encoder->shutdown();
-			h264_encoder.reset(new H264Encoder(h264_encoder_surface, global_flags.va_display, WIDTH, HEIGHT, &httpd));
-			h264_encoder->open_output_file(filename.c_str());
+			quicksync_encoder->close_output_file();
+			quicksync_encoder->shutdown();
+			quicksync_encoder.reset(new QuickSyncEncoder(h264_encoder_surface, global_flags.va_display, WIDTH, HEIGHT, &httpd));
+			quicksync_encoder->open_output_file(filename.c_str());
 		}
 
 #if 0
@@ -784,7 +784,7 @@ void Mixer::render_one_frame(int64_t duration)
 	//theme_main_chain.chain->enable_phase_timing(true);
 
 	GLuint y_tex, cbcr_tex;
-	bool got_frame = h264_encoder->begin_frame(&y_tex, &cbcr_tex);
+	bool got_frame = quicksync_encoder->begin_frame(&y_tex, &cbcr_tex);
 	assert(got_frame);
 
 	// Render main chain.
@@ -806,7 +806,7 @@ void Mixer::render_one_frame(int64_t duration)
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
 
 	const int64_t av_delay = TIMEBASE / 10;  // Corresponds to the fixed delay in resampling_queue.h. TODO: Make less hard-coded.
-	RefCountedGLsync fence = h264_encoder->end_frame(pts_int + av_delay, duration, theme_main_chain.input_frames);
+	RefCountedGLsync fence = quicksync_encoder->end_frame(pts_int + av_delay, duration, theme_main_chain.input_frames);
 
 	// The live frame just shows the RGBA texture we just rendered.
 	// It owns rgba_tex now.
@@ -1027,7 +1027,7 @@ void Mixer::process_audio_one_frame(int64_t frame_pts_int, int num_samples)
 	}
 
 	// And finally add them to the output.
-	h264_encoder->add_audio(frame_pts_int, move(samples_out));
+	quicksync_encoder->add_audio(frame_pts_int, move(samples_out));
 }
 
 void Mixer::subsample_chroma(GLuint src_tex, GLuint dst_tex)

@@ -1,5 +1,5 @@
 //#include "sysdeps.h"
-#include "h264encode.h"
+#include "quicksync_encode.h"
 
 #include <movit/util.h>
 #include <EGL/eglplatform.h>
@@ -201,10 +201,10 @@ FrameReorderer::Frame FrameReorderer::get_first_frame()
 	return storage;
 }
 
-class H264EncoderImpl : public KeyFrameSignalReceiver {
+class QuickSyncEncoderImpl : public KeyFrameSignalReceiver {
 public:
-	H264EncoderImpl(QSurface *surface, const string &va_display, int width, int height, HTTPD *httpd);
-	~H264EncoderImpl();
+	QuickSyncEncoderImpl(QSurface *surface, const string &va_display, int width, int height, HTTPD *httpd);
+	~QuickSyncEncoderImpl();
 	void add_audio(int64_t pts, vector<float> audio);
 	bool begin_frame(GLuint *y_tex, GLuint *cbcr_tex);
 	RefCountedGLsync end_frame(int64_t pts, int64_t duration, const vector<RefCountedFrame> &input_frames);
@@ -536,7 +536,7 @@ static void nal_header(bitstream *bs, int nal_ref_idc, int nal_unit_type)
     bitstream_put_ui(bs, nal_unit_type, 5);
 }
 
-void H264EncoderImpl::sps_rbsp(bitstream *bs)
+void QuickSyncEncoderImpl::sps_rbsp(bitstream *bs)
 {
     int profile_idc = PROFILE_IDC_BASELINE;
 
@@ -644,7 +644,7 @@ void H264EncoderImpl::sps_rbsp(bitstream *bs)
 }
 
 
-void H264EncoderImpl::pps_rbsp(bitstream *bs)
+void QuickSyncEncoderImpl::pps_rbsp(bitstream *bs)
 {
     bitstream_put_ue(bs, pic_param.pic_parameter_set_id);      /* pic_parameter_set_id */
     bitstream_put_ue(bs, pic_param.seq_parameter_set_id);      /* seq_parameter_set_id */
@@ -677,7 +677,7 @@ void H264EncoderImpl::pps_rbsp(bitstream *bs)
     rbsp_trailing_bits(bs);
 }
 
-void H264EncoderImpl::slice_header(bitstream *bs)
+void QuickSyncEncoderImpl::slice_header(bitstream *bs)
 {
     int first_mb_in_slice = slice_param.macroblock_address;
 
@@ -772,7 +772,7 @@ void H264EncoderImpl::slice_header(bitstream *bs)
     }
 }
 
-int H264EncoderImpl::build_packed_pic_buffer(unsigned char **header_buffer)
+int QuickSyncEncoderImpl::build_packed_pic_buffer(unsigned char **header_buffer)
 {
     bitstream bs;
 
@@ -787,7 +787,7 @@ int H264EncoderImpl::build_packed_pic_buffer(unsigned char **header_buffer)
 }
 
 int
-H264EncoderImpl::build_packed_seq_buffer(unsigned char **header_buffer)
+QuickSyncEncoderImpl::build_packed_seq_buffer(unsigned char **header_buffer)
 {
     bitstream bs;
 
@@ -801,7 +801,7 @@ H264EncoderImpl::build_packed_seq_buffer(unsigned char **header_buffer)
     return bs.bit_offset;
 }
 
-int H264EncoderImpl::build_packed_slice_buffer(unsigned char **header_buffer)
+int QuickSyncEncoderImpl::build_packed_slice_buffer(unsigned char **header_buffer)
 {
     bitstream bs;
     int is_idr = !!pic_param.pic_fields.bits.idr_pic_flag;
@@ -991,7 +991,7 @@ static const char *rc_to_string(int rc_mode)
     }
 }
 
-void H264EncoderImpl::enable_zerocopy_if_possible()
+void QuickSyncEncoderImpl::enable_zerocopy_if_possible()
 {
 	if (global_flags.uncompressed_video_to_http) {
 		fprintf(stderr, "Disabling zerocopy H.264 encoding due to --http-uncompressed-video.\n");
@@ -1004,7 +1004,7 @@ void H264EncoderImpl::enable_zerocopy_if_possible()
 	}
 }
 
-VADisplay H264EncoderImpl::va_open_display(const string &va_display)
+VADisplay QuickSyncEncoderImpl::va_open_display(const string &va_display)
 {
 	if (va_display.empty()) {
 		x11_display = XOpenDisplay(NULL);
@@ -1033,7 +1033,7 @@ VADisplay H264EncoderImpl::va_open_display(const string &va_display)
 	}
 }
 
-void H264EncoderImpl::va_close_display(VADisplay va_dpy)
+void QuickSyncEncoderImpl::va_close_display(VADisplay va_dpy)
 {
 	if (x11_display) {
 		XCloseDisplay(x11_display);
@@ -1044,7 +1044,7 @@ void H264EncoderImpl::va_close_display(VADisplay va_dpy)
 	}
 }
 
-int H264EncoderImpl::init_va(const string &va_display)
+int QuickSyncEncoderImpl::init_va(const string &va_display)
 {
     VAProfile profile_list[]={VAProfileH264High, VAProfileH264Main, VAProfileH264Baseline, VAProfileH264ConstrainedBaseline};
     VAEntrypoint *entrypoints;
@@ -1196,7 +1196,7 @@ int H264EncoderImpl::init_va(const string &va_display)
     return 0;
 }
 
-int H264EncoderImpl::setup_encode()
+int QuickSyncEncoderImpl::setup_encode()
 {
     VAStatus va_status;
     VASurfaceID *tmp_surfaceid;
@@ -1298,7 +1298,7 @@ static void sort_two(T *begin, T *end, const T &pivot, const C &less_than)
 	sort(middle, end, less_than);
 }
 
-void H264EncoderImpl::update_ReferenceFrames(int frame_type)
+void QuickSyncEncoderImpl::update_ReferenceFrames(int frame_type)
 {
     int i;
     
@@ -1319,7 +1319,7 @@ void H264EncoderImpl::update_ReferenceFrames(int frame_type)
 }
 
 
-int H264EncoderImpl::update_RefPicList(int frame_type)
+int QuickSyncEncoderImpl::update_RefPicList(int frame_type)
 {
     const auto descending_by_frame_idx = [](const VAPictureH264 &a, const VAPictureH264 &b) {
         return a.frame_idx > b.frame_idx;
@@ -1346,7 +1346,7 @@ int H264EncoderImpl::update_RefPicList(int frame_type)
 }
 
 
-int H264EncoderImpl::render_sequence()
+int QuickSyncEncoderImpl::render_sequence()
 {
     VABufferID seq_param_buf, rc_param_buf, render_id[2];
     VAStatus va_status;
@@ -1444,7 +1444,7 @@ static int calc_poc(int pic_order_cnt_lsb, int frame_type)
     return TopFieldOrderCnt;
 }
 
-int H264EncoderImpl::render_picture(int frame_type, int display_frame_num, int gop_start_display_frame_num)
+int QuickSyncEncoderImpl::render_picture(int frame_type, int display_frame_num, int gop_start_display_frame_num)
 {
     VABufferID pic_param_buf;
     VAStatus va_status;
@@ -1481,7 +1481,7 @@ int H264EncoderImpl::render_picture(int frame_type, int display_frame_num, int g
     return 0;
 }
 
-int H264EncoderImpl::render_packedsequence()
+int QuickSyncEncoderImpl::render_packedsequence()
 {
     VAEncPackedHeaderParameterBuffer packedheader_param_buffer;
     VABufferID packedseq_para_bufid, packedseq_data_bufid, render_id[2];
@@ -1519,7 +1519,7 @@ int H264EncoderImpl::render_packedsequence()
 }
 
 
-int H264EncoderImpl::render_packedpicture()
+int QuickSyncEncoderImpl::render_packedpicture()
 {
     VAEncPackedHeaderParameterBuffer packedheader_param_buffer;
     VABufferID packedpic_para_bufid, packedpic_data_bufid, render_id[2];
@@ -1555,7 +1555,7 @@ int H264EncoderImpl::render_packedpicture()
     return 0;
 }
 
-void H264EncoderImpl::render_packedslice()
+void QuickSyncEncoderImpl::render_packedslice()
 {
     VAEncPackedHeaderParameterBuffer packedheader_param_buffer;
     VABufferID packedslice_para_bufid, packedslice_data_bufid, render_id[2];
@@ -1589,7 +1589,7 @@ void H264EncoderImpl::render_packedslice()
     free(packedslice_buffer);
 }
 
-int H264EncoderImpl::render_slice(int encoding_frame_num, int display_frame_num, int gop_start_display_frame_num, int frame_type)
+int QuickSyncEncoderImpl::render_slice(int encoding_frame_num, int display_frame_num, int gop_start_display_frame_num, int frame_type)
 {
     VABufferID slice_param_buf;
     VAStatus va_status;
@@ -1650,7 +1650,7 @@ int H264EncoderImpl::render_slice(int encoding_frame_num, int display_frame_num,
 
 
 
-void H264EncoderImpl::save_codeddata(storage_task task)
+void QuickSyncEncoderImpl::save_codeddata(storage_task task)
 {    
 	VACodedBufferSegment *buf_list = NULL;
 	VAStatus va_status;
@@ -1714,7 +1714,7 @@ void H264EncoderImpl::save_codeddata(storage_task task)
 	}
 }
 
-void H264EncoderImpl::encode_audio(
+void QuickSyncEncoderImpl::encode_audio(
 	const vector<float> &audio,
 	vector<float> *audio_queue,
 	int64_t audio_pts,
@@ -1748,7 +1748,7 @@ void H264EncoderImpl::encode_audio(
 	audio_queue->erase(audio_queue->begin(), audio_queue->begin() + sample_num);
 }
 
-void H264EncoderImpl::encode_audio_one_frame(
+void QuickSyncEncoderImpl::encode_audio_one_frame(
 	const float *audio,
 	size_t num_samples,
 	int64_t audio_pts,
@@ -1793,7 +1793,7 @@ void H264EncoderImpl::encode_audio_one_frame(
 	av_free_packet(&pkt);
 }
 
-void H264EncoderImpl::encode_last_audio(
+void QuickSyncEncoderImpl::encode_last_audio(
 	vector<float> *audio_queue,
 	int64_t audio_pts,
 	AVCodecContext *ctx,
@@ -1829,14 +1829,14 @@ void H264EncoderImpl::encode_last_audio(
 }
 
 // this is weird. but it seems to put a new frame onto the queue
-void H264EncoderImpl::storage_task_enqueue(storage_task task)
+void QuickSyncEncoderImpl::storage_task_enqueue(storage_task task)
 {
 	unique_lock<mutex> lock(storage_task_queue_mutex);
 	storage_task_queue.push(move(task));
 	storage_task_queue_changed.notify_all();
 }
 
-void H264EncoderImpl::storage_task_thread()
+void QuickSyncEncoderImpl::storage_task_thread()
 {
 	for ( ;; ) {
 		storage_task current;
@@ -1864,7 +1864,7 @@ void H264EncoderImpl::storage_task_thread()
 	}
 }
 
-int H264EncoderImpl::release_encode()
+int QuickSyncEncoderImpl::release_encode()
 {
 	for (unsigned i = 0; i < SURFACE_NUM; i++) {
 		vaDestroyBuffer(va_dpy, gl_surfaces[i].coded_buf);
@@ -1887,7 +1887,7 @@ int H264EncoderImpl::release_encode()
 	return 0;
 }
 
-int H264EncoderImpl::deinit_va()
+int QuickSyncEncoderImpl::deinit_va()
 { 
     vaTerminate(va_dpy);
 
@@ -1942,7 +1942,7 @@ void init_audio_encoder(const string &codec_name, int bit_rate, AVCodecContext *
 
 }  // namespace
 
-H264EncoderImpl::H264EncoderImpl(QSurface *surface, const string &va_display, int width, int height, HTTPD *httpd)
+QuickSyncEncoderImpl::QuickSyncEncoderImpl(QSurface *surface, const string &va_display, int width, int height, HTTPD *httpd)
 	: current_storage_frame(0), surface(surface), httpd(httpd), frame_width(width), frame_height(height)
 {
 	init_audio_encoder(AUDIO_OUTPUT_CODEC_NAME, DEFAULT_AUDIO_OUTPUT_BIT_RATE, &context_audio_file, &resampler_audio_file);
@@ -1979,7 +1979,7 @@ H264EncoderImpl::H264EncoderImpl(QSurface *surface, const string &va_display, in
 	memset(&pic_param, 0, sizeof(pic_param));
 	memset(&slice_param, 0, sizeof(slice_param));
 
-	storage_thread = thread(&H264EncoderImpl::storage_task_thread, this);
+	storage_thread = thread(&QuickSyncEncoderImpl::storage_task_thread, this);
 
 	encode_thread = thread([this]{
 		//SDL_GL_MakeCurrent(window, context);
@@ -1994,7 +1994,7 @@ H264EncoderImpl::H264EncoderImpl(QSurface *surface, const string &va_display, in
 	});
 }
 
-H264EncoderImpl::~H264EncoderImpl()
+QuickSyncEncoderImpl::~QuickSyncEncoderImpl()
 {
 	shutdown();
 	av_frame_free(&audio_frame);
@@ -2005,7 +2005,7 @@ H264EncoderImpl::~H264EncoderImpl()
 	close_output_stream();
 }
 
-bool H264EncoderImpl::begin_frame(GLuint *y_tex, GLuint *cbcr_tex)
+bool QuickSyncEncoderImpl::begin_frame(GLuint *y_tex, GLuint *cbcr_tex)
 {
 	assert(!is_shutdown);
 	{
@@ -2076,7 +2076,7 @@ bool H264EncoderImpl::begin_frame(GLuint *y_tex, GLuint *cbcr_tex)
 	return true;
 }
 
-void H264EncoderImpl::add_audio(int64_t pts, vector<float> audio)
+void QuickSyncEncoderImpl::add_audio(int64_t pts, vector<float> audio)
 {
 	assert(!is_shutdown);
 	{
@@ -2086,7 +2086,7 @@ void H264EncoderImpl::add_audio(int64_t pts, vector<float> audio)
 	frame_queue_nonempty.notify_all();
 }
 
-RefCountedGLsync H264EncoderImpl::end_frame(int64_t pts, int64_t duration, const vector<RefCountedFrame> &input_frames)
+RefCountedGLsync QuickSyncEncoderImpl::end_frame(int64_t pts, int64_t duration, const vector<RefCountedFrame> &input_frames)
 {
 	assert(!is_shutdown);
 
@@ -2132,7 +2132,7 @@ RefCountedGLsync H264EncoderImpl::end_frame(int64_t pts, int64_t duration, const
 	return fence;
 }
 
-void H264EncoderImpl::shutdown()
+void QuickSyncEncoderImpl::shutdown()
 {
 	if (is_shutdown) {
 		return;
@@ -2159,7 +2159,7 @@ void H264EncoderImpl::shutdown()
 	is_shutdown = true;
 }
 
-void H264EncoderImpl::open_output_file(const std::string &filename)
+void QuickSyncEncoderImpl::open_output_file(const std::string &filename)
 {
 	AVFormatContext *avctx = avformat_alloc_context();
 	avctx->oformat = av_guess_format(NULL, filename.c_str(), NULL);
@@ -2177,12 +2177,12 @@ void H264EncoderImpl::open_output_file(const std::string &filename)
 	file_mux.reset(new Mux(avctx, frame_width, frame_height, Mux::CODEC_H264, context_audio_file->codec, TIMEBASE, DEFAULT_AUDIO_OUTPUT_BIT_RATE, nullptr));
 }
 
-void H264EncoderImpl::close_output_file()
+void QuickSyncEncoderImpl::close_output_file()
 {
         file_mux.reset();
 }
 
-void H264EncoderImpl::open_output_stream()
+void QuickSyncEncoderImpl::open_output_stream()
 {
 	AVFormatContext *avctx = avformat_alloc_context();
 	AVOutputFormat *oformat = av_guess_format(global_flags.stream_mux_name.c_str(), nullptr, nullptr);
@@ -2201,7 +2201,7 @@ void H264EncoderImpl::open_output_stream()
 	}
 
 	uint8_t *buf = (uint8_t *)av_malloc(MUX_BUFFER_SIZE);
-	avctx->pb = avio_alloc_context(buf, MUX_BUFFER_SIZE, 1, this, nullptr, &H264EncoderImpl::write_packet_thunk, nullptr);
+	avctx->pb = avio_alloc_context(buf, MUX_BUFFER_SIZE, 1, this, nullptr, &QuickSyncEncoderImpl::write_packet_thunk, nullptr);
 
 	Mux::Codec video_codec;
 	if (global_flags.uncompressed_video_to_http) {
@@ -2225,18 +2225,18 @@ void H264EncoderImpl::open_output_stream()
 	stream_mux_header.clear();
 }
 
-void H264EncoderImpl::close_output_stream()
+void QuickSyncEncoderImpl::close_output_stream()
 {
 	stream_mux.reset();
 }
 
-int H264EncoderImpl::write_packet_thunk(void *opaque, uint8_t *buf, int buf_size)
+int QuickSyncEncoderImpl::write_packet_thunk(void *opaque, uint8_t *buf, int buf_size)
 {
-	H264EncoderImpl *h264_encoder = (H264EncoderImpl *)opaque;
+	QuickSyncEncoderImpl *h264_encoder = (QuickSyncEncoderImpl *)opaque;
 	return h264_encoder->write_packet(buf, buf_size);
 }
 
-int H264EncoderImpl::write_packet(uint8_t *buf, int buf_size)
+int QuickSyncEncoderImpl::write_packet(uint8_t *buf, int buf_size)
 {
 	if (stream_mux_writing_header) {
 		stream_mux_header.append((char *)buf, buf_size);
@@ -2247,7 +2247,7 @@ int H264EncoderImpl::write_packet(uint8_t *buf, int buf_size)
 	return buf_size;
 }
 
-void H264EncoderImpl::encode_thread_func()
+void QuickSyncEncoderImpl::encode_thread_func()
 {
 	int64_t last_dts = -1;
 	int gop_start_display_frame_num = 0;
@@ -2296,7 +2296,7 @@ void H264EncoderImpl::encode_thread_func()
 	}
 }
 
-void H264EncoderImpl::encode_remaining_frames_as_p(int encoding_frame_num, int gop_start_display_frame_num, int64_t last_dts)
+void QuickSyncEncoderImpl::encode_remaining_frames_as_p(int encoding_frame_num, int gop_start_display_frame_num, int64_t last_dts)
 {
 	if (pending_video_frames.empty()) {
 		return;
@@ -2327,7 +2327,7 @@ void H264EncoderImpl::encode_remaining_frames_as_p(int encoding_frame_num, int g
 	}
 }
 
-void H264EncoderImpl::encode_remaining_audio()
+void QuickSyncEncoderImpl::encode_remaining_audio()
 {
 	// This really ought to be empty by now, but just to be sure...
 	for (auto &pending_frame : pending_audio_frames) {
@@ -2353,7 +2353,7 @@ void H264EncoderImpl::encode_remaining_audio()
 	}
 }
 
-void H264EncoderImpl::add_packet_for_uncompressed_frame(int64_t pts, int64_t duration, const uint8_t *data)
+void QuickSyncEncoderImpl::add_packet_for_uncompressed_frame(int64_t pts, int64_t duration, const uint8_t *data)
 {
 	AVPacket pkt;
 	memset(&pkt, 0, sizeof(pkt));
@@ -2383,7 +2383,7 @@ void memcpy_with_pitch(uint8_t *dst, const uint8_t *src, size_t src_width, size_
 
 }  // namespace
 
-void H264EncoderImpl::encode_frame(H264EncoderImpl::PendingFrame frame, int encoding_frame_num, int display_frame_num, int gop_start_display_frame_num,
+void QuickSyncEncoderImpl::encode_frame(QuickSyncEncoderImpl::PendingFrame frame, int encoding_frame_num, int display_frame_num, int gop_start_display_frame_num,
                                    int frame_type, int64_t pts, int64_t dts, int64_t duration)
 {
 	// Wait for the GPU to be done with the frame.
@@ -2472,38 +2472,38 @@ void H264EncoderImpl::encode_frame(H264EncoderImpl::PendingFrame frame, int enco
 }
 
 // Proxy object.
-H264Encoder::H264Encoder(QSurface *surface, const string &va_display, int width, int height, HTTPD *httpd)
-	: impl(new H264EncoderImpl(surface, va_display, width, height, httpd)) {}
+QuickSyncEncoder::QuickSyncEncoder(QSurface *surface, const string &va_display, int width, int height, HTTPD *httpd)
+	: impl(new QuickSyncEncoderImpl(surface, va_display, width, height, httpd)) {}
 
 // Must be defined here because unique_ptr<> destructor needs to know the impl.
-H264Encoder::~H264Encoder() {}
+QuickSyncEncoder::~QuickSyncEncoder() {}
 
-void H264Encoder::add_audio(int64_t pts, vector<float> audio)
+void QuickSyncEncoder::add_audio(int64_t pts, vector<float> audio)
 {
 	impl->add_audio(pts, audio);
 }
 
-bool H264Encoder::begin_frame(GLuint *y_tex, GLuint *cbcr_tex)
+bool QuickSyncEncoder::begin_frame(GLuint *y_tex, GLuint *cbcr_tex)
 {
 	return impl->begin_frame(y_tex, cbcr_tex);
 }
 
-RefCountedGLsync H264Encoder::end_frame(int64_t pts, int64_t duration, const vector<RefCountedFrame> &input_frames)
+RefCountedGLsync QuickSyncEncoder::end_frame(int64_t pts, int64_t duration, const vector<RefCountedFrame> &input_frames)
 {
 	return impl->end_frame(pts, duration, input_frames);
 }
 
-void H264Encoder::shutdown()
+void QuickSyncEncoder::shutdown()
 {
 	impl->shutdown();
 }
 
-void H264Encoder::open_output_file(const std::string &filename)
+void QuickSyncEncoder::open_output_file(const std::string &filename)
 {
 	impl->open_output_file(filename);
 }
 
-void H264Encoder::close_output_file()
+void QuickSyncEncoder::close_output_file()
 {
 	impl->close_output_file();
 }

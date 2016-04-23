@@ -36,17 +36,17 @@
 #include "ref_counted_frame.h"
 #include "ref_counted_gl_sync.h"
 
-class H264EncoderImpl;
+class QuickSyncEncoderImpl;
 class HTTPD;
 class QSurface;
 
 // This is just a pimpl, because including anything X11-related in a .h file
-// tends to trip up Qt. All the real logic is in H264EncoderImpl, defined in the
+// tends to trip up Qt. All the real logic is in QuickSyncEncoderImpl, defined in the
 // .cpp file.
-class H264Encoder {
+class QuickSyncEncoder {
 public:
-        H264Encoder(QSurface *surface, const std::string &va_display, int width, int height, HTTPD *httpd);
-        ~H264Encoder();
+        QuickSyncEncoder(QSurface *surface, const std::string &va_display, int width, int height, HTTPD *httpd);
+        ~QuickSyncEncoder();
 
 	void add_audio(int64_t pts, std::vector<float> audio);
 	bool begin_frame(GLuint *y_tex, GLuint *cbcr_tex);
@@ -58,7 +58,7 @@ public:
 	void close_output_file();
 
 private:
-	std::unique_ptr<H264EncoderImpl> impl;
+	std::unique_ptr<QuickSyncEncoderImpl> impl;
 };
 
 #endif
