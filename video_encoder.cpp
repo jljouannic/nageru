@@ -38,8 +38,8 @@ VideoEncoder::VideoEncoder(QSurface *surface, const std::string &va_display, int
 {
 	open_output_stream();
 
-	quicksync_encoder.reset(new QuickSyncEncoder(surface, va_display, width, height, stream_mux.get()));
-	quicksync_encoder->open_output_file(generate_local_dump_filename(/*frame=*/0).c_str());
+	string filename = generate_local_dump_filename(/*frame=*/0);
+	quicksync_encoder.reset(new QuickSyncEncoder(filename, surface, va_display, width, height, stream_mux.get()));
 }
 
 VideoEncoder::~VideoEncoder()
@@ -52,10 +52,8 @@ void VideoEncoder::do_cut(int frame)
 {
 	string filename = generate_local_dump_filename(frame);
 	printf("Starting new recording: %s\n", filename.c_str());
-	quicksync_encoder->close_output_file();
 	quicksync_encoder->shutdown();
-	quicksync_encoder.reset(new QuickSyncEncoder(surface, va_display, width, height, stream_mux.get()));
-	quicksync_encoder->open_output_file(filename.c_str());
+	quicksync_encoder.reset(new QuickSyncEncoder(filename, surface, va_display, width, height, stream_mux.get()));
 }
 
 void VideoEncoder::add_audio(int64_t pts, std::vector<float> audio)

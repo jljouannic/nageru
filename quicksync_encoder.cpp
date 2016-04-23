@@ -193,14 +193,12 @@ FrameReorderer::Frame FrameReorderer::get_first_frame()
 
 class QuickSyncEncoderImpl {
 public:
-	QuickSyncEncoderImpl(QSurface *surface, const string &va_display, int width, int height, Mux *stream_mux);
+	QuickSyncEncoderImpl(const std::string &filename, QSurface *surface, const string &va_display, int width, int height, Mux *stream_mux);
 	~QuickSyncEncoderImpl();
 	void add_audio(int64_t pts, vector<float> audio);
 	bool begin_frame(GLuint *y_tex, GLuint *cbcr_tex);
 	RefCountedGLsync end_frame(int64_t pts, int64_t duration, const vector<RefCountedFrame> &input_frames);
 	void shutdown();
-	void open_output_file(const std::string &filename);
-	void close_output_file();
 
 private:
 	struct storage_task {
@@ -220,6 +218,7 @@ private:
 		return int64_t(ip_period - 1) * (TIMEBASE / MAX_FPS);
 	}
 
+	void open_output_file(const std::string &filename);
 	void encode_thread_func();
 	void encode_remaining_frames_as_p(int encoding_frame_num, int gop_start_display_frame_num, int64_t last_dts);
 	void add_packet_for_uncompressed_frame(int64_t pts, int64_t duration, const uint8_t *data);
@@ -1733,14 +1732,17 @@ namespace {
 
 }  // namespace
 
-QuickSyncEncoderImpl::QuickSyncEncoderImpl(QSurface *surface, const string &va_display, int width, int height, Mux *stream_mux)
+QuickSyncEncoderImpl::QuickSyncEncoderImpl(const std::string &filename, QSurface *surface, const string &va_display, int width, int height, Mux *stream_mux)
 	: current_storage_frame(0), surface(surface), stream_mux(stream_mux), frame_width(width), frame_height(height)
 {
+	file_audio_encoder.reset(new AudioEncoder(AUDIO_OUTPUT_CODEC_NAME, DEFAULT_AUDIO_OUTPUT_BIT_RATE));
+	open_output_file(filename);
+	file_audio_encoder->add_mux(file_mux.get());
 	if (global_flags.stream_audio_codec_name.empty()) {
-		file_audio_encoder.reset(new AudioEncoder(AUDIO_OUTPUT_CODEC_NAME, DEFAULT_AUDIO_OUTPUT_BIT_RATE, { file_mux.get(), stream_mux }));
+		file_audio_encoder->add_mux(stream_mux);
 	} else {
-		file_audio_encoder.reset(new AudioEncoder(AUDIO_OUTPUT_CODEC_NAME, DEFAULT_AUDIO_OUTPUT_BIT_RATE, { file_mux.get() }));
-		stream_audio_encoder.reset(new AudioEncoder(global_flags.stream_audio_codec_name, global_flags.stream_audio_codec_bitrate, { stream_mux }));
+		stream_audio_encoder.reset(new AudioEncoder(global_flags.stream_audio_codec_name, global_flags.stream_audio_codec_bitrate));
+		stream_audio_encoder->add_mux(stream_mux);
 	}
 
 	frame_width_mbaligned = (frame_width + 15) & (~15);
@@ -1937,6 +1939,7 @@ void QuickSyncEncoderImpl::shutdown()
 
 	release_encode();
 	deinit_va();
+	file_mux.reset();
 	is_shutdown = true;
 }
 
@@ -1956,11 +1959,6 @@ void QuickSyncEncoderImpl::open_output_file(const std::string &filename)
 	}
 
 	file_mux.reset(new Mux(avctx, frame_width, frame_height, Mux::CODEC_H264, file_audio_encoder->get_codec(), TIMEBASE, DEFAULT_AUDIO_OUTPUT_BIT_RATE, nullptr));
-}
-
-void QuickSyncEncoderImpl::close_output_file()
-{
-        file_mux.reset();
 }
 
 void QuickSyncEncoderImpl::encode_thread_func()
@@ -2183,8 +2181,8 @@ void QuickSyncEncoderImpl::encode_frame(QuickSyncEncoderImpl::PendingFrame frame
 }
 
 // Proxy object.
-QuickSyncEncoder::QuickSyncEncoder(QSurface *surface, const string &va_display, int width, int height, Mux *stream_mux)
-	: impl(new QuickSyncEncoderImpl(surface, va_display, width, height, stream_mux)) {}
+QuickSyncEncoder::QuickSyncEncoder(const std::string &filename, QSurface *surface, const string &va_display, int width, int height, Mux *stream_mux)
+	: impl(new QuickSyncEncoderImpl(filename, surface, va_display, width, height, stream_mux)) {}
 
 // Must be defined here because unique_ptr<> destructor needs to know the impl.
 QuickSyncEncoder::~QuickSyncEncoder() {}
@@ -2207,14 +2205,4 @@ RefCountedGLsync QuickSyncEncoder::end_frame(int64_t pts, int64_t duration, cons
 void QuickSyncEncoder::shutdown()
 {
 	impl->shutdown();
-}
-
-void QuickSyncEncoder::open_output_file(const std::string &filename)
-{
-	impl->open_output_file(filename);
-}
-
-void QuickSyncEncoder::close_output_file()
-{
-	impl->close_output_file();
 }

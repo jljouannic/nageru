@@ -45,17 +45,13 @@ class QSurface;
 // .cpp file.
 class QuickSyncEncoder {
 public:
-        QuickSyncEncoder(QSurface *surface, const std::string &va_display, int width, int height, Mux *stream_mux);
+        QuickSyncEncoder(const std::string &filename, QSurface *surface, const std::string &va_display, int width, int height, Mux *stream_mux);
         ~QuickSyncEncoder();
 
 	void add_audio(int64_t pts, std::vector<float> audio);
 	bool begin_frame(GLuint *y_tex, GLuint *cbcr_tex);
 	RefCountedGLsync end_frame(int64_t pts, int64_t duration, const std::vector<RefCountedFrame> &input_frames);
 	void shutdown();  // Blocking.
-
-	// You can only have one going at the same time.
-	void open_output_file(const std::string &filename);
-	void close_output_file();
 
 private:
 	std::unique_ptr<QuickSyncEncoderImpl> impl;

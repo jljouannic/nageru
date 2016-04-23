@@ -16,9 +16,12 @@ extern "C" {
 
 class AudioEncoder {
 public:
-	AudioEncoder(const std::string &codec_name, int bit_rate, const std::vector<Mux *> &muxes);
+	AudioEncoder(const std::string &codec_name, int bit_rate);
 	~AudioEncoder();
 
+	void add_mux(Mux *mux) {  // Does not take ownership.
+		muxes.push_back(mux);
+	}
 	void encode_audio(const std::vector<float> &audio, int64_t audio_pts);
 	void encode_last_audio();
 

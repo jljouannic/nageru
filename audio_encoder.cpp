@@ -21,8 +21,7 @@ extern "C" {
 
 using namespace std;
 
-AudioEncoder::AudioEncoder(const string &codec_name, int bit_rate, const vector<Mux *> &muxes)
-	: muxes(muxes)
+AudioEncoder::AudioEncoder(const string &codec_name, int bit_rate)
 {
 	AVCodec *codec = avcodec_find_encoder_by_name(codec_name.c_str());
 	if (codec == nullptr) {
