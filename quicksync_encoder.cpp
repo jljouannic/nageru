@@ -7,16 +7,6 @@
 #include <X11/Xlib.h>
 #include <assert.h>
 #include <epoxy/egl.h>
-extern "C" {
-#include <libavcodec/avcodec.h>
-#include <libavformat/avformat.h>
-#include <libavresample/avresample.h>
-#include <libavutil/channel_layout.h>
-#include <libavutil/frame.h>
-#include <libavutil/rational.h>
-#include <libavutil/samplefmt.h>
-#include <libavutil/opt.h>
-}
 #include <libdrm/drm_fourcc.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -38,6 +28,7 @@ extern "C" {
 #include <thread>
 #include <utility>
 
+#include "audio_encoder.h"
 #include "context.h"
 #include "defs.h"
 #include "flags.h"
@@ -235,23 +226,6 @@ private:
 	void encode_frame(PendingFrame frame, int encoding_frame_num, int display_frame_num, int gop_start_display_frame_num,
 	                  int frame_type, int64_t pts, int64_t dts, int64_t duration);
 	void storage_task_thread();
-	void encode_audio(const vector<float> &audio,
-	                  vector<float> *audio_queue,
-	                  int64_t audio_pts,
-	                  AVCodecContext *ctx,
-	                  AVAudioResampleContext *resampler,
-			  const vector<Mux *> &muxes);
-	void encode_audio_one_frame(const float *audio,
-	                            size_t num_samples,  // In each channel.
-				    int64_t audio_pts,
-				    AVCodecContext *ctx,
-				    AVAudioResampleContext *resampler,
-				    const vector<Mux *> &muxes);
-	void encode_last_audio(vector<float> *audio_queue,
-	                       int64_t audio_pts,
-			       AVCodecContext *ctx,
-			       AVAudioResampleContext *resampler,
-			       const vector<Mux *> &muxes);
 	void encode_remaining_audio();
 	void storage_task_enqueue(storage_task task);
 	void save_codeddata(storage_task task);
@@ -297,22 +271,14 @@ private:
 
 	map<int, PendingFrame> pending_video_frames;  // under frame_queue_mutex
 	map<int64_t, vector<float>> pending_audio_frames;  // under frame_queue_mutex
-	int64_t last_audio_pts = 0;  // The first pts after all audio we've encoded.
 	QSurface *surface;
 
-	AVCodecContext *context_audio_file;
-	AVCodecContext *context_audio_stream = nullptr;  // nullptr = don't code separate audio for stream.
-
-	AVAudioResampleContext *resampler_audio_file = nullptr;
-	AVAudioResampleContext *resampler_audio_stream = nullptr;
-
-	vector<float> audio_queue_file;
-	vector<float> audio_queue_stream;
+	unique_ptr<AudioEncoder> file_audio_encoder;
+	unique_ptr<AudioEncoder> stream_audio_encoder;
 
 	Mux* stream_mux;  // To HTTP.
 	unique_ptr<Mux> file_mux;  // To local disk.
 
-	AVFrame *audio_frame = nullptr;
 	unique_ptr<FrameReorderer> reorderer;
 	unique_ptr<X264Encoder> x264_encoder;  // nullptr if not using x264.
 
@@ -1685,131 +1651,15 @@ void QuickSyncEncoderImpl::save_codeddata(storage_task task)
 			pending_audio_frames.erase(it); 
 		}
 
-		if (context_audio_stream) {
-			encode_audio(audio, &audio_queue_file, audio_pts, context_audio_file, resampler_audio_file, { file_mux.get() });
-			encode_audio(audio, &audio_queue_stream, audio_pts, context_audio_stream, resampler_audio_stream, { stream_mux });
-		} else {
-			encode_audio(audio, &audio_queue_file, audio_pts, context_audio_file, resampler_audio_file, { stream_mux, file_mux.get() });
+		file_audio_encoder->encode_audio(audio, audio_pts + global_delay());
+		if (stream_audio_encoder) {
+			stream_audio_encoder->encode_audio(audio, audio_pts + global_delay());
 		}
-		last_audio_pts = audio_pts + audio.size() * TIMEBASE / (OUTPUT_FREQUENCY * 2);
 
 		if (audio_pts == task.pts) break;
 	}
 }
 
-void QuickSyncEncoderImpl::encode_audio(
-	const vector<float> &audio,
-	vector<float> *audio_queue,
-	int64_t audio_pts,
-	AVCodecContext *ctx,
-	AVAudioResampleContext *resampler,
-	const vector<Mux *> &muxes)
-{
-	if (ctx->frame_size == 0) {
-		// No queueing needed.
-		assert(audio_queue->empty());
-		assert(audio.size() % 2 == 0);
-		encode_audio_one_frame(&audio[0], audio.size() / 2, audio_pts, ctx, resampler, muxes);
-		return;
-	}
-
-	int64_t sample_offset = audio_queue->size();
-
-	audio_queue->insert(audio_queue->end(), audio.begin(), audio.end());
-	size_t sample_num;
-	for (sample_num = 0;
-	     sample_num + ctx->frame_size * 2 <= audio_queue->size();
-	     sample_num += ctx->frame_size * 2) {
-		int64_t adjusted_audio_pts = audio_pts + (int64_t(sample_num) - sample_offset) * TIMEBASE / (OUTPUT_FREQUENCY * 2);
-		encode_audio_one_frame(&(*audio_queue)[sample_num],
-		                       ctx->frame_size,
-		                       adjusted_audio_pts,
-		                       ctx,
-		                       resampler,
-		                       muxes);
-	}
-	audio_queue->erase(audio_queue->begin(), audio_queue->begin() + sample_num);
-}
-
-void QuickSyncEncoderImpl::encode_audio_one_frame(
-	const float *audio,
-	size_t num_samples,
-	int64_t audio_pts,
-	AVCodecContext *ctx,
-	AVAudioResampleContext *resampler,
-	const vector<Mux *> &muxes)
-{
-	audio_frame->pts = audio_pts + global_delay();
-	audio_frame->nb_samples = num_samples;
-	audio_frame->channel_layout = AV_CH_LAYOUT_STEREO;
-	audio_frame->format = ctx->sample_fmt;
-	audio_frame->sample_rate = OUTPUT_FREQUENCY;
-
-	if (av_samples_alloc(audio_frame->data, nullptr, 2, num_samples, ctx->sample_fmt, 0) < 0) {
-		fprintf(stderr, "Could not allocate %ld samples.\n", num_samples);
-		exit(1);
-	}
-
-	if (avresample_convert(resampler, audio_frame->data, 0, num_samples,
-	                       (uint8_t **)&audio, 0, num_samples) < 0) {
-		fprintf(stderr, "Audio conversion failed.\n");
-		exit(1);
-	}
-
-	AVPacket pkt;
-	av_init_packet(&pkt);
-	pkt.data = nullptr;
-	pkt.size = 0;
-	int got_output = 0;
-	avcodec_encode_audio2(ctx, &pkt, audio_frame, &got_output);
-	if (got_output) {
-		pkt.stream_index = 1;
-		pkt.flags = 0;
-		for (Mux *mux : muxes) {
-			mux->add_packet(pkt, pkt.pts, pkt.dts);
-		}
-	}
-
-	av_freep(&audio_frame->data[0]);
-
-	av_frame_unref(audio_frame);
-	av_free_packet(&pkt);
-}
-
-void QuickSyncEncoderImpl::encode_last_audio(
-	vector<float> *audio_queue,
-	int64_t audio_pts,
-	AVCodecContext *ctx,
-	AVAudioResampleContext *resampler,
-	const vector<Mux *> &muxes)
-{
-	if (!audio_queue->empty()) {
-		// Last frame can be whatever size we want.
-		assert(audio_queue->size() % 2 == 0);
-		encode_audio_one_frame(&(*audio_queue)[0], audio_queue->size() / 2, audio_pts, ctx, resampler, muxes);
-		audio_queue->clear();
-	}
-
-	if (ctx->codec->capabilities & AV_CODEC_CAP_DELAY) {
-		// Collect any delayed frames.
-		for ( ;; ) {
-			int got_output = 0;
-			AVPacket pkt;
-			av_init_packet(&pkt);
-			pkt.data = nullptr;
-			pkt.size = 0;
-			avcodec_encode_audio2(ctx, &pkt, nullptr, &got_output);
-			if (!got_output) break;
-
-			pkt.stream_index = 1;
-			pkt.flags = 0;
-			for (Mux *mux : muxes) {
-				mux->add_packet(pkt, pkt.pts, pkt.dts);
-			}
-			av_free_packet(&pkt);
-		}
-	}
-}
 
 // this is weird. but it seems to put a new frame onto the queue
 void QuickSyncEncoderImpl::storage_task_enqueue(storage_task task)
@@ -1881,64 +1731,20 @@ int QuickSyncEncoderImpl::deinit_va()
 
 namespace {
 
-void init_audio_encoder(const string &codec_name, int bit_rate, AVCodecContext **ctx, AVAudioResampleContext **resampler)
-{
-	AVCodec *codec_audio = avcodec_find_encoder_by_name(codec_name.c_str());
-	if (codec_audio == nullptr) {
-		fprintf(stderr, "ERROR: Could not find codec '%s'\n", codec_name.c_str());
-		exit(1);
-	}
-
-	AVCodecContext *context_audio = avcodec_alloc_context3(codec_audio);
-	context_audio->bit_rate = bit_rate;
-	context_audio->sample_rate = OUTPUT_FREQUENCY;
-	context_audio->sample_fmt = codec_audio->sample_fmts[0];
-	context_audio->channels = 2;
-	context_audio->channel_layout = AV_CH_LAYOUT_STEREO;
-	context_audio->time_base = AVRational{1, TIMEBASE};
-	context_audio->flags |= CODEC_FLAG_GLOBAL_HEADER;
-	if (avcodec_open2(context_audio, codec_audio, NULL) < 0) {
-		fprintf(stderr, "Could not open codec '%s'\n", codec_name.c_str());
-		exit(1);
-	}
-
-	*ctx = context_audio;
-
-	*resampler = avresample_alloc_context();
-	if (*resampler == nullptr) {
-		fprintf(stderr, "Allocating resampler failed.\n");
-		exit(1);
-	}
-
-	av_opt_set_int(*resampler, "in_channel_layout",  AV_CH_LAYOUT_STEREO,       0);
-	av_opt_set_int(*resampler, "out_channel_layout", AV_CH_LAYOUT_STEREO,       0);
-	av_opt_set_int(*resampler, "in_sample_rate",     OUTPUT_FREQUENCY,          0);
-	av_opt_set_int(*resampler, "out_sample_rate",    OUTPUT_FREQUENCY,          0);
-	av_opt_set_int(*resampler, "in_sample_fmt",      AV_SAMPLE_FMT_FLT,         0);
-	av_opt_set_int(*resampler, "out_sample_fmt",     context_audio->sample_fmt, 0);
-
-	if (avresample_open(*resampler) < 0) {
-		fprintf(stderr, "Could not open resample context.\n");
-		exit(1);
-	}
-}
-
 }  // namespace
 
 QuickSyncEncoderImpl::QuickSyncEncoderImpl(QSurface *surface, const string &va_display, int width, int height, Mux *stream_mux)
 	: current_storage_frame(0), surface(surface), stream_mux(stream_mux), frame_width(width), frame_height(height)
 {
-	init_audio_encoder(AUDIO_OUTPUT_CODEC_NAME, DEFAULT_AUDIO_OUTPUT_BIT_RATE, &context_audio_file, &resampler_audio_file);
-
-	if (!global_flags.stream_audio_codec_name.empty()) {
-		init_audio_encoder(global_flags.stream_audio_codec_name,
-			global_flags.stream_audio_codec_bitrate, &context_audio_stream, &resampler_audio_stream);
+	if (global_flags.stream_audio_codec_name.empty()) {
+		file_audio_encoder.reset(new AudioEncoder(AUDIO_OUTPUT_CODEC_NAME, DEFAULT_AUDIO_OUTPUT_BIT_RATE, { file_mux.get(), stream_mux }));
+	} else {
+		file_audio_encoder.reset(new AudioEncoder(AUDIO_OUTPUT_CODEC_NAME, DEFAULT_AUDIO_OUTPUT_BIT_RATE, { file_mux.get() }));
+		stream_audio_encoder.reset(new AudioEncoder(global_flags.stream_audio_codec_name, global_flags.stream_audio_codec_bitrate, { stream_mux }));
 	}
 
 	frame_width_mbaligned = (frame_width + 15) & (~15);
 	frame_height_mbaligned = (frame_height + 15) & (~15);
-
-	audio_frame = av_frame_alloc();
 
 	//print_input();
 
@@ -1978,11 +1784,6 @@ QuickSyncEncoderImpl::QuickSyncEncoderImpl(QSurface *surface, const string &va_d
 QuickSyncEncoderImpl::~QuickSyncEncoderImpl()
 {
 	shutdown();
-	av_frame_free(&audio_frame);
-	avresample_free(&resampler_audio_file);
-	avresample_free(&resampler_audio_stream);
-	avcodec_free_context(&context_audio_file);
-	avcodec_free_context(&context_audio_stream);
 }
 
 bool QuickSyncEncoderImpl::begin_frame(GLuint *y_tex, GLuint *cbcr_tex)
@@ -2154,7 +1955,7 @@ void QuickSyncEncoderImpl::open_output_file(const std::string &filename)
 		exit(1);
 	}
 
-	file_mux.reset(new Mux(avctx, frame_width, frame_height, Mux::CODEC_H264, context_audio_file->codec, TIMEBASE, DEFAULT_AUDIO_OUTPUT_BIT_RATE, nullptr));
+	file_mux.reset(new Mux(avctx, frame_width, frame_height, Mux::CODEC_H264, file_audio_encoder->get_codec(), TIMEBASE, DEFAULT_AUDIO_OUTPUT_BIT_RATE, nullptr));
 }
 
 void QuickSyncEncoderImpl::close_output_file()
@@ -2249,22 +2050,17 @@ void QuickSyncEncoderImpl::encode_remaining_audio()
 		int64_t audio_pts = pending_frame.first;
 		vector<float> audio = move(pending_frame.second);
 
-		if (context_audio_stream) {
-			encode_audio(audio, &audio_queue_file, audio_pts, context_audio_file, resampler_audio_file, { file_mux.get() });
-			encode_audio(audio, &audio_queue_stream, audio_pts, context_audio_stream, resampler_audio_stream, { stream_mux });
-		} else {
-			encode_audio(audio, &audio_queue_file, audio_pts, context_audio_file, resampler_audio_file, { stream_mux, file_mux.get() });
+		file_audio_encoder->encode_audio(audio, audio_pts + global_delay());
+		if (stream_audio_encoder) {
+			stream_audio_encoder->encode_audio(audio, audio_pts + global_delay());
 		}
-		last_audio_pts = audio_pts + audio.size() * TIMEBASE / (OUTPUT_FREQUENCY * 2);
 	}
 	pending_audio_frames.clear();
 
 	// Encode any leftover audio in the queues, and also any delayed frames.
-	if (context_audio_stream) {
-		encode_last_audio(&audio_queue_file, last_audio_pts, context_audio_file, resampler_audio_file, { file_mux.get() });
-		encode_last_audio(&audio_queue_stream, last_audio_pts, context_audio_stream, resampler_audio_stream, { stream_mux });
-	} else {
-		encode_last_audio(&audio_queue_file, last_audio_pts, context_audio_file, resampler_audio_file, { stream_mux, file_mux.get() });
+	file_audio_encoder->encode_last_audio();
+	if (stream_audio_encoder) {
+		stream_audio_encoder->encode_last_audio();
 	}
 }
 
