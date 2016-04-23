@@ -33,10 +33,11 @@
 #include <string>
 #include <vector>
 
-#include "mux.h"
 #include "ref_counted_frame.h"
 #include "ref_counted_gl_sync.h"
 
+class AudioEncoder;
+class Mux;
 class QuickSyncEncoderImpl;
 class QSurface;
 
@@ -45,7 +46,7 @@ class QSurface;
 // .cpp file.
 class QuickSyncEncoder {
 public:
-        QuickSyncEncoder(const std::string &filename, QSurface *surface, const std::string &va_display, int width, int height, Mux *stream_mux);
+        QuickSyncEncoder(const std::string &filename, QSurface *surface, const std::string &va_display, int width, int height, Mux *stream_mux, AudioEncoder *stream_audio_encoder);
         ~QuickSyncEncoder();
 
 	void add_audio(int64_t pts, std::vector<float> audio);

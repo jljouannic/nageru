@@ -10,6 +10,7 @@
 #include <string>
 #include <vector>
 
+#include "audio_encoder.h"
 #include "mux.h"
 #include "ref_counted_frame.h"
 #include "ref_counted_gl_sync.h"
@@ -47,6 +48,7 @@ private:
 	HTTPD *httpd;
 
 	std::unique_ptr<Mux> stream_mux;  // To HTTP.
+	std::unique_ptr<AudioEncoder> stream_audio_encoder;
 
 	// While Mux object is constructing, <stream_mux_writing_header> is true,
 	// and the header is being collected into stream_mux_header.

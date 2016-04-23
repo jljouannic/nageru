@@ -38,8 +38,15 @@ VideoEncoder::VideoEncoder(QSurface *surface, const std::string &va_display, int
 {
 	open_output_stream();
 
+	if (global_flags.stream_audio_codec_name.empty()) {
+		stream_audio_encoder.reset(new AudioEncoder(AUDIO_OUTPUT_CODEC_NAME, DEFAULT_AUDIO_OUTPUT_BIT_RATE));
+	} else {
+		stream_audio_encoder.reset(new AudioEncoder(global_flags.stream_audio_codec_name, global_flags.stream_audio_codec_bitrate));
+	}
+	stream_audio_encoder->add_mux(stream_mux.get());
+
 	string filename = generate_local_dump_filename(/*frame=*/0);
-	quicksync_encoder.reset(new QuickSyncEncoder(filename, surface, va_display, width, height, stream_mux.get()));
+	quicksync_encoder.reset(new QuickSyncEncoder(filename, surface, va_display, width, height, stream_mux.get(), stream_audio_encoder.get()));
 }
 
 VideoEncoder::~VideoEncoder()
@@ -53,7 +60,7 @@ void VideoEncoder::do_cut(int frame)
 	string filename = generate_local_dump_filename(frame);
 	printf("Starting new recording: %s\n", filename.c_str());
 	quicksync_encoder->shutdown();
-	quicksync_encoder.reset(new QuickSyncEncoder(filename, surface, va_display, width, height, stream_mux.get()));
+	quicksync_encoder.reset(new QuickSyncEncoder(filename, surface, va_display, width, height, stream_mux.get(), stream_audio_encoder.get()));
 }
 
 void VideoEncoder::add_audio(int64_t pts, std::vector<float> audio)
