@@ -9,6 +9,7 @@
 #include "httpd.h"
 #include "timebase.h"
 #include "quicksync_encoder.h"
+#include "x264_encoder.h"
 
 using namespace std;
 
@@ -45,8 +46,12 @@ VideoEncoder::VideoEncoder(QSurface *surface, const std::string &va_display, int
 	}
 	stream_audio_encoder->add_mux(stream_mux.get());
 
+	if (global_flags.x264_video_to_http) {
+		x264_encoder.reset(new X264Encoder(stream_mux.get()));
+	}
+
 	string filename = generate_local_dump_filename(/*frame=*/0);
-	quicksync_encoder.reset(new QuickSyncEncoder(filename, surface, va_display, width, height, stream_mux.get(), stream_audio_encoder.get()));
+	quicksync_encoder.reset(new QuickSyncEncoder(filename, surface, va_display, width, height, stream_mux.get(), stream_audio_encoder.get(), x264_encoder.get()));
 }
 
 VideoEncoder::~VideoEncoder()
@@ -60,7 +65,7 @@ void VideoEncoder::do_cut(int frame)
 	string filename = generate_local_dump_filename(frame);
 	printf("Starting new recording: %s\n", filename.c_str());
 	quicksync_encoder->shutdown();
-	quicksync_encoder.reset(new QuickSyncEncoder(filename, surface, va_display, width, height, stream_mux.get(), stream_audio_encoder.get()));
+	quicksync_encoder.reset(new QuickSyncEncoder(filename, surface, va_display, width, height, stream_mux.get(), stream_audio_encoder.get(), x264_encoder.get()));
 }
 
 void VideoEncoder::add_audio(int64_t pts, std::vector<float> audio)

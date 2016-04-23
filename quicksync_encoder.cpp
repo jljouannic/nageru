@@ -193,7 +193,7 @@ FrameReorderer::Frame FrameReorderer::get_first_frame()
 
 class QuickSyncEncoderImpl {
 public:
-	QuickSyncEncoderImpl(const std::string &filename, QSurface *surface, const string &va_display, int width, int height, Mux *stream_mux, AudioEncoder *stream_audio_encoder);
+	QuickSyncEncoderImpl(const std::string &filename, QSurface *surface, const string &va_display, int width, int height, Mux *stream_mux, AudioEncoder *stream_audio_encoder, X264Encoder *x264_encoder);
 	~QuickSyncEncoderImpl();
 	void add_audio(int64_t pts, vector<float> audio);
 	bool begin_frame(GLuint *y_tex, GLuint *cbcr_tex);
@@ -275,11 +275,11 @@ private:
 	unique_ptr<AudioEncoder> file_audio_encoder;
 	AudioEncoder *stream_audio_encoder;
 
+	unique_ptr<FrameReorderer> reorderer;
+	X264Encoder *x264_encoder;  // nullptr if not using x264.
+
 	Mux* stream_mux;  // To HTTP.
 	unique_ptr<Mux> file_mux;  // To local disk.
-
-	unique_ptr<FrameReorderer> reorderer;
-	unique_ptr<X264Encoder> x264_encoder;  // nullptr if not using x264.
 
 	Display *x11_display = nullptr;
 
@@ -1730,8 +1730,8 @@ namespace {
 
 }  // namespace
 
-QuickSyncEncoderImpl::QuickSyncEncoderImpl(const std::string &filename, QSurface *surface, const string &va_display, int width, int height, Mux *stream_mux, AudioEncoder *stream_audio_encoder)
-	: current_storage_frame(0), surface(surface), stream_audio_encoder(stream_audio_encoder), stream_mux(stream_mux), frame_width(width), frame_height(height)
+QuickSyncEncoderImpl::QuickSyncEncoderImpl(const std::string &filename, QSurface *surface, const string &va_display, int width, int height, Mux *stream_mux, AudioEncoder *stream_audio_encoder, X264Encoder *x264_encoder)
+	: current_storage_frame(0), surface(surface), stream_audio_encoder(stream_audio_encoder), x264_encoder(x264_encoder), stream_mux(stream_mux), frame_width(width), frame_height(height)
 {
 	file_audio_encoder.reset(new AudioEncoder(AUDIO_OUTPUT_CODEC_NAME, DEFAULT_AUDIO_OUTPUT_BIT_RATE));
 	open_output_file(filename);
@@ -1747,7 +1747,9 @@ QuickSyncEncoderImpl::QuickSyncEncoderImpl(const std::string &filename, QSurface
 		reorderer.reset(new FrameReorderer(ip_period - 1, frame_width, frame_height));
 	}
 	if (global_flags.x264_video_to_http) {
-		x264_encoder.reset(new X264Encoder(stream_mux));
+		assert(x264_encoder != nullptr);
+	} else {
+		assert(x264_encoder == nullptr);
 	}
 
 	init_va(va_display);
@@ -1919,7 +1921,6 @@ void QuickSyncEncoderImpl::shutdown()
 		frame_queue_nonempty.notify_all();
 	}
 	encode_thread.join();
-	x264_encoder.reset();
 	{
 		unique_lock<mutex> lock(storage_task_queue_mutex);
 		storage_thread_should_quit = true;
@@ -2171,8 +2172,8 @@ void QuickSyncEncoderImpl::encode_frame(QuickSyncEncoderImpl::PendingFrame frame
 }
 
 // Proxy object.
-QuickSyncEncoder::QuickSyncEncoder(const std::string &filename, QSurface *surface, const string &va_display, int width, int height, Mux *stream_mux, AudioEncoder *stream_audio_encoder)
-	: impl(new QuickSyncEncoderImpl(filename, surface, va_display, width, height, stream_mux, stream_audio_encoder)) {}
+QuickSyncEncoder::QuickSyncEncoder(const std::string &filename, QSurface *surface, const string &va_display, int width, int height, Mux *stream_mux, AudioEncoder *stream_audio_encoder, X264Encoder *x264_encoder)
+	: impl(new QuickSyncEncoderImpl(filename, surface, va_display, width, height, stream_mux, stream_audio_encoder, x264_encoder)) {}
 
 // Must be defined here because unique_ptr<> destructor needs to know the impl.
 QuickSyncEncoder::~QuickSyncEncoder() {}

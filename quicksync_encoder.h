@@ -40,13 +40,14 @@ class AudioEncoder;
 class Mux;
 class QuickSyncEncoderImpl;
 class QSurface;
+class X264Encoder;
 
 // This is just a pimpl, because including anything X11-related in a .h file
 // tends to trip up Qt. All the real logic is in QuickSyncEncoderImpl, defined in the
 // .cpp file.
 class QuickSyncEncoder {
 public:
-        QuickSyncEncoder(const std::string &filename, QSurface *surface, const std::string &va_display, int width, int height, Mux *stream_mux, AudioEncoder *stream_audio_encoder);
+        QuickSyncEncoder(const std::string &filename, QSurface *surface, const std::string &va_display, int width, int height, Mux *stream_mux, AudioEncoder *stream_audio_encoder, X264Encoder *x264_encoder);
         ~QuickSyncEncoder();
 
 	void add_audio(int64_t pts, std::vector<float> audio);

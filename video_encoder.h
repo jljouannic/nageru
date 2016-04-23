@@ -18,6 +18,7 @@
 class HTTPD;
 class QSurface;
 class QuickSyncEncoder;
+class X264Encoder;
 
 class VideoEncoder : public KeyFrameSignalReceiver {
 public:
@@ -49,6 +50,7 @@ private:
 
 	std::unique_ptr<Mux> stream_mux;  // To HTTP.
 	std::unique_ptr<AudioEncoder> stream_audio_encoder;
+	std::unique_ptr<X264Encoder> x264_encoder;  // nullptr if not using x264.
 
 	// While Mux object is constructing, <stream_mux_writing_header> is true,
 	// and the header is being collected into stream_mux_header.
