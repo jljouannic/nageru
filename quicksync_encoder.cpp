@@ -1774,6 +1774,7 @@ QuickSyncEncoderImpl::QuickSyncEncoderImpl(const std::string &filename, QSurface
 			exit(1);
 		}
 		encode_thread_func();
+		delete_context(context);
 	});
 }
 

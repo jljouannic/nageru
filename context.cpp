@@ -35,3 +35,8 @@ bool make_current(QOpenGLContext *context, QSurface *surface)
 {
 	return context->makeCurrent(surface);
 }
+
+void delete_context(QOpenGLContext *context)
+{
+	delete context;
+}

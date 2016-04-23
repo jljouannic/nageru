@@ -11,3 +11,4 @@ extern QGLWidget *global_share_widget;
 QSurface *create_surface(const QSurfaceFormat &format);
 QOpenGLContext *create_context(const QSurface *surface);
 bool make_current(QOpenGLContext *context, QSurface *surface);
+void delete_context(QOpenGLContext *context);
