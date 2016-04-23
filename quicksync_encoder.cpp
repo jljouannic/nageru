@@ -1149,8 +1149,8 @@ int QuickSyncEncoderImpl::setup_encode()
     VAStatus va_status;
     VASurfaceID *tmp_surfaceid;
     int codedbuf_size, i;
-    static VASurfaceID src_surface[SURFACE_NUM];
-    static VASurfaceID ref_surface[SURFACE_NUM];
+    VASurfaceID src_surface[SURFACE_NUM];
+    VASurfaceID ref_surface[SURFACE_NUM];
     
     va_status = vaCreateConfig(va_dpy, h264_profile, VAEntrypointEncSlice,
             &config_attrib[0], config_attrib_num, &config_id);
