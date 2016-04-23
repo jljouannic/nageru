@@ -33,7 +33,7 @@
 #include "decklink_capture.h"
 #include "defs.h"
 #include "flags.h"
-#include "quicksync_encode.h"
+#include "quicksync_encoder.h"
 #include "pbo_frame_allocator.h"
 #include "ref_counted_gl_sync.h"
 #include "timebase.h"

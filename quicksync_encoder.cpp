@@ -1,5 +1,5 @@
 //#include "sysdeps.h"
-#include "quicksync_encode.h"
+#include "quicksync_encoder.h"
 
 #include <movit/util.h>
 #include <EGL/eglplatform.h>
@@ -44,7 +44,7 @@ extern "C" {
 #include "httpd.h"
 #include "mux.h"
 #include "timebase.h"
-#include "x264encode.h"
+#include "x264_encoder.h"
 
 using namespace std;
 

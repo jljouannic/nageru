@@ -5,7 +5,7 @@
 #include "flags.h"
 #include "mux.h"
 #include "timebase.h"
-#include "x264encode.h"
+#include "x264_encoder.h"
 
 extern "C" {
 #include <libavformat/avformat.h>

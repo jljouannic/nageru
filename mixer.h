@@ -24,7 +24,7 @@
 #include "bmusb/bmusb.h"
 #include "alsa_output.h"
 #include "ebu_r128_proc.h"
-#include "quicksync_encode.h"
+#include "quicksync_encoder.h"
 #include "httpd.h"
 #include "pbo_frame_allocator.h"
 #include "ref_counted_frame.h"
