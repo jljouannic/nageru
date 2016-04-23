@@ -10,6 +10,7 @@
 #include <string>
 #include <vector>
 
+#include "mux.h"
 #include "ref_counted_frame.h"
 #include "ref_counted_gl_sync.h"
 
@@ -17,7 +18,7 @@ class HTTPD;
 class QSurface;
 class QuickSyncEncoder;
 
-class VideoEncoder {
+class VideoEncoder : public KeyFrameSignalReceiver {
 public:
 	VideoEncoder(QSurface *surface, const std::string &va_display, int width, int height, HTTPD *httpd);
 	~VideoEncoder();
@@ -29,12 +30,30 @@ public:
 	// Does a cut of the disk stream immediately ("frame" is used for the filename only).
 	void do_cut(int frame);
 
+	virtual void signal_keyframe() override {
+		stream_mux_writing_keyframes = true;
+	}
+
 private:
+	void open_output_stream();
+	void close_output_stream();
+	static int write_packet_thunk(void *opaque, uint8_t *buf, int buf_size);
+	int write_packet(uint8_t *buf, int buf_size);
+
 	std::unique_ptr<QuickSyncEncoder> quicksync_encoder;
 	QSurface *surface;
 	std::string va_display;
 	int width, height;
 	HTTPD *httpd;
+
+	std::unique_ptr<Mux> stream_mux;  // To HTTP.
+
+	// While Mux object is constructing, <stream_mux_writing_header> is true,
+	// and the header is being collected into stream_mux_header.
+	bool stream_mux_writing_header;
+	std::string stream_mux_header;
+
+	bool stream_mux_writing_keyframes = false;
 };
 
 #endif

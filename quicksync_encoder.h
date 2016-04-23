@@ -33,11 +33,11 @@
 #include <string>
 #include <vector>
 
+#include "mux.h"
 #include "ref_counted_frame.h"
 #include "ref_counted_gl_sync.h"
 
 class QuickSyncEncoderImpl;
-class HTTPD;
 class QSurface;
 
 // This is just a pimpl, because including anything X11-related in a .h file
@@ -45,7 +45,7 @@ class QSurface;
 // .cpp file.
 class QuickSyncEncoder {
 public:
-        QuickSyncEncoder(QSurface *surface, const std::string &va_display, int width, int height, HTTPD *httpd);
+        QuickSyncEncoder(QSurface *surface, const std::string &va_display, int width, int height, Mux *stream_mux);
         ~QuickSyncEncoder();
 
 	void add_audio(int64_t pts, std::vector<float> audio);

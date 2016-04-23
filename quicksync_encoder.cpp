@@ -41,7 +41,6 @@ extern "C" {
 #include "context.h"
 #include "defs.h"
 #include "flags.h"
-#include "httpd.h"
 #include "mux.h"
 #include "timebase.h"
 #include "x264_encoder.h"
@@ -201,9 +200,9 @@ FrameReorderer::Frame FrameReorderer::get_first_frame()
 	return storage;
 }
 
-class QuickSyncEncoderImpl : public KeyFrameSignalReceiver {
+class QuickSyncEncoderImpl {
 public:
-	QuickSyncEncoderImpl(QSurface *surface, const string &va_display, int width, int height, HTTPD *httpd);
+	QuickSyncEncoderImpl(QSurface *surface, const string &va_display, int width, int height, Mux *stream_mux);
 	~QuickSyncEncoderImpl();
 	void add_audio(int64_t pts, vector<float> audio);
 	bool begin_frame(GLuint *y_tex, GLuint *cbcr_tex);
@@ -211,10 +210,6 @@ public:
 	void shutdown();
 	void open_output_file(const std::string &filename);
 	void close_output_file();
-
-	virtual void signal_keyframe() override {
-		stream_mux_writing_keyframes = true;
-	}
 
 private:
 	struct storage_task {
@@ -281,10 +276,6 @@ private:
 	int release_encode();
 	void update_ReferenceFrames(int frame_type);
 	int update_RefPicList(int frame_type);
-	void open_output_stream();
-	void close_output_stream();
-	static int write_packet_thunk(void *opaque, uint8_t *buf, int buf_size);
-	int write_packet(uint8_t *buf, int buf_size);
 
 	bool is_shutdown = false;
 	bool use_zerocopy;
@@ -318,18 +309,10 @@ private:
 	vector<float> audio_queue_file;
 	vector<float> audio_queue_stream;
 
-	unique_ptr<Mux> stream_mux;  // To HTTP.
+	Mux* stream_mux;  // To HTTP.
 	unique_ptr<Mux> file_mux;  // To local disk.
 
-	// While Mux object is constructing, <stream_mux_writing_header> is true,
-	// and the header is being collected into stream_mux_header.
-	bool stream_mux_writing_header;
-	string stream_mux_header;
-
-	bool stream_mux_writing_keyframes = false;
-
 	AVFrame *audio_frame = nullptr;
-	HTTPD *httpd;
 	unique_ptr<FrameReorderer> reorderer;
 	unique_ptr<X264Encoder> x264_encoder;  // nullptr if not using x264.
 
@@ -1704,9 +1687,9 @@ void QuickSyncEncoderImpl::save_codeddata(storage_task task)
 
 		if (context_audio_stream) {
 			encode_audio(audio, &audio_queue_file, audio_pts, context_audio_file, resampler_audio_file, { file_mux.get() });
-			encode_audio(audio, &audio_queue_stream, audio_pts, context_audio_stream, resampler_audio_stream, { stream_mux.get() });
+			encode_audio(audio, &audio_queue_stream, audio_pts, context_audio_stream, resampler_audio_stream, { stream_mux });
 		} else {
-			encode_audio(audio, &audio_queue_file, audio_pts, context_audio_file, resampler_audio_file, { stream_mux.get(), file_mux.get() });
+			encode_audio(audio, &audio_queue_file, audio_pts, context_audio_file, resampler_audio_file, { stream_mux, file_mux.get() });
 		}
 		last_audio_pts = audio_pts + audio.size() * TIMEBASE / (OUTPUT_FREQUENCY * 2);
 
@@ -1942,8 +1925,8 @@ void init_audio_encoder(const string &codec_name, int bit_rate, AVCodecContext *
 
 }  // namespace
 
-QuickSyncEncoderImpl::QuickSyncEncoderImpl(QSurface *surface, const string &va_display, int width, int height, HTTPD *httpd)
-	: current_storage_frame(0), surface(surface), httpd(httpd), frame_width(width), frame_height(height)
+QuickSyncEncoderImpl::QuickSyncEncoderImpl(QSurface *surface, const string &va_display, int width, int height, Mux *stream_mux)
+	: current_storage_frame(0), surface(surface), stream_mux(stream_mux), frame_width(width), frame_height(height)
 {
 	init_audio_encoder(AUDIO_OUTPUT_CODEC_NAME, DEFAULT_AUDIO_OUTPUT_BIT_RATE, &context_audio_file, &resampler_audio_file);
 
@@ -1955,8 +1938,6 @@ QuickSyncEncoderImpl::QuickSyncEncoderImpl(QSurface *surface, const string &va_d
 	frame_width_mbaligned = (frame_width + 15) & (~15);
 	frame_height_mbaligned = (frame_height + 15) & (~15);
 
-	open_output_stream();
-
 	audio_frame = av_frame_alloc();
 
 	//print_input();
@@ -1966,7 +1947,7 @@ QuickSyncEncoderImpl::QuickSyncEncoderImpl(QSurface *surface, const string &va_d
 		reorderer.reset(new FrameReorderer(ip_period - 1, frame_width, frame_height));
 	}
 	if (global_flags.x264_video_to_http) {
-		x264_encoder.reset(new X264Encoder(stream_mux.get()));
+		x264_encoder.reset(new X264Encoder(stream_mux));
 	}
 
 	init_va(va_display);
@@ -2002,7 +1983,6 @@ QuickSyncEncoderImpl::~QuickSyncEncoderImpl()
 	avresample_free(&resampler_audio_stream);
 	avcodec_free_context(&context_audio_file);
 	avcodec_free_context(&context_audio_stream);
-	close_output_stream();
 }
 
 bool QuickSyncEncoderImpl::begin_frame(GLuint *y_tex, GLuint *cbcr_tex)
@@ -2182,71 +2162,6 @@ void QuickSyncEncoderImpl::close_output_file()
         file_mux.reset();
 }
 
-void QuickSyncEncoderImpl::open_output_stream()
-{
-	AVFormatContext *avctx = avformat_alloc_context();
-	AVOutputFormat *oformat = av_guess_format(global_flags.stream_mux_name.c_str(), nullptr, nullptr);
-	assert(oformat != nullptr);
-	avctx->oformat = oformat;
-
-	string codec_name;
-	int bit_rate;
-
-	if (global_flags.stream_audio_codec_name.empty()) {
-		codec_name = AUDIO_OUTPUT_CODEC_NAME;
-		bit_rate = DEFAULT_AUDIO_OUTPUT_BIT_RATE;
-	} else {
-		codec_name = global_flags.stream_audio_codec_name;
-		bit_rate = global_flags.stream_audio_codec_bitrate;
-	}
-
-	uint8_t *buf = (uint8_t *)av_malloc(MUX_BUFFER_SIZE);
-	avctx->pb = avio_alloc_context(buf, MUX_BUFFER_SIZE, 1, this, nullptr, &QuickSyncEncoderImpl::write_packet_thunk, nullptr);
-
-	Mux::Codec video_codec;
-	if (global_flags.uncompressed_video_to_http) {
-		video_codec = Mux::CODEC_NV12;
-	} else {
-		video_codec = Mux::CODEC_H264;
-	}
-
-	avctx->flags = AVFMT_FLAG_CUSTOM_IO;
-	AVCodec *codec_audio = avcodec_find_encoder_by_name(codec_name.c_str());
-	if (codec_audio == nullptr) {
-		fprintf(stderr, "ERROR: Could not find codec '%s'\n", codec_name.c_str());
-		exit(1);
-	}
-
-	int time_base = global_flags.stream_coarse_timebase ? COARSE_TIMEBASE : TIMEBASE;
-	stream_mux_writing_header = true;
-	stream_mux.reset(new Mux(avctx, frame_width, frame_height, video_codec, codec_audio, time_base, bit_rate, this));
-	stream_mux_writing_header = false;
-	httpd->set_header(stream_mux_header);
-	stream_mux_header.clear();
-}
-
-void QuickSyncEncoderImpl::close_output_stream()
-{
-	stream_mux.reset();
-}
-
-int QuickSyncEncoderImpl::write_packet_thunk(void *opaque, uint8_t *buf, int buf_size)
-{
-	QuickSyncEncoderImpl *h264_encoder = (QuickSyncEncoderImpl *)opaque;
-	return h264_encoder->write_packet(buf, buf_size);
-}
-
-int QuickSyncEncoderImpl::write_packet(uint8_t *buf, int buf_size)
-{
-	if (stream_mux_writing_header) {
-		stream_mux_header.append((char *)buf, buf_size);
-	} else {
-		httpd->add_data((char *)buf, buf_size, stream_mux_writing_keyframes);
-		stream_mux_writing_keyframes = false;
-	}
-	return buf_size;
-}
-
 void QuickSyncEncoderImpl::encode_thread_func()
 {
 	int64_t last_dts = -1;
@@ -2336,9 +2251,9 @@ void QuickSyncEncoderImpl::encode_remaining_audio()
 
 		if (context_audio_stream) {
 			encode_audio(audio, &audio_queue_file, audio_pts, context_audio_file, resampler_audio_file, { file_mux.get() });
-			encode_audio(audio, &audio_queue_stream, audio_pts, context_audio_stream, resampler_audio_stream, { stream_mux.get() });
+			encode_audio(audio, &audio_queue_stream, audio_pts, context_audio_stream, resampler_audio_stream, { stream_mux });
 		} else {
-			encode_audio(audio, &audio_queue_file, audio_pts, context_audio_file, resampler_audio_file, { stream_mux.get(), file_mux.get() });
+			encode_audio(audio, &audio_queue_file, audio_pts, context_audio_file, resampler_audio_file, { stream_mux, file_mux.get() });
 		}
 		last_audio_pts = audio_pts + audio.size() * TIMEBASE / (OUTPUT_FREQUENCY * 2);
 	}
@@ -2347,9 +2262,9 @@ void QuickSyncEncoderImpl::encode_remaining_audio()
 	// Encode any leftover audio in the queues, and also any delayed frames.
 	if (context_audio_stream) {
 		encode_last_audio(&audio_queue_file, last_audio_pts, context_audio_file, resampler_audio_file, { file_mux.get() });
-		encode_last_audio(&audio_queue_stream, last_audio_pts, context_audio_stream, resampler_audio_stream, { stream_mux.get() });
+		encode_last_audio(&audio_queue_stream, last_audio_pts, context_audio_stream, resampler_audio_stream, { stream_mux });
 	} else {
-		encode_last_audio(&audio_queue_file, last_audio_pts, context_audio_file, resampler_audio_file, { stream_mux.get(), file_mux.get() });
+		encode_last_audio(&audio_queue_file, last_audio_pts, context_audio_file, resampler_audio_file, { stream_mux, file_mux.get() });
 	}
 }
 
@@ -2472,8 +2387,8 @@ void QuickSyncEncoderImpl::encode_frame(QuickSyncEncoderImpl::PendingFrame frame
 }
 
 // Proxy object.
-QuickSyncEncoder::QuickSyncEncoder(QSurface *surface, const string &va_display, int width, int height, HTTPD *httpd)
-	: impl(new QuickSyncEncoderImpl(surface, va_display, width, height, httpd)) {}
+QuickSyncEncoder::QuickSyncEncoder(QSurface *surface, const string &va_display, int width, int height, Mux *stream_mux)
+	: impl(new QuickSyncEncoderImpl(surface, va_display, width, height, stream_mux)) {}
 
 // Must be defined here because unique_ptr<> destructor needs to know the impl.
 QuickSyncEncoder::~QuickSyncEncoder() {}
