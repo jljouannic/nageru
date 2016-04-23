@@ -20,6 +20,9 @@
 	/* Make seekable .mov files. */ \
 	{ "movflags", "empty_moov+frag_keyframe+default_base_moof" }, \
 	\
+	/* Make for somewhat less bursty stream output when using .mov. */ \
+	{ "frag_duration", "125000" }, \
+	\
 	/* Keep nut muxer from using unlimited amounts of memory. */ \
 	{ "write_index", "0" } \
 }
