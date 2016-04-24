@@ -110,9 +110,9 @@ void QueueLengthPolicy::update_policy(int queue_length)
 		if (queue_length >= int(safe_queue_length)) {
 			been_at_safe_point_since_last_starvation = true;
 		}
-		if (++frames_with_at_least_one >= 50 && safe_queue_length > 0) {
+		if (++frames_with_at_least_one >= 1000 && safe_queue_length > 0) {
 			--safe_queue_length;
-			fprintf(stderr, "Card %u: Spare frames for more than 50 frames, reducing safe limit to %u frames\n",
+			fprintf(stderr, "Card %u: Spare frames for more than 1000 frames, reducing safe limit to %u frames\n",
 				card_index, safe_queue_length);
 			frames_with_at_least_one = 0;
 		}
@@ -157,7 +157,7 @@ Mixer::Mixer(const QSurfaceFormat &format, unsigned num_cards)
 	display_chain->set_dither_bits(0);  // Don't bother.
 	display_chain->finalize();
 
-	video_encoder.reset(new VideoEncoder(h264_encoder_surface, global_flags.va_display, WIDTH, HEIGHT, &httpd));
+	video_encoder.reset(new VideoEncoder(resource_pool.get(), h264_encoder_surface, global_flags.va_display, WIDTH, HEIGHT, &httpd));
 
 	// Start listening for clients only once VideoEncoder has written its header, if any.
 	httpd.start(9095);
