@@ -20,9 +20,13 @@ class QSurface;
 class QuickSyncEncoder;
 class X264Encoder;
 
+namespace movit {
+class ResourcePool;
+}  // namespace movit
+
 class VideoEncoder : public KeyFrameSignalReceiver {
 public:
-	VideoEncoder(QSurface *surface, const std::string &va_display, int width, int height, HTTPD *httpd);
+	VideoEncoder(movit::ResourcePool *resource_pool, QSurface *surface, const std::string &va_display, int width, int height, HTTPD *httpd);
 	~VideoEncoder();
 
 	void add_audio(int64_t pts, std::vector<float> audio);
@@ -43,6 +47,7 @@ private:
 	int write_packet(uint8_t *buf, int buf_size);
 
 	std::unique_ptr<QuickSyncEncoder> quicksync_encoder;
+	movit::ResourcePool *resource_pool;
 	QSurface *surface;
 	std::string va_display;
 	int width, height;

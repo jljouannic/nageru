@@ -1,6 +1,7 @@
 //#include "sysdeps.h"
 #include "quicksync_encoder.h"
 
+#include <movit/resource_pool.h>
 #include <movit/util.h>
 #include <EGL/eglplatform.h>
 #include <X11/X.h>
@@ -193,7 +194,7 @@ FrameReorderer::Frame FrameReorderer::get_first_frame()
 
 class QuickSyncEncoderImpl {
 public:
-	QuickSyncEncoderImpl(const std::string &filename, QSurface *surface, const string &va_display, int width, int height, Mux *stream_mux, AudioEncoder *stream_audio_encoder, X264Encoder *x264_encoder);
+	QuickSyncEncoderImpl(const std::string &filename, movit::ResourcePool *resource_pool, QSurface *surface, const string &va_display, int width, int height, Mux *stream_mux, AudioEncoder *stream_audio_encoder, X264Encoder *x264_encoder);
 	~QuickSyncEncoderImpl();
 	void add_audio(int64_t pts, vector<float> audio);
 	bool begin_frame(GLuint *y_tex, GLuint *cbcr_tex);
@@ -270,6 +271,7 @@ private:
 
 	map<int, PendingFrame> pending_video_frames;  // under frame_queue_mutex
 	map<int64_t, vector<float>> pending_audio_frames;  // under frame_queue_mutex
+	movit::ResourcePool *resource_pool;
 	QSurface *surface;
 
 	unique_ptr<AudioEncoder> file_audio_encoder;
@@ -1201,17 +1203,12 @@ int QuickSyncEncoderImpl::setup_encode()
     //glGenFramebuffers(SURFACE_NUM, fbos);
     
     for (i = 0; i < SURFACE_NUM; i++) {
-        glGenTextures(1, &gl_surfaces[i].y_tex);
-        glGenTextures(1, &gl_surfaces[i].cbcr_tex);
-
-        if (!use_zerocopy) {
-            // Create Y image.
-            glBindTexture(GL_TEXTURE_2D, gl_surfaces[i].y_tex);
-            glTexStorage2D(GL_TEXTURE_2D, 1, GL_R8, frame_width, frame_height);
-
-            // Create CbCr image.
-            glBindTexture(GL_TEXTURE_2D, gl_surfaces[i].cbcr_tex);
-            glTexStorage2D(GL_TEXTURE_2D, 1, GL_RG8, frame_width / 2, frame_height / 2);
+        if (use_zerocopy) {
+            gl_surfaces[i].y_tex = resource_pool->create_2d_texture(GL_R8, 1, 1);
+            gl_surfaces[i].cbcr_tex = resource_pool->create_2d_texture(GL_RG8, 1, 1);
+        } else {
+            gl_surfaces[i].y_tex = resource_pool->create_2d_texture(GL_R8, frame_width, frame_height);
+            gl_surfaces[i].cbcr_tex = resource_pool->create_2d_texture(GL_RG8, frame_width / 2, frame_height / 2);
 
             // Generate a PBO to read into. It doesn't necessarily fit 1:1 with the VA-API
             // buffers, due to potentially differing pitch.
@@ -1707,8 +1704,8 @@ int QuickSyncEncoderImpl::release_encode()
 			glBindBuffer(GL_PIXEL_PACK_BUFFER, 0);
 			glDeleteBuffers(1, &gl_surfaces[i].pbo);
 		}
-		glDeleteTextures(1, &gl_surfaces[i].y_tex);
-		glDeleteTextures(1, &gl_surfaces[i].cbcr_tex);
+		resource_pool->release_2d_texture(gl_surfaces[i].y_tex);
+		resource_pool->release_2d_texture(gl_surfaces[i].cbcr_tex);
 	}
 
 	vaDestroyContext(va_dpy, context_id);
@@ -1730,8 +1727,8 @@ namespace {
 
 }  // namespace
 
-QuickSyncEncoderImpl::QuickSyncEncoderImpl(const std::string &filename, QSurface *surface, const string &va_display, int width, int height, Mux *stream_mux, AudioEncoder *stream_audio_encoder, X264Encoder *x264_encoder)
-	: current_storage_frame(0), surface(surface), stream_audio_encoder(stream_audio_encoder), x264_encoder(x264_encoder), stream_mux(stream_mux), frame_width(width), frame_height(height)
+QuickSyncEncoderImpl::QuickSyncEncoderImpl(const std::string &filename, movit::ResourcePool *resource_pool, QSurface *surface, const string &va_display, int width, int height, Mux *stream_mux, AudioEncoder *stream_audio_encoder, X264Encoder *x264_encoder)
+	: current_storage_frame(0), resource_pool(resource_pool), surface(surface), stream_audio_encoder(stream_audio_encoder), x264_encoder(x264_encoder), stream_mux(stream_mux), frame_width(width), frame_height(height)
 {
 	file_audio_encoder.reset(new AudioEncoder(AUDIO_OUTPUT_CODEC_NAME, DEFAULT_AUDIO_OUTPUT_BIT_RATE));
 	open_output_file(filename);
@@ -2173,8 +2170,8 @@ void QuickSyncEncoderImpl::encode_frame(QuickSyncEncoderImpl::PendingFrame frame
 }
 
 // Proxy object.
-QuickSyncEncoder::QuickSyncEncoder(const std::string &filename, QSurface *surface, const string &va_display, int width, int height, Mux *stream_mux, AudioEncoder *stream_audio_encoder, X264Encoder *x264_encoder)
-	: impl(new QuickSyncEncoderImpl(filename, surface, va_display, width, height, stream_mux, stream_audio_encoder, x264_encoder)) {}
+QuickSyncEncoder::QuickSyncEncoder(const std::string &filename, movit::ResourcePool *resource_pool, QSurface *surface, const string &va_display, int width, int height, Mux *stream_mux, AudioEncoder *stream_audio_encoder, X264Encoder *x264_encoder)
+	: impl(new QuickSyncEncoderImpl(filename, resource_pool, surface, va_display, width, height, stream_mux, stream_audio_encoder, x264_encoder)) {}
 
 // Must be defined here because unique_ptr<> destructor needs to know the impl.
 QuickSyncEncoder::~QuickSyncEncoder() {}

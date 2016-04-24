@@ -12,6 +12,7 @@
 #include "x264_encoder.h"
 
 using namespace std;
+using namespace movit;
 
 namespace {
 
@@ -34,8 +35,8 @@ string generate_local_dump_filename(int frame)
 
 }  // namespace
 
-VideoEncoder::VideoEncoder(QSurface *surface, const std::string &va_display, int width, int height, HTTPD *httpd)
-	: surface(surface), va_display(va_display), width(width), height(height), httpd(httpd)
+VideoEncoder::VideoEncoder(ResourcePool *resource_pool, QSurface *surface, const std::string &va_display, int width, int height, HTTPD *httpd)
+	: resource_pool(resource_pool), surface(surface), va_display(va_display), width(width), height(height), httpd(httpd)
 {
 	open_output_stream();
 
@@ -51,7 +52,7 @@ VideoEncoder::VideoEncoder(QSurface *surface, const std::string &va_display, int
 	}
 
 	string filename = generate_local_dump_filename(/*frame=*/0);
-	quicksync_encoder.reset(new QuickSyncEncoder(filename, surface, va_display, width, height, stream_mux.get(), stream_audio_encoder.get(), x264_encoder.get()));
+	quicksync_encoder.reset(new QuickSyncEncoder(filename, resource_pool, surface, va_display, width, height, stream_mux.get(), stream_audio_encoder.get(), x264_encoder.get()));
 }
 
 VideoEncoder::~VideoEncoder()
@@ -65,7 +66,7 @@ void VideoEncoder::do_cut(int frame)
 	string filename = generate_local_dump_filename(frame);
 	printf("Starting new recording: %s\n", filename.c_str());
 	quicksync_encoder->shutdown();
-	quicksync_encoder.reset(new QuickSyncEncoder(filename, surface, va_display, width, height, stream_mux.get(), stream_audio_encoder.get(), x264_encoder.get()));
+	quicksync_encoder.reset(new QuickSyncEncoder(filename, resource_pool, surface, va_display, width, height, stream_mux.get(), stream_audio_encoder.get(), x264_encoder.get()));
 }
 
 void VideoEncoder::add_audio(int64_t pts, std::vector<float> audio)
