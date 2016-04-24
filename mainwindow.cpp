@@ -32,6 +32,8 @@ using namespace std::placeholders;
 
 Q_DECLARE_METATYPE(std::vector<std::string>);
 
+MainWindow *global_mainwindow = nullptr;
+
 namespace {
 
 void schedule_cut_signal(int ignored)
@@ -41,12 +43,10 @@ void schedule_cut_signal(int ignored)
 
 void quit_signal(int ignored)
 {
-	global_mixer->quit();
+	global_mainwindow->close();
 }
 
 }  // namespace
-
-MainWindow *global_mainwindow = nullptr;
 
 MainWindow::MainWindow()
 	: ui(new Ui::MainWindow)
