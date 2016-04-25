@@ -25,7 +25,7 @@ public:
 	};
 
 	// Takes ownership of avctx. <keyframe_signal_receiver> can be nullptr.
-	Mux(AVFormatContext *avctx, int width, int height, Codec video_codec, const AVCodec *codec_audio, int time_base, int bit_rate, KeyFrameSignalReceiver *keyframe_signal_receiver);
+	Mux(AVFormatContext *avctx, int width, int height, Codec video_codec, const AVCodecContext *audio_ctx, int time_base, KeyFrameSignalReceiver *keyframe_signal_receiver);
 	~Mux();
 	void add_packet(const AVPacket &pkt, int64_t pts, int64_t dts);
 

@@ -25,7 +25,7 @@ public:
 	void encode_audio(const std::vector<float> &audio, int64_t audio_pts);
 	void encode_last_audio();
 
-	const AVCodec *get_codec() { return ctx->codec; }
+	const AVCodecContext *get_ctx() { return ctx; }
 
 private:
 	void encode_audio_one_frame(const float *audio, size_t num_samples, int64_t audio_pts);

@@ -91,17 +91,6 @@ void VideoEncoder::open_output_stream()
 	assert(oformat != nullptr);
 	avctx->oformat = oformat;
 
-	string codec_name;
-	int bit_rate;
-
-	if (global_flags.stream_audio_codec_name.empty()) {
-		codec_name = AUDIO_OUTPUT_CODEC_NAME;
-		bit_rate = DEFAULT_AUDIO_OUTPUT_BIT_RATE;
-	} else {
-		codec_name = global_flags.stream_audio_codec_name;
-		bit_rate = global_flags.stream_audio_codec_bitrate;
-	}
-
 	uint8_t *buf = (uint8_t *)av_malloc(MUX_BUFFER_SIZE);
 	avctx->pb = avio_alloc_context(buf, MUX_BUFFER_SIZE, 1, this, nullptr, &VideoEncoder::write_packet_thunk, nullptr);
 
@@ -113,15 +102,10 @@ void VideoEncoder::open_output_stream()
 	}
 
 	avctx->flags = AVFMT_FLAG_CUSTOM_IO;
-	AVCodec *codec_audio = avcodec_find_encoder_by_name(codec_name.c_str());
-	if (codec_audio == nullptr) {
-		fprintf(stderr, "ERROR: Could not find codec '%s'\n", codec_name.c_str());
-		exit(1);
-	}
 
 	int time_base = global_flags.stream_coarse_timebase ? COARSE_TIMEBASE : TIMEBASE;
 	stream_mux_writing_header = true;
-	stream_mux.reset(new Mux(avctx, width, height, video_codec, codec_audio, time_base, bit_rate, this));
+	stream_mux.reset(new Mux(avctx, width, height, video_codec, stream_audio_encoder->get_ctx(), time_base, this));
 	stream_mux_writing_header = false;
 	httpd->set_header(stream_mux_header);
 	stream_mux_header.clear();

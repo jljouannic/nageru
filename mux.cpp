@@ -10,7 +10,7 @@
 
 using namespace std;
 
-Mux::Mux(AVFormatContext *avctx, int width, int height, Codec video_codec, const AVCodec *codec_audio, int time_base, int bit_rate, KeyFrameSignalReceiver *keyframe_signal_receiver)
+Mux::Mux(AVFormatContext *avctx, int width, int height, Codec video_codec, const AVCodecContext *audio_ctx, int time_base, KeyFrameSignalReceiver *keyframe_signal_receiver)
 	: avctx(avctx), keyframe_signal_receiver(keyframe_signal_receiver)
 {
 	AVCodec *codec_video = avcodec_find_encoder((video_codec == CODEC_H264) ? AV_CODEC_ID_H264 : AV_CODEC_ID_RAWVIDEO);
@@ -47,20 +47,13 @@ Mux::Mux(AVFormatContext *avctx, int width, int height, Codec video_codec, const
 		avstream_video->codec->flags = AV_CODEC_FLAG_GLOBAL_HEADER;
 	}
 
-	avstream_audio = avformat_new_stream(avctx, codec_audio);
+	avstream_audio = avformat_new_stream(avctx, nullptr);
 	if (avstream_audio == nullptr) {
 		fprintf(stderr, "avformat_new_stream() failed\n");
 		exit(1);
 	}
 	avstream_audio->time_base = AVRational{1, time_base};
-	avstream_audio->codec->bit_rate = bit_rate;
-	avstream_audio->codec->sample_rate = OUTPUT_FREQUENCY;
-	avstream_audio->codec->channels = 2;
-	avstream_audio->codec->channel_layout = AV_CH_LAYOUT_STEREO;
-	avstream_audio->codec->time_base = AVRational{1, time_base};
-	if (avctx->oformat->flags & AVFMT_GLOBALHEADER) {
-		avstream_audio->codec->flags = AV_CODEC_FLAG_GLOBAL_HEADER;
-	}
+	avcodec_copy_context(avstream_audio->codec, audio_ctx);
 
 	AVDictionary *options = NULL;
 	vector<pair<string, string>> opts = MUX_OPTS;

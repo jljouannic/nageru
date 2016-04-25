@@ -1949,7 +1949,7 @@ void QuickSyncEncoderImpl::open_output_file(const std::string &filename)
 		exit(1);
 	}
 
-	file_mux.reset(new Mux(avctx, frame_width, frame_height, Mux::CODEC_H264, file_audio_encoder->get_codec(), TIMEBASE, DEFAULT_AUDIO_OUTPUT_BIT_RATE, nullptr));
+	file_mux.reset(new Mux(avctx, frame_width, frame_height, Mux::CODEC_H264, file_audio_encoder->get_ctx(), TIMEBASE, nullptr));
 }
 
 void QuickSyncEncoderImpl::encode_thread_func()
