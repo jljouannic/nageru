@@ -21,7 +21,7 @@ extern "C" {
 
 using namespace std;
 
-AudioEncoder::AudioEncoder(const string &codec_name, int bit_rate)
+AudioEncoder::AudioEncoder(const string &codec_name, int bit_rate, const AVOutputFormat *oformat)
 {
 	AVCodec *codec = avcodec_find_encoder_by_name(codec_name.c_str());
 	if (codec == nullptr) {
@@ -36,7 +36,9 @@ AudioEncoder::AudioEncoder(const string &codec_name, int bit_rate)
 	ctx->channels = 2;
 	ctx->channel_layout = AV_CH_LAYOUT_STEREO;
 	ctx->time_base = AVRational{1, TIMEBASE};
-	ctx->flags |= CODEC_FLAG_GLOBAL_HEADER;
+	if (oformat->flags & AVFMT_GLOBALHEADER) {
+		ctx->flags |= CODEC_FLAG_GLOBAL_HEADER;
+	}
 	if (avcodec_open2(ctx, codec, NULL) < 0) {
 		fprintf(stderr, "Could not open codec '%s'\n", codec_name.c_str());
 		exit(1);

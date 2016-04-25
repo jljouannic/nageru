@@ -27,21 +27,27 @@
 
 extern "C" {
 #include "x264.h"
+#include <libavformat/avformat.h>
 }
 
 class Mux;
 
 class X264Encoder {
 public:
-	X264Encoder(Mux *httpd);  // Does not take ownership.
+	X264Encoder(AVOutputFormat *oformat);  // Does not take ownership.
 
 	// Called after the last frame. Will block; once this returns,
 	// the last data is flushed.
 	~X264Encoder();
 
+	// Must be called before first frame. Does not take ownership.
+	void set_mux(Mux *mux) { this->mux = mux; }
+
 	// <data> is taken to be raw NV12 data of WIDTHxHEIGHT resolution.
 	// Does not block.
 	void add_frame(int64_t pts, int64_t duration, const uint8_t *data);
+
+	std::string get_global_headers() const { return global_headers; }
 
 private:
 	struct QueuedFrame {
@@ -58,6 +64,10 @@ private:
 	std::unique_ptr<uint8_t[]> frame_pool;
 
 	Mux *mux = nullptr;
+	bool wants_global_headers;
+
+	std::string global_headers;
+	std::string buffered_sei;  // Will be output before first frame, if any.
 
 	std::thread encoder_thread;
 	std::atomic<bool> should_quit{false};

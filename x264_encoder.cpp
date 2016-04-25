@@ -13,8 +13,8 @@ extern "C" {
 
 using namespace std;
 
-X264Encoder::X264Encoder(Mux *mux)
-	: mux(mux)
+X264Encoder::X264Encoder(AVOutputFormat *oformat)
+	: wants_global_headers(oformat->flags & AVFMT_GLOBALHEADER)
 {
 	frame_pool.reset(new uint8_t[WIDTH * HEIGHT * 2 * X264_QUEUE_LENGTH]);
 	for (unsigned i = 0; i < X264_QUEUE_LENGTH; ++i) {
@@ -88,10 +88,28 @@ void X264Encoder::init_x264()
 
 	x264_param_apply_profile(&param, "high");
 
+	param.b_repeat_headers = !wants_global_headers;
+
 	x264 = x264_encoder_open(&param);
 	if (x264 == nullptr) {
 		fprintf(stderr, "ERROR: x264 initialization failed.\n");
 		exit(1);
+	}
+
+	if (wants_global_headers) {
+		x264_nal_t *nal;
+		int num_nal;
+
+		x264_encoder_headers(x264, &nal, &num_nal);
+
+		for (int i = 0; i < num_nal; ++i) {
+			if (nal[i].i_type == NAL_SEI) {
+				// Don't put the SEI in extradata; make it part of the first frame instead.
+				buffered_sei += string((const char *)nal[i].p_payload, nal[i].i_payload);
+			} else {
+				global_headers += string((const char *)nal[i].p_payload, nal[i].i_payload);
+			}
+		}
 	}
 }
 
@@ -160,7 +178,7 @@ void X264Encoder::encode_frame(X264Encoder::QueuedFrame qf)
 
 	// We really need one AVPacket for the entire frame, it seems,
 	// so combine it all.
-	size_t num_bytes = 0;
+	size_t num_bytes = buffered_sei.size();
 	for (int i = 0; i < num_nal; ++i) {
 		num_bytes += nal[i].i_payload;
 	}
@@ -168,6 +186,11 @@ void X264Encoder::encode_frame(X264Encoder::QueuedFrame qf)
 	unique_ptr<uint8_t[]> data(new uint8_t[num_bytes]);
 	uint8_t *ptr = data.get();
 
+	if (!buffered_sei.empty()) {
+		memcpy(ptr, buffered_sei.data(), buffered_sei.size());
+		ptr += buffered_sei.size();
+		buffered_sei.clear();
+	}
 	for (int i = 0; i < num_nal; ++i) {
 		memcpy(ptr, nal[i].p_payload, nal[i].i_payload);
 		ptr += nal[i].i_payload;

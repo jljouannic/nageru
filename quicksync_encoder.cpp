@@ -194,12 +194,16 @@ FrameReorderer::Frame FrameReorderer::get_first_frame()
 
 class QuickSyncEncoderImpl {
 public:
-	QuickSyncEncoderImpl(const std::string &filename, movit::ResourcePool *resource_pool, QSurface *surface, const string &va_display, int width, int height, Mux *stream_mux, AudioEncoder *stream_audio_encoder, X264Encoder *x264_encoder);
+	QuickSyncEncoderImpl(const std::string &filename, movit::ResourcePool *resource_pool, QSurface *surface, const string &va_display, int width, int height, AVOutputFormat *oformat, AudioEncoder *stream_audio_encoder, X264Encoder *x264_encoder);
 	~QuickSyncEncoderImpl();
 	void add_audio(int64_t pts, vector<float> audio);
 	bool begin_frame(GLuint *y_tex, GLuint *cbcr_tex);
 	RefCountedGLsync end_frame(int64_t pts, int64_t duration, const vector<RefCountedFrame> &input_frames);
 	void shutdown();
+	void set_stream_mux(Mux *mux)
+	{
+		stream_mux = mux;
+	}
 
 private:
 	struct storage_task {
@@ -280,7 +284,7 @@ private:
 	unique_ptr<FrameReorderer> reorderer;
 	X264Encoder *x264_encoder;  // nullptr if not using x264.
 
-	Mux* stream_mux;  // To HTTP.
+	Mux* stream_mux = nullptr;  // To HTTP.
 	unique_ptr<Mux> file_mux;  // To local disk.
 
 	Display *x11_display = nullptr;
@@ -1727,10 +1731,10 @@ namespace {
 
 }  // namespace
 
-QuickSyncEncoderImpl::QuickSyncEncoderImpl(const std::string &filename, movit::ResourcePool *resource_pool, QSurface *surface, const string &va_display, int width, int height, Mux *stream_mux, AudioEncoder *stream_audio_encoder, X264Encoder *x264_encoder)
-	: current_storage_frame(0), resource_pool(resource_pool), surface(surface), stream_audio_encoder(stream_audio_encoder), x264_encoder(x264_encoder), stream_mux(stream_mux), frame_width(width), frame_height(height)
+QuickSyncEncoderImpl::QuickSyncEncoderImpl(const std::string &filename, movit::ResourcePool *resource_pool, QSurface *surface, const string &va_display, int width, int height, AVOutputFormat *oformat, AudioEncoder *stream_audio_encoder, X264Encoder *x264_encoder)
+	: current_storage_frame(0), resource_pool(resource_pool), surface(surface), stream_audio_encoder(stream_audio_encoder), x264_encoder(x264_encoder), frame_width(width), frame_height(height)
 {
-	file_audio_encoder.reset(new AudioEncoder(AUDIO_OUTPUT_CODEC_NAME, DEFAULT_AUDIO_OUTPUT_BIT_RATE));
+	file_audio_encoder.reset(new AudioEncoder(AUDIO_OUTPUT_CODEC_NAME, DEFAULT_AUDIO_OUTPUT_BIT_RATE, oformat));
 	open_output_file(filename);
 	file_audio_encoder->add_mux(file_mux.get());
 
@@ -1949,7 +1953,8 @@ void QuickSyncEncoderImpl::open_output_file(const std::string &filename)
 		exit(1);
 	}
 
-	file_mux.reset(new Mux(avctx, frame_width, frame_height, Mux::CODEC_H264, file_audio_encoder->get_ctx(), TIMEBASE, nullptr));
+	string video_extradata = "";  // FIXME: See other comment about global headers.
+	file_mux.reset(new Mux(avctx, frame_width, frame_height, Mux::CODEC_H264, video_extradata, file_audio_encoder->get_ctx(), TIMEBASE, nullptr));
 }
 
 void QuickSyncEncoderImpl::encode_thread_func()
@@ -2141,6 +2146,9 @@ void QuickSyncEncoderImpl::encode_frame(QuickSyncEncoderImpl::PendingFrame frame
 	CHECK_VASTATUS(va_status, "vaBeginPicture");
 
 	if (frame_type == FRAME_IDR) {
+		// FIXME: If the mux wants global headers, we should not put the
+		// SPS/PPS before each IDR frame, but rather put it into the
+		// codec extradata (formatted differently?).
 		render_sequence();
 		render_picture(frame_type, display_frame_num, gop_start_display_frame_num);
 		if (h264_packedheader) {
@@ -2170,8 +2178,8 @@ void QuickSyncEncoderImpl::encode_frame(QuickSyncEncoderImpl::PendingFrame frame
 }
 
 // Proxy object.
-QuickSyncEncoder::QuickSyncEncoder(const std::string &filename, movit::ResourcePool *resource_pool, QSurface *surface, const string &va_display, int width, int height, Mux *stream_mux, AudioEncoder *stream_audio_encoder, X264Encoder *x264_encoder)
-	: impl(new QuickSyncEncoderImpl(filename, resource_pool, surface, va_display, width, height, stream_mux, stream_audio_encoder, x264_encoder)) {}
+QuickSyncEncoder::QuickSyncEncoder(const std::string &filename, movit::ResourcePool *resource_pool, QSurface *surface, const string &va_display, int width, int height, AVOutputFormat *oformat, AudioEncoder *stream_audio_encoder, X264Encoder *x264_encoder)
+	: impl(new QuickSyncEncoderImpl(filename, resource_pool, surface, va_display, width, height, oformat, stream_audio_encoder, x264_encoder)) {}
 
 // Must be defined here because unique_ptr<> destructor needs to know the impl.
 QuickSyncEncoder::~QuickSyncEncoder() {}
@@ -2195,3 +2203,9 @@ void QuickSyncEncoder::shutdown()
 {
 	impl->shutdown();
 }
+
+void QuickSyncEncoder::set_stream_mux(Mux *mux)
+{
+	impl->set_stream_mux(mux);
+}
+

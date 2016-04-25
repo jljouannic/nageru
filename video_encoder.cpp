@@ -38,21 +38,24 @@ string generate_local_dump_filename(int frame)
 VideoEncoder::VideoEncoder(ResourcePool *resource_pool, QSurface *surface, const std::string &va_display, int width, int height, HTTPD *httpd)
 	: resource_pool(resource_pool), surface(surface), va_display(va_display), width(width), height(height), httpd(httpd)
 {
-	open_output_stream();
-
+	oformat = av_guess_format(global_flags.stream_mux_name.c_str(), nullptr, nullptr);
+	assert(oformat != nullptr);
 	if (global_flags.stream_audio_codec_name.empty()) {
-		stream_audio_encoder.reset(new AudioEncoder(AUDIO_OUTPUT_CODEC_NAME, DEFAULT_AUDIO_OUTPUT_BIT_RATE));
+		stream_audio_encoder.reset(new AudioEncoder(AUDIO_OUTPUT_CODEC_NAME, DEFAULT_AUDIO_OUTPUT_BIT_RATE, oformat));
 	} else {
-		stream_audio_encoder.reset(new AudioEncoder(global_flags.stream_audio_codec_name, global_flags.stream_audio_codec_bitrate));
+		stream_audio_encoder.reset(new AudioEncoder(global_flags.stream_audio_codec_name, global_flags.stream_audio_codec_bitrate, oformat));
 	}
-	stream_audio_encoder->add_mux(stream_mux.get());
-
 	if (global_flags.x264_video_to_http) {
-		x264_encoder.reset(new X264Encoder(stream_mux.get()));
+		x264_encoder.reset(new X264Encoder(oformat));
 	}
 
 	string filename = generate_local_dump_filename(/*frame=*/0);
-	quicksync_encoder.reset(new QuickSyncEncoder(filename, resource_pool, surface, va_display, width, height, stream_mux.get(), stream_audio_encoder.get(), x264_encoder.get()));
+	quicksync_encoder.reset(new QuickSyncEncoder(filename, resource_pool, surface, va_display, width, height, oformat, stream_audio_encoder.get(), x264_encoder.get()));
+
+	open_output_stream();
+	stream_audio_encoder->add_mux(stream_mux.get());
+	quicksync_encoder->set_stream_mux(stream_mux.get());
+	x264_encoder->set_mux(stream_mux.get());
 }
 
 VideoEncoder::~VideoEncoder()
@@ -66,7 +69,8 @@ void VideoEncoder::do_cut(int frame)
 	string filename = generate_local_dump_filename(frame);
 	printf("Starting new recording: %s\n", filename.c_str());
 	quicksync_encoder->shutdown();
-	quicksync_encoder.reset(new QuickSyncEncoder(filename, resource_pool, surface, va_display, width, height, stream_mux.get(), stream_audio_encoder.get(), x264_encoder.get()));
+	quicksync_encoder.reset(new QuickSyncEncoder(filename, resource_pool, surface, va_display, width, height, oformat, stream_audio_encoder.get(), x264_encoder.get()));
+	quicksync_encoder->set_stream_mux(stream_mux.get());
 }
 
 void VideoEncoder::add_audio(int64_t pts, std::vector<float> audio)
@@ -87,8 +91,6 @@ RefCountedGLsync VideoEncoder::end_frame(int64_t pts, int64_t duration, const st
 void VideoEncoder::open_output_stream()
 {
 	AVFormatContext *avctx = avformat_alloc_context();
-	AVOutputFormat *oformat = av_guess_format(global_flags.stream_mux_name.c_str(), nullptr, nullptr);
-	assert(oformat != nullptr);
 	avctx->oformat = oformat;
 
 	uint8_t *buf = (uint8_t *)av_malloc(MUX_BUFFER_SIZE);
@@ -103,9 +105,14 @@ void VideoEncoder::open_output_stream()
 
 	avctx->flags = AVFMT_FLAG_CUSTOM_IO;
 
+	string video_extradata;
+	if (global_flags.x264_video_to_http) {
+		video_extradata = x264_encoder->get_global_headers();
+	}
+
 	int time_base = global_flags.stream_coarse_timebase ? COARSE_TIMEBASE : TIMEBASE;
 	stream_mux_writing_header = true;
-	stream_mux.reset(new Mux(avctx, width, height, video_codec, stream_audio_encoder->get_ctx(), time_base, this));
+	stream_mux.reset(new Mux(avctx, width, height, video_codec, video_extradata, stream_audio_encoder->get_ctx(), time_base, this));
 	stream_mux_writing_header = false;
 	httpd->set_header(stream_mux_header);
 	stream_mux_header.clear();

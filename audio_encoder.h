@@ -16,7 +16,7 @@ extern "C" {
 
 class AudioEncoder {
 public:
-	AudioEncoder(const std::string &codec_name, int bit_rate);
+	AudioEncoder(const std::string &codec_name, int bit_rate, const AVOutputFormat *oformat);
 	~AudioEncoder();
 
 	void add_mux(Mux *mux) {  // Does not take ownership.

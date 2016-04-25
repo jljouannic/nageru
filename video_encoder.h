@@ -46,6 +46,7 @@ private:
 	static int write_packet_thunk(void *opaque, uint8_t *buf, int buf_size);
 	int write_packet(uint8_t *buf, int buf_size);
 
+	AVOutputFormat *oformat;
 	std::unique_ptr<QuickSyncEncoder> quicksync_encoder;
 	movit::ResourcePool *resource_pool;
 	QSurface *surface;

@@ -10,7 +10,7 @@
 
 using namespace std;
 
-Mux::Mux(AVFormatContext *avctx, int width, int height, Codec video_codec, const AVCodecContext *audio_ctx, int time_base, KeyFrameSignalReceiver *keyframe_signal_receiver)
+Mux::Mux(AVFormatContext *avctx, int width, int height, Codec video_codec, const string &video_extradata, const AVCodecContext *audio_ctx, int time_base, KeyFrameSignalReceiver *keyframe_signal_receiver)
 	: avctx(avctx), keyframe_signal_receiver(keyframe_signal_receiver)
 {
 	AVCodec *codec_video = avcodec_find_encoder((video_codec == CODEC_H264) ? AV_CODEC_ID_H264 : AV_CODEC_ID_RAWVIDEO);
@@ -43,8 +43,11 @@ Mux::Mux(AVFormatContext *avctx, int width, int height, Codec video_codec, const
 	avstream_video->codec->color_range = AVCOL_RANGE_MPEG;  // Full vs. limited range (output_ycbcr_format.full_range).
 	avstream_video->codec->chroma_sample_location = AVCHROMA_LOC_LEFT;  // Chroma sample location. See chroma_offset_0[] in Mixer::subsample_chroma().
 	avstream_video->codec->field_order = AV_FIELD_PROGRESSIVE;
-	if (avctx->oformat->flags & AVFMT_GLOBALHEADER) {
-		avstream_video->codec->flags = AV_CODEC_FLAG_GLOBAL_HEADER;
+
+	if (!video_extradata.empty()) {
+		avstream_video->codec->extradata = (uint8_t *)av_malloc(video_extradata.size());
+		avstream_video->codec->extradata_size = video_extradata.size();
+		memcpy(avstream_video->codec->extradata, video_extradata.data(), video_extradata.size());
 	}
 
 	avstream_audio = avformat_new_stream(avctx, nullptr);

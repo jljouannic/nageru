@@ -33,6 +33,10 @@
 #include <string>
 #include <vector>
 
+extern "C" {
+#include <libavformat/avformat.h>
+}
+
 #include "ref_counted_frame.h"
 #include "ref_counted_gl_sync.h"
 
@@ -51,9 +55,10 @@ class ResourcePool;
 // .cpp file.
 class QuickSyncEncoder {
 public:
-        QuickSyncEncoder(const std::string &filename, movit::ResourcePool *resource_pool, QSurface *surface, const std::string &va_display, int width, int height, Mux *stream_mux, AudioEncoder *stream_audio_encoder, X264Encoder *x264_encoder);
+        QuickSyncEncoder(const std::string &filename, movit::ResourcePool *resource_pool, QSurface *surface, const std::string &va_display, int width, int height, AVOutputFormat *oformat, AudioEncoder *stream_audio_encoder, X264Encoder *x264_encoder);
         ~QuickSyncEncoder();
 
+	void set_stream_mux(Mux *mux);  // Does not take ownership. Must be called unless x264 is used for the stream.
 	void add_audio(int64_t pts, std::vector<float> audio);
 	bool begin_frame(GLuint *y_tex, GLuint *cbcr_tex);
 	RefCountedGLsync end_frame(int64_t pts, int64_t duration, const std::vector<RefCountedFrame> &input_frames);
