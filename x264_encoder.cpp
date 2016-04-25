@@ -76,13 +76,19 @@ void X264Encoder::init_x264()
 	param.vui.i_transfer = 2;  // Unspecified (since we use sRGB).
 	param.vui.i_colmatrix = 6;  // BT.601/SMPTE 170M.
 
-	// 4.5 Mbit/sec, CBR.
-	param.rc.i_rc_method = X264_RC_ABR;
-	param.rc.i_bitrate = 4500;
 
-	// One-second VBV.
-	param.rc.i_vbv_max_bitrate = 4500;
-	param.rc.i_vbv_buffer_size = 4500;
+	param.rc.i_rc_method = X264_RC_ABR;
+	param.rc.i_bitrate = global_flags.x264_vbv_max_bitrate;
+	if (global_flags.x264_vbv_buffer_size < 0) {
+		param.rc.i_vbv_buffer_size = param.rc.i_bitrate;  // One-second VBV.
+	} else {
+		param.rc.i_vbv_buffer_size = global_flags.x264_vbv_buffer_size;
+	}
+	if (global_flags.x264_vbv_max_bitrate < 0) {
+		param.rc.i_vbv_max_bitrate = param.rc.i_bitrate;  // CBR.
+	} else {
+		param.rc.i_vbv_max_bitrate = global_flags.x264_vbv_max_bitrate;
+	}
 
 	// TODO: more flags here, via x264_param_parse().
 

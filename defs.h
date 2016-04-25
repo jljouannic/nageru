@@ -12,6 +12,7 @@
 
 #define AUDIO_OUTPUT_CODEC_NAME "pcm_s32le"
 #define DEFAULT_AUDIO_OUTPUT_BIT_RATE 0
+#define DEFAULT_X264_OUTPUT_BIT_RATE 4500  // 5 Mbit after making room for some audio and TCP overhead.
 
 #define LOCAL_DUMP_PREFIX "record-"
 #define LOCAL_DUMP_SUFFIX ".nut"

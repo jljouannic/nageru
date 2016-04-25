@@ -19,6 +19,9 @@ struct Flags {
 	int stream_audio_codec_bitrate = DEFAULT_AUDIO_OUTPUT_BIT_RATE;  // Ignored if stream_audio_codec_name is blank.
 	std::string x264_preset = X264_DEFAULT_PRESET;
 	std::string x264_tune = X264_DEFAULT_TUNE;
+	int x264_bitrate = DEFAULT_X264_OUTPUT_BIT_RATE;  // In kilobit/sec.
+	int x264_vbv_max_bitrate = -1;  // In kilobits. 0 = no limit, -1 = same as <x264_bitrate> (CBR).
+	int x264_vbv_buffer_size = -1;  // In kilobits. 0 = one-frame VBV, -1 = same as <x264_bitrate> (one-second VBV).
 };
 extern Flags global_flags;
 

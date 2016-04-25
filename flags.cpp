@@ -19,6 +19,12 @@ void usage()
 	fprintf(stderr, "      --http-x264-video           send x264-compressed video to HTTP clients\n");
 	fprintf(stderr, "      --x264-preset               x264 quality preset (default " X264_DEFAULT_PRESET ")\n");
 	fprintf(stderr, "      --x264-tune                 x264 tuning (default " X264_DEFAULT_TUNE ", can be blank)\n");
+	fprintf(stderr, "      --x264-bitrate              x264 bitrate (in kilobit/sec, default %d)\n",
+		DEFAULT_X264_OUTPUT_BIT_RATE);
+	fprintf(stderr, "      --x264-vbv-bufsize          x264 VBV size (in kilobits, 0 = one-frame VBV,\n");
+	fprintf(stderr, "                                  default: same as --x264-bitrate, that is, one-second VBV)\n");
+	fprintf(stderr, "      --x264-vbv-max-bitrate      x264 local max bitrate (in kilobit/sec per --vbv-bufsize,\n");
+	fprintf(stderr, "                                  0 = no limit, default: same as --x264-bitrate, i.e., CBR)\n");
 	fprintf(stderr, "      --http-mux=NAME             mux to use for HTTP streams (default " DEFAULT_STREAM_MUX_NAME ")\n");
 	fprintf(stderr, "      --http-audio-codec=NAME     audio codec to use for HTTP streams\n");
 	fprintf(stderr, "                                  (default is to use the same as for the recording)\n");
@@ -44,6 +50,9 @@ void parse_flags(int argc, char * const argv[])
 		{ "http-x264-video", no_argument, 0, 1008 },
 		{ "x264-preset", required_argument, 0, 1009 },
 		{ "x264-tune", required_argument, 0, 1010 },
+		{ "x264-bitrate", required_argument, 0, 1011 },
+		{ "x264-vbv-bufsize", required_argument, 0, 1012 },
+		{ "x264-vbv-max-bitrate", required_argument, 0, 1013 },
 		{ "http-mux", required_argument, 0, 1004 },
 		{ "http-coarse-timebase", no_argument, 0, 1005 },
 		{ "http-audio-codec", required_argument, 0, 1006 },
@@ -92,6 +101,15 @@ void parse_flags(int argc, char * const argv[])
 			break;
 		case 1010:
 			global_flags.x264_tune = optarg;
+			break;
+		case 1011:
+			global_flags.x264_bitrate = atoi(optarg);
+			break;
+		case 1012:
+			global_flags.x264_vbv_buffer_size = atoi(optarg);
+			break;
+		case 1013:
+			global_flags.x264_vbv_max_bitrate = atoi(optarg);
 			break;
 		case 1002:
 			global_flags.flat_audio = true;
