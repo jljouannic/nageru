@@ -105,8 +105,12 @@ The stream saved to disk will still be the Quick Sync-encoded stream, as it is
 typically higher bitrate and thus also higher quality. Note that if you add
 ".metacube" at the end of the URL (e.g. "http://127.0.0.1:9095/stream.ts.metacube"),
 you will get a stream suitable for streaming through the Cubemap video reflector
-(cubemap.sesse.net). See --help for more information on options in general.
+(cubemap.sesse.net). A typical example would be:
 
+  ./nageru --http-x264-video --x264-preset veryfast --x264-tune film \
+      --http-mux mp4 --http-audio-codec libfdk_aac --http-audio-bitrate 128
+
+See --help for more information on options in general.
 
 The name “Nageru” is a play on the Japanese verb 投げる (nageru), which means
 to throw or cast. (I also later learned that it could mean to face defeat or
