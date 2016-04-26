@@ -90,6 +90,10 @@ void X264Encoder::init_x264()
 		param.rc.i_vbv_max_bitrate = global_flags.x264_vbv_max_bitrate;
 	}
 
+	// Occasionally players have problem with extremely low quantizers;
+	// be on the safe side. Shouldn't affect quality in any meaningful way.
+	param.rc.i_qp_min = 5;
+
 	// TODO: more flags here, via x264_param_parse().
 
 	x264_param_apply_profile(&param, "high");
