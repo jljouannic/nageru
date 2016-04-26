@@ -78,7 +78,7 @@ void X264Encoder::init_x264()
 
 
 	param.rc.i_rc_method = X264_RC_ABR;
-	param.rc.i_bitrate = global_flags.x264_vbv_max_bitrate;
+	param.rc.i_bitrate = global_flags.x264_bitrate;
 	if (global_flags.x264_vbv_buffer_size < 0) {
 		param.rc.i_vbv_buffer_size = param.rc.i_bitrate;  // One-second VBV.
 	} else {
