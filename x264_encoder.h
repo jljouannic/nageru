@@ -31,6 +31,7 @@ extern "C" {
 }
 
 class Mux;
+class X264SpeedControl;
 
 class X264Encoder {
 public:
@@ -72,6 +73,7 @@ private:
 	std::thread encoder_thread;
 	std::atomic<bool> should_quit{false};
 	x264_t *x264;
+	std::unique_ptr<X264SpeedControl> speed_control;
 
 	// Protects everything below it.
 	std::mutex mu;

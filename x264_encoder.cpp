@@ -6,6 +6,7 @@
 #include "mux.h"
 #include "timebase.h"
 #include "x264_encoder.h"
+#include "x264_speed_control.h"
 
 extern "C" {
 #include <libavformat/avformat.h>
@@ -68,6 +69,9 @@ void X264Encoder::init_x264()
 	param.i_timebase_num = 1;
 	param.i_timebase_den = TIMEBASE;
 	param.i_keyint_max = 50; // About one second.
+	if (global_flags.x264_speedcontrol) {
+		param.i_frame_reference = 16;  // Because speedcontrol is never allowed to change this above what we set at start.
+	}
 
 	// NOTE: These should be in sync with the ones in h264encode.cpp (sbs_rbsp()).
 	param.vui.i_vidformat = 5;  // Unspecified.
@@ -104,6 +108,10 @@ void X264Encoder::init_x264()
 	if (x264 == nullptr) {
 		fprintf(stderr, "ERROR: x264 initialization failed.\n");
 		exit(1);
+	}
+
+	if (global_flags.x264_speedcontrol) {
+		speed_control.reset(new X264SpeedControl(x264, /*f_speed=*/1.0f, X264_QUEUE_LENGTH, /*f_buffer_init=*/1.0f));
 	}
 
 	if (wants_global_headers) {
@@ -181,9 +189,21 @@ void X264Encoder::encode_frame(X264Encoder::QueuedFrame qf)
 		pic.img.i_stride[1] = WIDTH / 2 * sizeof(uint16_t);
 		pic.opaque = reinterpret_cast<void *>(intptr_t(qf.duration));
 
+		if (speed_control) {
+			speed_control->before_frame(float(free_frames.size()) / X264_QUEUE_LENGTH, X264_QUEUE_LENGTH, 1e6 * qf.duration / TIMEBASE);
+		}
 		x264_encoder_encode(x264, &nal, &num_nal, &pic, &pic);
+		if (speed_control) {
+			speed_control->after_frame();
+		}
 	} else {
+		if (speed_control) {
+			speed_control->before_frame(float(free_frames.size()) / X264_QUEUE_LENGTH, X264_QUEUE_LENGTH, 1e6 * qf.duration / TIMEBASE);
+		}
 		x264_encoder_encode(x264, &nal, &num_nal, nullptr, &pic);
+		if (speed_control) {
+			speed_control->after_frame();
+		}
 	}
 
 	// We really need one AVPacket for the entire frame, it seems,

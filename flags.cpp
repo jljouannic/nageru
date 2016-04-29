@@ -25,6 +25,8 @@ void usage()
 	fprintf(stderr, "      --http-x264-video           send x264-compressed video to HTTP clients\n");
 	fprintf(stderr, "      --x264-preset               x264 quality preset (default " X264_DEFAULT_PRESET ")\n");
 	fprintf(stderr, "      --x264-tune                 x264 tuning (default " X264_DEFAULT_TUNE ", can be blank)\n");
+	fprintf(stderr, "      --x264-speedcontrol         try to match x264 preset to available CPU speed\n");
+	fprintf(stderr, "      --x264-speedcontrol-verbose  output speedcontrol debugging statistics\n");
 	fprintf(stderr, "      --x264-bitrate              x264 bitrate (in kilobit/sec, default %d)\n",
 		DEFAULT_X264_OUTPUT_BIT_RATE);
 	fprintf(stderr, "      --x264-vbv-bufsize          x264 VBV size (in kilobits, 0 = one-frame VBV,\n");
@@ -58,6 +60,8 @@ void parse_flags(int argc, char * const argv[])
 		{ "http-x264-video", no_argument, 0, 1008 },
 		{ "x264-preset", required_argument, 0, 1009 },
 		{ "x264-tune", required_argument, 0, 1010 },
+		{ "x264-speedcontrol", no_argument, 0, 1015 },
+		{ "x264-speedcontrol-verbose", no_argument, 0, 1016 },
 		{ "x264-bitrate", required_argument, 0, 1011 },
 		{ "x264-vbv-bufsize", required_argument, 0, 1012 },
 		{ "x264-vbv-max-bitrate", required_argument, 0, 1013 },
@@ -128,6 +132,12 @@ void parse_flags(int argc, char * const argv[])
 		case 1010:
 			global_flags.x264_tune = optarg;
 			break;
+		case 1015:
+			global_flags.x264_speedcontrol = true;
+			break;
+		case 1016:
+			global_flags.x264_speedcontrol_verbose = true;
+			break;
 		case 1011:
 			global_flags.x264_bitrate = atoi(optarg);
 			break;
@@ -162,6 +172,15 @@ void parse_flags(int argc, char * const argv[])
 		fprintf(stderr, "ERROR: --http-uncompressed-video and --http-x264-video are mutually incompatible\n");
 		exit(1);
 	}
+	if (global_flags.x264_speedcontrol) {
+		if (!global_flags.x264_preset.empty() && global_flags.x264_preset != "faster") {
+			fprintf(stderr, "WARNING: --x264-preset is overridden by --x264-speedcontrol (implicitly uses \"faster\" as base preset)\n");
+		}
+		global_flags.x264_preset = "faster";
+	} else if (global_flags.x264_preset.empty()) {
+		global_flags.x264_preset = X264_DEFAULT_PRESET;
+	}
+
 	for (pair<int, int> mapping : global_flags.default_stream_mapping) {
 		if (mapping.second >= global_flags.num_cards) {
 			fprintf(stderr, "ERROR: Signal %d mapped to card %d, which doesn't exist (try adjusting --num-cards)\n",
