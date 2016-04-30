@@ -256,7 +256,9 @@ Mixer::Mixer(const QSurfaceFormat &format, unsigned num_cards)
 	// and there's a limit to how important the peak meter is.
 	peak_resampler.setup(OUTPUT_FREQUENCY, OUTPUT_FREQUENCY * 4, /*num_channels=*/2, /*hlen=*/16, /*frel=*/1.0);
 
-	alsa.reset(new ALSAOutput(OUTPUT_FREQUENCY, /*num_channels=*/2));
+	if (global_flags.enable_alsa_output) {
+		alsa.reset(new ALSAOutput(OUTPUT_FREQUENCY, /*num_channels=*/2));
+	}
 }
 
 Mixer::~Mixer()

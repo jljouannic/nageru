@@ -34,6 +34,7 @@ void usage()
 	fprintf(stderr, "      --http-coarse-timebase      use less timebase for HTTP (recommended for muxers\n");
 	fprintf(stderr, "                                  that handle large pts poorly, like e.g. MP4)\n");
 	fprintf(stderr, "      --flat-audio                start with most audio processing turned off\n");
+	fprintf(stderr, "      --disable-alsa-output       disable audio monitoring via ALSA\n");
 	fprintf(stderr, "      --no-flush-pbos             do not explicitly signal texture data uploads\n");
 	fprintf(stderr, "                                    (will give display corruption, but makes it\n");
 	fprintf(stderr, "                                    possible to run with apitrace in real time)\n");
@@ -58,6 +59,7 @@ void parse_flags(int argc, char * const argv[])
 		{ "http-audio-codec", required_argument, 0, 1006 },
 		{ "http-audio-bitrate", required_argument, 0, 1007 },
 		{ "flat-audio", no_argument, 0, 1002 },
+		{ "disable-alsa-output", no_argument, 0, 1014 },
 		{ "no-flush-pbos", no_argument, 0, 1003 },
 		{ 0, 0, 0, 0 }
 	};
@@ -113,6 +115,9 @@ void parse_flags(int argc, char * const argv[])
 			break;
 		case 1002:
 			global_flags.flat_audio = true;
+			break;
+		case 1014:
+			global_flags.enable_alsa_output = false;
 			break;
 		case 1003:
 			global_flags.flush_pbos = false;
