@@ -21,7 +21,7 @@ private:
 	snd_pcm_t *pcm_handle;
 	std::vector<float> buffer;
 	snd_pcm_uframes_t period_size;
-	int num_channels;
+	int sample_rate, num_channels;
 };
 
 #endif  // !defined(_ALSA_OUTPUT_H)

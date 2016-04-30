@@ -17,7 +17,7 @@ void die_on_error(const char *func_name, int err)
 }  // namespace
 
 ALSAOutput::ALSAOutput(int sample_rate, int num_channels)
-	: num_channels(num_channels)
+	: sample_rate(sample_rate), num_channels(num_channels)
 {
 	die_on_error("snd_pcm_open()", snd_pcm_open(&pcm_handle, "default", SND_PCM_STREAM_PLAYBACK, 0));
 
@@ -79,7 +79,8 @@ try_again:
 		if (ret == 0) {
 			if (buffer.size() >= period_size * num_channels * 8) {
 				// OK, almost 100 ms. Giving up.
-				fprintf(stderr, "warning: ALSA overrun, dropping some audio\n");
+				fprintf(stderr, "warning: ALSA overrun, dropping some audio (%d ms)\n",
+					int(buffer.size() * 1000 / (num_channels * sample_rate)));
 				buffer.clear();
 			}
 		} else if (ret > 0) {
