@@ -397,7 +397,7 @@ private:
 			int64_t length;  // In TIMEBASE units.
 			bool interlaced;
 			unsigned field;  // Which field (0 or 1) of the frame to use. Always 0 for progressive.
-			RefCountedGLsync ready_fence;  // Whether frame is ready for rendering.
+			std::function<void()> upload_func;  // Needs to be called to actually upload the texture to OpenGL.
 			unsigned dropped_frames = 0;  // Number of dropped frames before this one.
 		};
 		std::queue<NewFrame> new_frames;

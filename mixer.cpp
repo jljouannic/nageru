@@ -289,18 +289,6 @@ void Mixer::configure_card(unsigned card_index, const QSurfaceFormat &format, Ca
 	card->frame_allocator.reset(new PBOFrameAllocator(8 << 20, WIDTH, HEIGHT));  // 8 MB.
 	card->capture->set_video_frame_allocator(card->frame_allocator.get());
 	card->surface = create_surface(format);
-	card->capture->set_dequeue_thread_callbacks(
-		[card]{
-			eglBindAPI(EGL_OPENGL_API);
-			card->context = create_context(card->surface);
-			if (!make_current(card->context, card->surface)) {
-				printf("failed to create bmusb context\n");
-				exit(1);
-			}
-		},
-		[this]{
-			resource_pool->clean_context();
-		});
 	card->resampling_queue.reset(new ResamplingQueue(OUTPUT_FREQUENCY, OUTPUT_FREQUENCY, 2));
 	card->capture->configure_card();
 }
@@ -503,59 +491,64 @@ void Mixer::bm_frame(unsigned card_index, uint16_t timecode,
 	size_t y_offset = video_frame.size / 2 + video_offset / 2;
 
 	for (unsigned field = 0; field < num_fields; ++field) {
-		unsigned field_start_line = (field == 1) ? video_format.second_field_start : video_format.extra_lines_top + field * (video_format.height + 22);
+		// Put the actual texture upload in a lambda that is executed in the main thread.
+		// It is entirely possible to do this in the same thread (and it might even be
+		// faster, depending on the GPU and driver), but it appears to be trickling
+		// driver bugs very easily.
+		//
+		// Note that this means we must hold on to the actual frame data in <userdata>
+		// until the upload command is run, but we hold on to <frame> much longer than that
+		// (in fact, all the way until we no longer use the texture in rendering).
+		auto upload_func = [field, video_format, y_offset, cbcr_offset, cbcr_width, userdata]() {
+			unsigned field_start_line = (field == 1) ? video_format.second_field_start : video_format.extra_lines_top + field * (video_format.height + 22);
 
-		if (userdata->tex_y[field] == 0 ||
-		    userdata->tex_cbcr[field] == 0 ||
-		    video_format.width != userdata->last_width[field] ||
-		    video_format.height != userdata->last_height[field]) {
-			// We changed resolution since last use of this texture, so we need to create
-			// a new object. Note that this each card has its own PBOFrameAllocator,
-			// we don't need to worry about these flip-flopping between resolutions.
+			if (userdata->tex_y[field] == 0 ||
+			    userdata->tex_cbcr[field] == 0 ||
+			    video_format.width != userdata->last_width[field] ||
+			    video_format.height != userdata->last_height[field]) {
+				// We changed resolution since last use of this texture, so we need to create
+				// a new object. Note that this each card has its own PBOFrameAllocator,
+				// we don't need to worry about these flip-flopping between resolutions.
+				glBindTexture(GL_TEXTURE_2D, userdata->tex_cbcr[field]);
+				check_error();
+				glTexImage2D(GL_TEXTURE_2D, 0, GL_RG8, cbcr_width, video_format.height, 0, GL_RG, GL_UNSIGNED_BYTE, nullptr);
+				check_error();
+				glBindTexture(GL_TEXTURE_2D, userdata->tex_y[field]);
+				check_error();
+				glTexImage2D(GL_TEXTURE_2D, 0, GL_R8, video_format.width, video_format.height, 0, GL_RED, GL_UNSIGNED_BYTE, nullptr);
+				check_error();
+				userdata->last_width[field] = video_format.width;
+				userdata->last_height[field] = video_format.height;
+			}
+
+			GLuint pbo = userdata->pbo;
+			check_error();
+			glBindBuffer(GL_PIXEL_UNPACK_BUFFER, pbo);
+			check_error();
+
+			size_t field_y_start = y_offset + video_format.width * field_start_line;
+			size_t field_cbcr_start = cbcr_offset + cbcr_width * field_start_line * sizeof(uint16_t);
+
+			if (global_flags.flush_pbos) {
+				glFlushMappedBufferRange(GL_PIXEL_UNPACK_BUFFER, field_y_start, video_format.width * video_format.height);
+				check_error();
+				glFlushMappedBufferRange(GL_PIXEL_UNPACK_BUFFER, field_cbcr_start, cbcr_width * video_format.height * sizeof(uint16_t));
+				check_error();
+			}
+
 			glBindTexture(GL_TEXTURE_2D, userdata->tex_cbcr[field]);
 			check_error();
-			glTexImage2D(GL_TEXTURE_2D, 0, GL_RG8, cbcr_width, video_format.height, 0, GL_RG, GL_UNSIGNED_BYTE, nullptr);
+			glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, cbcr_width, video_format.height, GL_RG, GL_UNSIGNED_BYTE, BUFFER_OFFSET(field_cbcr_start));
 			check_error();
 			glBindTexture(GL_TEXTURE_2D, userdata->tex_y[field]);
 			check_error();
-			glTexImage2D(GL_TEXTURE_2D, 0, GL_R8, video_format.width, video_format.height, 0, GL_RED, GL_UNSIGNED_BYTE, nullptr);
+			glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, video_format.width, video_format.height, GL_RED, GL_UNSIGNED_BYTE, BUFFER_OFFSET(field_y_start));
 			check_error();
-			userdata->last_width[field] = video_format.width;
-			userdata->last_height[field] = video_format.height;
-		}
-
-		GLuint pbo = userdata->pbo;
-		check_error();
-		glBindBuffer(GL_PIXEL_UNPACK_BUFFER, pbo);
-		check_error();
-
-		size_t field_y_start = y_offset + video_format.width * field_start_line;
-		size_t field_cbcr_start = cbcr_offset + cbcr_width * field_start_line * sizeof(uint16_t);
-
-		if (global_flags.flush_pbos) {
-			glFlushMappedBufferRange(GL_PIXEL_UNPACK_BUFFER, field_y_start, video_format.width * video_format.height);
+			glBindTexture(GL_TEXTURE_2D, 0);
 			check_error();
-			glFlushMappedBufferRange(GL_PIXEL_UNPACK_BUFFER, field_cbcr_start, cbcr_width * video_format.height * sizeof(uint16_t));
+			glBindBuffer(GL_PIXEL_UNPACK_BUFFER, 0);
 			check_error();
-		}
-
-		glBindTexture(GL_TEXTURE_2D, userdata->tex_cbcr[field]);
-		check_error();
-		glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, cbcr_width, video_format.height, GL_RG, GL_UNSIGNED_BYTE, BUFFER_OFFSET(field_cbcr_start));
-		check_error();
-		glBindTexture(GL_TEXTURE_2D, userdata->tex_y[field]);
-		check_error();
-		glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, video_format.width, video_format.height, GL_RED, GL_UNSIGNED_BYTE, BUFFER_OFFSET(field_y_start));
-		check_error();
-		glBindTexture(GL_TEXTURE_2D, 0);
-		check_error();
-		glBindBuffer(GL_PIXEL_UNPACK_BUFFER, 0);
-		check_error();
-		RefCountedGLsync fence(GL_SYNC_GPU_COMMANDS_COMPLETE, /*flags=*/0);
-		check_error();
-		assert(fence.get() != nullptr);
-		glFlush();  // Make sure the main thread doesn't have to wait until we push out enough frames to make a new command buffer.
-		check_error();
+		};
 
 		if (field == 1) {
 			// Don't upload the second field as fast as we can; wait until
@@ -583,7 +576,7 @@ void Mixer::bm_frame(unsigned card_index, uint16_t timecode,
 			new_frame.length = frame_length;
 			new_frame.field = field;
 			new_frame.interlaced = video_format.interlaced;
-			new_frame.ready_fence = fence;
+			new_frame.upload_func = upload_func;
 			new_frame.dropped_frames = dropped_frames;
 			card->new_frames.push(move(new_frame));
 			card->new_frames_changed.notify_all();
@@ -650,13 +643,10 @@ void Mixer::thread_func()
 			insert_new_frame(new_frame->frame, new_frame->field, new_frame->interlaced, card_index, &input_state);
 			check_error();
 
-			// The new texture might still be uploaded,
-			// tell the GPU to wait until it's there.
-			if (new_frame->ready_fence) {
-				glWaitSync(new_frame->ready_fence.get(), /*flags=*/0, GL_TIMEOUT_IGNORED);
-				check_error();
-				new_frame->ready_fence.reset();
-				check_error();
+			// The new texture might need uploading before use.
+			if (new_frame->upload_func) {
+				new_frame->upload_func();
+				new_frame->upload_func = nullptr;
 			}
 		}
 
