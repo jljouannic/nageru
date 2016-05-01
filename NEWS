@@ -17,6 +17,9 @@ Nageru 1.3.0, not released yet
    is now done in a background thread, in order to not disturb the external
    stream. The audio still goes into a somewhat random stream, though.
 
+ - You can now override the default stream-to-card mapping with --map-signal=
+   on the command line.
+
 
 Nageru 1.2.1, April 15th, 2016
 

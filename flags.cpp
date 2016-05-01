@@ -3,6 +3,11 @@
 #include <getopt.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
+
+#include <utility>
+
+using namespace std;
 
 Flags global_flags;
 
@@ -15,6 +20,7 @@ void usage()
 	fprintf(stderr, "  -t, --theme=FILE                choose theme (default theme.lua)\n");
 	fprintf(stderr, "  -v, --va-display=SPEC           VA-API device for H.264 encoding\n");
 	fprintf(stderr, "                                    ($DISPLAY spec or /dev/dri/render* path)\n");
+	fprintf(stderr, "  -m, --map-signal=SIGNAL,CARD    set a default card mapping (can be given multiple times)\n");
 	fprintf(stderr, "      --http-uncompressed-video   send uncompressed NV12 video to HTTP clients\n");
 	fprintf(stderr, "      --http-x264-video           send x264-compressed video to HTTP clients\n");
 	fprintf(stderr, "      --x264-preset               x264 quality preset (default " X264_DEFAULT_PRESET ")\n");
@@ -46,6 +52,7 @@ void parse_flags(int argc, char * const argv[])
 		{ "help", no_argument, 0, 'h' },
 		{ "num-cards", required_argument, 0, 'c' },
 		{ "theme", required_argument, 0, 't' },
+		{ "map-signal", required_argument, 0, 'm' },
 		{ "va-display", required_argument, 0, 1000 },
 		{ "http-uncompressed-video", no_argument, 0, 1001 },
 		{ "http-x264-video", no_argument, 0, 1008 },
@@ -77,6 +84,23 @@ void parse_flags(int argc, char * const argv[])
 		case 't':
 			global_flags.theme_filename = optarg;
 			break;
+		case 'm': {
+			char *ptr = strchr(optarg, ',');
+			if (ptr == nullptr) {
+				fprintf(stderr, "ERROR: Invalid argument '%s' to --map-signal (needs a signal and a card number, separated by comma)\n", optarg);
+				exit(1);
+			}
+			*ptr = '\0';
+			const int signal_num = atoi(optarg);
+			const int card_num = atoi(ptr + 1);
+			if (global_flags.default_stream_mapping.count(signal_num)) {
+				fprintf(stderr, "ERROR: Signal %d already mapped to card %d\n",
+					signal_num, global_flags.default_stream_mapping[signal_num]);
+				exit(1);
+			}
+			global_flags.default_stream_mapping[signal_num] = card_num;
+			break;
+		}
 		case 1000:
 			global_flags.va_display = optarg;
 			break;
@@ -137,5 +161,12 @@ void parse_flags(int argc, char * const argv[])
 	    global_flags.x264_video_to_http) {
 		fprintf(stderr, "ERROR: --http-uncompressed-video and --http-x264-video are mutually incompatible\n");
 		exit(1);
+	}
+	for (pair<int, int> mapping : global_flags.default_stream_mapping) {
+		if (mapping.second >= global_flags.num_cards) {
+			fprintf(stderr, "ERROR: Signal %d mapped to card %d, which doesn't exist (try adjusting --num-cards)\n",
+				mapping.first, mapping.second);
+			exit(1);
+		}
 	}
 }

@@ -24,6 +24,7 @@
 #include <memory>
 
 #include "defs.h"
+#include "flags.h"
 #include "image_input.h"
 #include "mixer.h"
 
@@ -695,7 +696,7 @@ int call_num_channels(lua_State *L)
 }  // namespace
 
 Theme::Theme(const char *filename, ResourcePool *resource_pool, unsigned num_cards)
-	: resource_pool(resource_pool), num_cards(num_cards)
+	: resource_pool(resource_pool), num_cards(num_cards), signal_to_card_mapping(global_flags.default_stream_mapping)
 {
 	L = luaL_newstate();
         luaL_openlibs(L);
