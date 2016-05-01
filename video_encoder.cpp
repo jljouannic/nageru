@@ -61,6 +61,9 @@ VideoEncoder::VideoEncoder(ResourcePool *resource_pool, QSurface *surface, const
 VideoEncoder::~VideoEncoder()
 {
 	quicksync_encoder.reset(nullptr);
+	while (quicksync_encoders_in_shutdown.load() > 0) {
+		usleep(10000);
+	}
 	close_output_stream();
 }
 
@@ -68,23 +71,46 @@ void VideoEncoder::do_cut(int frame)
 {
 	string filename = generate_local_dump_filename(frame);
 	printf("Starting new recording: %s\n", filename.c_str());
-	quicksync_encoder->shutdown();
+
+	// Do the shutdown of the old encoder in a separate thread, since it can
+	// take some time (it needs to wait for all the frames in the queue to be
+	// done encoding, for one) and we are running on the main mixer thread.
+	// However, since this means both encoders could be sending packets at
+	// the same time, it means pts could come out of order to the stream mux,
+	// and we need to plug it until the shutdown is complete.
+	stream_mux->plug();
+	lock_guard<mutex> lock(qs_mu);
+	QuickSyncEncoder *old_encoder = quicksync_encoder.release();  // When we go C++14, we can use move capture instead.
+	thread([old_encoder, this]{
+		old_encoder->shutdown();
+		stream_mux->unplug();
+
+		// We cannot delete the encoder here, as this thread has no OpenGL context.
+		// We'll deal with it in begin_frame().
+		lock_guard<mutex> lock(qs_mu);
+		qs_needing_cleanup.emplace_back(old_encoder);
+	}).detach();
+
 	quicksync_encoder.reset(new QuickSyncEncoder(filename, resource_pool, surface, va_display, width, height, oformat, stream_audio_encoder.get(), x264_encoder.get()));
 	quicksync_encoder->set_stream_mux(stream_mux.get());
 }
 
 void VideoEncoder::add_audio(int64_t pts, std::vector<float> audio)
 {
+	lock_guard<mutex> lock(qs_mu);
 	quicksync_encoder->add_audio(pts, audio);
 }
 
 bool VideoEncoder::begin_frame(GLuint *y_tex, GLuint *cbcr_tex)
 {
+	lock_guard<mutex> lock(qs_mu);
+	qs_needing_cleanup.clear();  // Since we have an OpenGL context here, and are called regularly.
 	return quicksync_encoder->begin_frame(y_tex, cbcr_tex);
 }
 
 RefCountedGLsync VideoEncoder::end_frame(int64_t pts, int64_t duration, const std::vector<RefCountedFrame> &input_frames)
 {
+	lock_guard<mutex> lock(qs_mu);
 	return quicksync_encoder->end_frame(pts, duration, input_frames);
 }
 

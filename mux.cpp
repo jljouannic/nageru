@@ -1,5 +1,6 @@
 #include <assert.h>
 
+#include <algorithm>
 #include <mutex>
 #include <string>
 #include <vector>
@@ -107,12 +108,48 @@ void Mux::add_packet(const AVPacket &pkt, int64_t pts, int64_t dts)
 	}
 
 	{
-		lock_guard<mutex> lock(ctx_mu);
-		if (av_interleaved_write_frame(avctx, &pkt_copy) < 0) {
+		lock_guard<mutex> lock(mu);
+		if (plug_count > 0) {
+			plugged_packets.push_back(av_packet_clone(&pkt_copy));
+		} else if (av_interleaved_write_frame(avctx, &pkt_copy) < 0) {
 			fprintf(stderr, "av_interleaved_write_frame() failed\n");
 			exit(1);
 		}
 	}
 
 	av_packet_unref(&pkt_copy);
+}
+
+void Mux::plug()
+{
+	lock_guard<mutex> lock(mu);
+	++plug_count;
+}
+
+void Mux::unplug()
+{
+	lock_guard<mutex> lock(mu);
+	if (--plug_count > 0) {
+		return;
+	}
+	assert(plug_count >= 0);
+
+	sort(plugged_packets.begin(), plugged_packets.end(), [](const AVPacket *a, const AVPacket *b) {
+		int64_t a_dts = (a->dts == AV_NOPTS_VALUE ? a->pts : a->dts);
+		int64_t b_dts = (b->dts == AV_NOPTS_VALUE ? b->pts : b->dts);
+		if (a_dts != b_dts) {
+			return a_dts < b_dts;
+		} else {
+			return a->pts < b->pts;
+		}
+	});
+
+	for (AVPacket *pkt : plugged_packets) {
+		if (av_interleaved_write_frame(avctx, pkt) < 0) {
+			fprintf(stderr, "av_interleaved_write_frame() failed\n");
+			exit(1);
+		}
+		av_packet_free(&pkt);
+	}
+	plugged_packets.clear();
 }

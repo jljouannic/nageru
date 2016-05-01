@@ -10,6 +10,7 @@ extern "C" {
 }
 
 #include <mutex>
+#include <vector>
 
 class KeyFrameSignalReceiver {
 public:
@@ -29,9 +30,23 @@ public:
 	~Mux();
 	void add_packet(const AVPacket &pkt, int64_t pts, int64_t dts);
 
+	// As long as the mux is plugged, it will not actually write anything to disk,
+	// just queue the packets. Once it is unplugged, the packets are reordered by pts
+	// and written. This is primarily useful if you might have two different encoders
+	// writing to the mux at the same time (because one is shutting down), so that
+	// pts might otherwise come out-of-order.
+	//
+	// You can plug and unplug multiple times; only when the plug count reaches zero,
+	// something will actually happen.
+	void plug();
+	void unplug();
+
 private:
-	std::mutex ctx_mu;
-	AVFormatContext *avctx;  // Protected by <ctx_mu>.
+	std::mutex mu;
+	AVFormatContext *avctx;  // Protected by <mu>.
+	int plug_count = 0;  // Protected by <mu>.
+	std::vector<AVPacket *> plugged_packets;  // Protected by <mu>.
+
 	AVStream *avstream_video, *avstream_audio;
 	KeyFrameSignalReceiver *keyframe_signal_receiver;
 };

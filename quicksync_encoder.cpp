@@ -200,6 +200,7 @@ public:
 	bool begin_frame(GLuint *y_tex, GLuint *cbcr_tex);
 	RefCountedGLsync end_frame(int64_t pts, int64_t duration, const vector<RefCountedFrame> &input_frames);
 	void shutdown();
+	void release_gl_resources();
 	void set_stream_mux(Mux *mux)
 	{
 		stream_mux = mux;
@@ -251,11 +252,12 @@ private:
 	VADisplay va_open_display(const string &va_display);
 	void va_close_display(VADisplay va_dpy);
 	int setup_encode();
-	int release_encode();
+	void release_encode();
 	void update_ReferenceFrames(int frame_type);
 	int update_RefPicList(int frame_type);
 
 	bool is_shutdown = false;
+	bool has_released_gl_resources = false;
 	bool use_zerocopy;
 	int drm_fd = -1;
 
@@ -1695,13 +1697,26 @@ void QuickSyncEncoderImpl::storage_task_thread()
 	}
 }
 
-int QuickSyncEncoderImpl::release_encode()
+void QuickSyncEncoderImpl::release_encode()
 {
 	for (unsigned i = 0; i < SURFACE_NUM; i++) {
 		vaDestroyBuffer(va_dpy, gl_surfaces[i].coded_buf);
 		vaDestroySurfaces(va_dpy, &gl_surfaces[i].src_surface, 1);
 		vaDestroySurfaces(va_dpy, &gl_surfaces[i].ref_surface, 1);
+	}
 
+	vaDestroyContext(va_dpy, context_id);
+	vaDestroyConfig(va_dpy, config_id);
+}
+
+void QuickSyncEncoderImpl::release_gl_resources()
+{
+	assert(is_shutdown);
+	if (has_released_gl_resources) {
+		return;
+	}
+
+	for (unsigned i = 0; i < SURFACE_NUM; i++) {
 		if (!use_zerocopy) {
 			glBindBuffer(GL_PIXEL_PACK_BUFFER, gl_surfaces[i].pbo);
 			glUnmapBuffer(GL_PIXEL_PACK_BUFFER);
@@ -1712,10 +1727,7 @@ int QuickSyncEncoderImpl::release_encode()
 		resource_pool->release_2d_texture(gl_surfaces[i].cbcr_tex);
 	}
 
-	vaDestroyContext(va_dpy, context_id);
-	vaDestroyConfig(va_dpy, config_id);
-
-	return 0;
+	has_released_gl_resources = true;
 }
 
 int QuickSyncEncoderImpl::deinit_va()
@@ -1782,6 +1794,7 @@ QuickSyncEncoderImpl::QuickSyncEncoderImpl(const std::string &filename, movit::R
 QuickSyncEncoderImpl::~QuickSyncEncoderImpl()
 {
 	shutdown();
+	release_gl_resources();
 }
 
 bool QuickSyncEncoderImpl::begin_frame(GLuint *y_tex, GLuint *cbcr_tex)

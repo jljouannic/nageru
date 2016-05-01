@@ -7,6 +7,7 @@
 
 #include <stdint.h>
 #include <memory>
+#include <set>
 #include <string>
 #include <vector>
 
@@ -47,7 +48,8 @@ private:
 	int write_packet(uint8_t *buf, int buf_size);
 
 	AVOutputFormat *oformat;
-	std::unique_ptr<QuickSyncEncoder> quicksync_encoder;
+	std::mutex qs_mu;
+	std::unique_ptr<QuickSyncEncoder> quicksync_encoder;  // Under <qs_mu>.
 	movit::ResourcePool *resource_pool;
 	QSurface *surface;
 	std::string va_display;
@@ -64,6 +66,12 @@ private:
 	std::string stream_mux_header;
 
 	bool stream_mux_writing_keyframes = false;
+
+	std::atomic<int> quicksync_encoders_in_shutdown{0};
+
+	// Encoders that are shutdown, but need to call release_gl_resources()
+	// (or be deleted) from some thread with an OpenGL context.
+	std::vector<std::unique_ptr<QuickSyncEncoder>> qs_needing_cleanup;  // Under <qs_mu>.
 };
 
 #endif

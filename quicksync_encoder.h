@@ -62,7 +62,8 @@ public:
 	void add_audio(int64_t pts, std::vector<float> audio);
 	bool begin_frame(GLuint *y_tex, GLuint *cbcr_tex);
 	RefCountedGLsync end_frame(int64_t pts, int64_t duration, const std::vector<RefCountedFrame> &input_frames);
-	void shutdown();  // Blocking.
+	void shutdown();  // Blocking. Does not require an OpenGL context.
+	void release_gl_resources();  // Requires an OpenGL context. Must be run after shutdown.
 
 private:
 	std::unique_ptr<QuickSyncEncoderImpl> impl;
