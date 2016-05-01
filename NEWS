@@ -1,3 +1,23 @@
+Nageru 1.3.0, not released yet
+
+ - It is now possible, given enough CPU power (e.g., a quad-core Haswell or
+   faster desktop CPU), to output a stream that is suitable for streaming
+   directly to end users without further transcoding. In particular, this
+   includes support for encoding the network stream with x264 (the stream
+   saved to disk is still done using Quick Sync), for Metacube framing (for
+   streaming to the Cubemap reflector), and for choosing the network stream
+   mux. For more information, see the README.
+
+ - Add a flag (--disable-alsa-output) to disable ALSA monitoring output.
+
+ - Do texture uploads from the main thread instead of from separate threads;
+   may or may not improve stability with NVIDIA's proprietary drivers.
+
+ - When beginning a new video segment, the shutdown of the old encoder
+   is now done in a background thread, in order to not disturb the external
+   stream. The audio still goes into a somewhat random stream, though.
+
+
 Nageru 1.2.1, April 15th, 2016
 
  - Images are now updated from disk about every second, so that it is possible
