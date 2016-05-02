@@ -36,6 +36,9 @@ public:
 	void set_video_frame_allocator(FrameAllocator *allocator) override
 	{
 		video_frame_allocator = allocator;
+		if (owned_video_frame_allocator.get() != allocator) {
+			owned_video_frame_allocator.reset();
+		}
 	}
 
 	FrameAllocator *get_video_frame_allocator() override
@@ -47,6 +50,9 @@ public:
 	void set_audio_frame_allocator(FrameAllocator *allocator) override
 	{
 		audio_frame_allocator = allocator;
+		if (owned_audio_frame_allocator.get() != allocator) {
+			owned_audio_frame_allocator.reset();
+		}
 	}
 
 	FrameAllocator *get_audio_frame_allocator() override
@@ -102,6 +108,8 @@ private:
 
 	FrameAllocator *video_frame_allocator = nullptr;
 	FrameAllocator *audio_frame_allocator = nullptr;
+	std::unique_ptr<FrameAllocator> owned_video_frame_allocator;
+	std::unique_ptr<FrameAllocator> owned_audio_frame_allocator;
 	frame_callback_t frame_callback = nullptr;
 
 	IDeckLinkConfiguration *config = nullptr;

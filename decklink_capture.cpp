@@ -384,10 +384,12 @@ HRESULT STDMETHODCALLTYPE DeckLinkCapture::VideoInputFrameArrived(
 void DeckLinkCapture::configure_card()
 {
 	if (video_frame_allocator == nullptr) {
-		set_video_frame_allocator(new MallocFrameAllocator(FRAME_SIZE, NUM_QUEUED_VIDEO_FRAMES));  // FIXME: leak.
+		owned_video_frame_allocator.reset(new MallocFrameAllocator(FRAME_SIZE, NUM_QUEUED_VIDEO_FRAMES));
+		set_video_frame_allocator(owned_video_frame_allocator.get());
 	}
 	if (audio_frame_allocator == nullptr) {
-		set_audio_frame_allocator(new MallocFrameAllocator(65536, NUM_QUEUED_AUDIO_FRAMES));  // FIXME: leak.
+		owned_audio_frame_allocator.reset(new MallocFrameAllocator(65536, NUM_QUEUED_AUDIO_FRAMES));
+		set_audio_frame_allocator(owned_audio_frame_allocator.get());
 	}
 }
 
