@@ -811,11 +811,16 @@ string Theme::get_channel_name(unsigned channel)
 		fprintf(stderr, "error running function `channel_name': %s\n", lua_tostring(L, -1));
 		exit(1);
 	}
+	const char *ret = lua_tostring(L, -1);
+	if (ret == nullptr) {
+		fprintf(stderr, "function `channel_name' returned nil for channel %d\n", channel);
+		exit(1);
+	}
 
-	string ret = lua_tostring(L, -1);
+	string retstr = ret;
 	lua_pop(L, 1);
 	assert(lua_gettop(L) == 0);
-	return ret;
+	return retstr;
 }
 
 int Theme::get_channel_signal(unsigned channel)
@@ -844,10 +849,16 @@ std::string Theme::get_channel_color(unsigned channel)
 		exit(1);
 	}
 
-	std::string ret = checkstdstring(L, -1);
+	const char *ret = lua_tostring(L, -1);
+	if (ret == nullptr) {
+		fprintf(stderr, "function `channel_color' returned nil for channel %d\n", channel);
+		exit(1);
+	}
+
+	string retstr = ret;
 	lua_pop(L, 1);
 	assert(lua_gettop(L) == 0);
-	return ret;
+	return retstr;
 }
 
 bool Theme::get_supports_set_wb(unsigned channel)
