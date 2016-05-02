@@ -134,7 +134,7 @@ size_t memcpy_interleaved_fastpath(uint8_t *dest1, uint8_t *dest2, const uint8_t
 }  // namespace
 
 DeckLinkCapture::DeckLinkCapture(IDeckLink *card, int card_index)
-	: card_index(card_index)
+	: card_index(card_index), card(card)
 {
 	{
 		const char *model_name;
@@ -262,6 +262,9 @@ DeckLinkCapture::~DeckLinkCapture()
 	if (has_dequeue_callbacks) {
 		dequeue_cleanup_callback();
 	}
+	input->Release();
+	config->Release();
+	card->Release();
 }
 
 HRESULT STDMETHODCALLTYPE DeckLinkCapture::QueryInterface(REFIID, LPVOID *)

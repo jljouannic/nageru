@@ -17,7 +17,7 @@ class IDeckLinkDisplayMode;
 class DeckLinkCapture : public CaptureInterface, IDeckLinkInputCallback
 {
 public:
-	DeckLinkCapture(IDeckLink *card, int card_index);
+	DeckLinkCapture(IDeckLink *card, int card_index);  // Takes ownership of <card>.
 	~DeckLinkCapture();
 
 	// IDeckLinkInputCallback.
@@ -106,6 +106,7 @@ private:
 
 	IDeckLinkConfiguration *config = nullptr;
 
+	IDeckLink *card = nullptr;
 	IDeckLinkInput *input = nullptr;
 	BMDTimeValue frame_duration;
 	BMDTimeScale time_scale;
