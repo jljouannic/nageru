@@ -110,6 +110,10 @@ you will get a stream suitable for streaming through the Cubemap video reflector
   ./nageru --http-x264-video --x264-preset veryfast --x264-tune film \
       --http-mux mp4 --http-audio-codec libfdk_aac --http-audio-bitrate 128
 
+If you are comfortable with using all your remaining CPU power on the machine
+for x264, try --x264-speedcontrol, which will try to adjust the preset
+dynamically for maximum quality, at the expense of somewhat higher delay.
+
 See --help for more information on options in general.
 
 The name “Nageru” is a play on the Japanese verb 投げる (nageru), which means
