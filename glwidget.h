@@ -46,8 +46,8 @@ protected:
 signals:
 	void clicked();
 	void transition_names_updated(std::vector<std::string> transition_names);
-	void resolution_updated(Mixer::Output output);
-	void color_updated(Mixer::Output output);
+	void name_updated(Mixer::Output output, const std::string &name);
+	void color_updated(Mixer::Output output, const std::string &color);
 
 private slots:
 	void show_context_menu(unsigned signal_num, const QPoint &pos);

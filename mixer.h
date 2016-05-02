@@ -147,6 +147,25 @@ public:
 		output_channel[output].set_frame_ready_callback(callback);
 	}
 
+	// TODO: Should this really be per-channel? Shouldn't it just be called for e.g. the live output?
+	typedef std::function<void(const std::vector<std::string> &)> transition_names_updated_callback_t;
+	void set_transition_names_updated_callback(Output output, transition_names_updated_callback_t callback)
+	{
+		output_channel[output].set_transition_names_updated_callback(callback);
+	}
+
+	typedef std::function<void(const std::string &)> name_updated_callback_t;
+	void set_name_updated_callback(Output output, name_updated_callback_t callback)
+	{
+		output_channel[output].set_name_updated_callback(callback);
+	}
+
+	typedef std::function<void(const std::string &)> color_updated_callback_t;
+	void set_color_updated_callback(Output output, color_updated_callback_t callback)
+	{
+		output_channel[output].set_color_updated_callback(callback);
+	}
+
 	typedef std::function<void(float level_lufs, float peak_db,
 	                           float global_level_lufs, float range_low_lufs, float range_high_lufs,
 	                           float gain_staging_db, float final_makeup_gain_db,
@@ -426,16 +445,25 @@ private:
 		void output_frame(DisplayFrame frame);
 		bool get_display_frame(DisplayFrame *frame);
 		void set_frame_ready_callback(new_frame_ready_callback_t callback);
+		void set_transition_names_updated_callback(transition_names_updated_callback_t callback);
+		void set_name_updated_callback(name_updated_callback_t callback);
+		void set_color_updated_callback(color_updated_callback_t callback);
 
 	private:
 		friend class Mixer;
 
+		unsigned channel;
 		Mixer *parent = nullptr;  // Not owned.
 		std::mutex frame_mutex;
 		DisplayFrame current_frame, ready_frame;  // protected by <frame_mutex>
 		bool has_current_frame = false, has_ready_frame = false;  // protected by <frame_mutex>
 		new_frame_ready_callback_t new_frame_ready_callback;
-		bool has_new_frame_ready_callback = false;
+		transition_names_updated_callback_t transition_names_updated_callback;
+		name_updated_callback_t name_updated_callback;
+		color_updated_callback_t color_updated_callback;
+
+		std::vector<std::string> last_transition_names;
+		std::string last_name, last_color;
 	};
 	OutputChannel output_channel[NUM_OUTPUTS];
 

@@ -30,6 +30,7 @@ class QResizeEvent;
 using namespace std;
 using namespace std::placeholders;
 
+Q_DECLARE_METATYPE(std::string);
 Q_DECLARE_METATYPE(std::vector<std::string>);
 
 MainWindow *global_mainwindow = nullptr;
@@ -72,6 +73,7 @@ MainWindow::MainWindow()
 	transition_btn1 = ui->transition_btn1;
 	transition_btn2 = ui->transition_btn2;
 	transition_btn3 = ui->transition_btn3;
+	qRegisterMetaType<string>("std::string");
 	qRegisterMetaType<vector<string>>("std::vector<std::string>");
 	connect(ui->me_preview, &GLWidget::transition_names_updated, this, &MainWindow::set_transition_names);
 	qRegisterMetaType<Mixer::Output>("Mixer::Output");
@@ -106,7 +108,7 @@ void MainWindow::mixer_created(Mixer *mixer)
 		connect(ui_display->display, &GLWidget::clicked, bind(&MainWindow::channel_clicked, this, i));
 
 		// Let the theme update the text whenever the resolution or color changed.
-		connect(ui_display->display, &GLWidget::resolution_updated, this, &MainWindow::update_channel_name);
+		connect(ui_display->display, &GLWidget::name_updated, this, &MainWindow::update_channel_name);
 		connect(ui_display->display, &GLWidget::color_updated, this, &MainWindow::update_channel_color);
 
 		// Hook up the keyboard key.
@@ -351,19 +353,18 @@ void MainWindow::set_transition_names(vector<string> transition_names)
 	}
 }
 
-void MainWindow::update_channel_name(Mixer::Output output)
+void MainWindow::update_channel_name(Mixer::Output output, const string &name)
 {
 	if (output >= Mixer::OUTPUT_INPUT0) {
 		unsigned channel = output - Mixer::OUTPUT_INPUT0;
-		previews[channel]->label->setText(global_mixer->get_channel_name(output).c_str());
+		previews[channel]->label->setText(name.c_str());
 	}
 }
 
-void MainWindow::update_channel_color(Mixer::Output output)
+void MainWindow::update_channel_color(Mixer::Output output, const string &color)
 {
 	if (output >= Mixer::OUTPUT_INPUT0) {
 		unsigned channel = output - Mixer::OUTPUT_INPUT0;
-		string color = global_mixer->get_channel_color(output);
 		previews[channel]->frame->setStyleSheet(QString::fromStdString("background-color:" + color));
 	}
 }

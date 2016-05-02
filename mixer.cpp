@@ -142,6 +142,7 @@ Mixer::Mixer(const QSurfaceFormat &format, unsigned num_cards)
 	theme.reset(new Theme(global_flags.theme_filename.c_str(), resource_pool.get(), num_cards));
 	for (unsigned i = 0; i < NUM_OUTPUTS; ++i) {
 		output_channel[i].parent = this;
+		output_channel[i].channel = i;
 	}
 
 	ImageFormat inout_format;
@@ -1140,8 +1141,46 @@ void Mixer::OutputChannel::output_frame(DisplayFrame frame)
 		has_ready_frame = true;
 	}
 
-	if (has_new_frame_ready_callback) {
+	if (new_frame_ready_callback) {
 		new_frame_ready_callback();
+	}
+
+	// Reduce the number of callbacks by filtering duplicates. The reason
+	// why we bother doing this is that Qt seemingly can get into a state
+	// where its builds up an essentially unbounded queue of signals,
+	// consuming more and more memory, and there's no good way of collapsing
+	// user-defined signals or limiting the length of the queue.
+	if (transition_names_updated_callback) {
+		vector<string> transition_names = global_mixer->get_transition_names();
+		bool changed = false;
+		if (transition_names.size() != last_transition_names.size()) {
+			changed = true;
+		} else {
+			for (unsigned i = 0; i < transition_names.size(); ++i) {
+				if (transition_names[i] != last_transition_names[i]) {
+					changed = true;
+					break;
+				}
+			}
+		}
+		if (changed) {
+			transition_names_updated_callback(transition_names);
+			last_transition_names = transition_names;
+		}
+	}
+	if (name_updated_callback) {
+		string name = global_mixer->get_channel_name(channel);
+		if (name != last_name) {
+			name_updated_callback(name);
+			last_name = name;
+		}
+	}
+	if (color_updated_callback) {
+		string color = global_mixer->get_channel_color(channel);
+		if (color != last_color) {
+			color_updated_callback(color);
+			last_color = color;
+		}
 	}
 }
 
@@ -1173,7 +1212,21 @@ bool Mixer::OutputChannel::get_display_frame(DisplayFrame *frame)
 void Mixer::OutputChannel::set_frame_ready_callback(Mixer::new_frame_ready_callback_t callback)
 {
 	new_frame_ready_callback = callback;
-	has_new_frame_ready_callback = true;
+}
+
+void Mixer::OutputChannel::set_transition_names_updated_callback(Mixer::transition_names_updated_callback_t callback)
+{
+	transition_names_updated_callback = callback;
+}
+
+void Mixer::OutputChannel::set_name_updated_callback(Mixer::name_updated_callback_t callback)
+{
+	name_updated_callback = callback;
+}
+
+void Mixer::OutputChannel::set_color_updated_callback(Mixer::color_updated_callback_t callback)
+{
+	color_updated_callback = callback;
 }
 
 mutex RefCountedGLsync::fence_lock;

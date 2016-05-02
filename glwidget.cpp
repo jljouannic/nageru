@@ -58,12 +58,20 @@ void GLWidget::initializeGL()
 	});
 	global_mixer->set_frame_ready_callback(output, [this]{
 		QMetaObject::invokeMethod(this, "update", Qt::AutoConnection);
-		emit transition_names_updated(global_mixer->get_transition_names());
-		emit resolution_updated(output);
-		emit color_updated(output);
 	});
-
+	if (output == Mixer::OUTPUT_LIVE) {
+		global_mixer->set_transition_names_updated_callback(output, [this](const vector<string> &names){
+			emit transition_names_updated(names);
+		});
+	}
 	if (output >= Mixer::OUTPUT_INPUT0) {
+		global_mixer->set_name_updated_callback(output, [this](const string &name){
+			emit name_updated(output, name);
+		});
+		global_mixer->set_color_updated_callback(output, [this](const string &color){
+			emit color_updated(output, color);
+		});
+
 		int signal_num = global_mixer->get_channel_signal(output);
 		if (signal_num != -1) {
 			setContextMenuPolicy(Qt::CustomContextMenu);

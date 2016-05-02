@@ -39,8 +39,8 @@ public slots:
 	void channel_clicked(int channel_number);
 	void wb_button_clicked(int channel_number);
 	void set_transition_names(std::vector<std::string> transition_names);
-	void update_channel_name(Mixer::Output output);
-	void update_channel_color(Mixer::Output output);
+	void update_channel_name(Mixer::Output output, const std::string &name);
+	void update_channel_color(Mixer::Output output, const std::string &color);
 	void gain_staging_knob_changed(int value);
 	void final_makeup_gain_knob_changed(int value);
 	void cutoff_knob_changed(int value);
