@@ -154,12 +154,14 @@ void MainWindow::mixer_created(Mixer *mixer)
 	mixer->set_audio_level_callback(bind(&MainWindow::audio_level_callback, this, _1, _2, _3, _4, _5, _6, _7, _8));
 
 	struct sigaction act;
+	memset(&act, 0, sizeof(act));
 	act.sa_handler = schedule_cut_signal;
 	act.sa_flags = SA_RESTART;
 	sigaction(SIGHUP, &act, nullptr);
 
 	// Mostly for debugging. Don't override SIGINT, that's so evil if
 	// shutdown isn't instant.
+	memset(&act, 0, sizeof(act));
 	act.sa_handler = quit_signal;
 	act.sa_flags = SA_RESTART;
 	sigaction(SIGUSR1, &act, nullptr);
