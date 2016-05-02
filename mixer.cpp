@@ -828,7 +828,10 @@ void Mixer::audio_thread_func()
 
 		{
 			unique_lock<mutex> lock(audio_mutex);
-			audio_task_queue_changed.wait(lock, [this]{ return !audio_task_queue.empty(); });
+			audio_task_queue_changed.wait(lock, [this]{ return should_quit || !audio_task_queue.empty(); });
+			if (should_quit) {
+				return;
+			}
 			task = audio_task_queue.front();
 			audio_task_queue.pop();
 		}
@@ -1078,6 +1081,7 @@ void Mixer::start()
 void Mixer::quit()
 {
 	should_quit = true;
+	audio_task_queue_changed.notify_one();
 	mixer_thread.join();
 	audio_thread.join();
 }

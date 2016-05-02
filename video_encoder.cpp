@@ -64,7 +64,6 @@ VideoEncoder::~VideoEncoder()
 	while (quicksync_encoders_in_shutdown.load() > 0) {
 		usleep(10000);
 	}
-	close_output_stream();
 }
 
 void VideoEncoder::do_cut(int frame)
@@ -142,11 +141,6 @@ void VideoEncoder::open_output_stream()
 	stream_mux_writing_header = false;
 	httpd->set_header(stream_mux_header);
 	stream_mux_header.clear();
-}
-
-void VideoEncoder::close_output_stream()
-{
-	stream_mux.reset();
 }
 
 int VideoEncoder::write_packet_thunk(void *opaque, uint8_t *buf, int buf_size)

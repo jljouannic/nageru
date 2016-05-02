@@ -43,7 +43,6 @@ public:
 
 private:
 	void open_output_stream();
-	void close_output_stream();
 	static int write_packet_thunk(void *opaque, uint8_t *buf, int buf_size);
 	int write_packet(uint8_t *buf, int buf_size);
 

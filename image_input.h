@@ -20,7 +20,8 @@ public:
 
 	std::string effect_type_id() const override { return "ImageInput"; }
 	void set_gl_state(GLuint glsl_program_num, const std::string& prefix, unsigned *sampler_num) override;
-
+	static void shutdown_updaters();
+	
 private:
 	struct Image {
 		std::unique_ptr<uint8_t[]> pixels;
@@ -36,6 +37,7 @@ private:
 	static std::mutex all_images_lock;
 	static std::map<std::string, std::shared_ptr<const Image>> all_images;
 	static std::map<std::string, std::thread> update_threads;
+	static volatile bool threads_should_quit;
 };
 
 #endif // !defined(_IMAGE_INPUT_H)

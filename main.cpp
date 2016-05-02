@@ -14,6 +14,7 @@ extern "C" {
 
 #include "context.h"
 #include "flags.h"
+#include "image_input.h"
 #include "mainwindow.h"
 #include "mixer.h"
 
@@ -55,5 +56,6 @@ int main(int argc, char *argv[])
 	global_mixer->quit();
 	mainWindow.mixer_shutting_down();
 	delete global_mixer;
+	ImageInput::shutdown_updaters();
 	return rc;
 }

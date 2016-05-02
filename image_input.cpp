@@ -220,13 +220,16 @@ shared_ptr<const ImageInput::Image> ImageInput::load_image_raw(const string &fil
 
 // Fire up a thread to update the image every second.
 // We could do inotify, but this is good enough for now.
-// TODO: These don't really quit, ever. Should they?
 void ImageInput::update_thread_func(const std::string &filename, const timespec &first_modified)
 {
 	timespec last_modified = first_modified;
 	struct stat buf;
 	for ( ;; ) {
 		sleep(1);
+
+		if (threads_should_quit) {
+			return;
+		}
 
 		if (stat(filename.c_str(), &buf) != 0) {
 			fprintf(stderr, "%s: Couldn't check for new version, leaving the old in place.\n", filename.c_str());
@@ -249,6 +252,17 @@ void ImageInput::update_thread_func(const std::string &filename, const timespec 
 	}
 }
 
+void ImageInput::shutdown_updaters()
+{
+	// TODO: Kick these out of the sleep before one second?
+	threads_should_quit = true;
+
+	for (auto &it : update_threads) {
+		it.second.join();
+	}
+}
+
 mutex ImageInput::all_images_lock;
 map<string, shared_ptr<const ImageInput::Image>> ImageInput::all_images;
 map<string, thread> ImageInput::update_threads;
+volatile bool ImageInput::threads_should_quit = false;
