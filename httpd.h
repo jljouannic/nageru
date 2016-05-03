@@ -15,10 +15,12 @@
 #include <string>
 
 struct MHD_Connection;
+struct MHD_Daemon;
 
 class HTTPD {
 public:
 	HTTPD();
+	~HTTPD();
 
 	// Should be called before start().
 	void set_header(const std::string &data) {
@@ -63,17 +65,20 @@ private:
 			DATA_TYPE_OTHER
 		};
 		void add_data(const char *buf, size_t size, DataType data_type);
+		void stop();
 
 	private:
 		Framing framing;
 
 		std::mutex buffer_mutex;
+		bool should_quit = false;  // Under <buffer_mutex>.
 		std::condition_variable has_buffered_data;
-		std::deque<std::string> buffered_data;  // Protected by <mutex>.
+		std::deque<std::string> buffered_data;  // Protected by <buffer_mutex>.
 		size_t used_of_buffered_data = 0;  // How many bytes of the first element of <buffered_data> that is already used. Protected by <mutex>.
 		size_t seen_keyframe = false;
 	};
 
+	MHD_Daemon *mhd = nullptr;
 	std::mutex streams_mutex;
 	std::set<Stream *> streams;  // Not owned.
 	std::string header;

@@ -23,14 +23,23 @@ HTTPD::HTTPD()
 {
 }
 
+HTTPD::~HTTPD()
+{
+	MHD_quiesce_daemon(mhd);
+	for (Stream *stream : streams) {
+		stream->stop();
+	}
+	MHD_stop_daemon(mhd);
+}
+
 void HTTPD::start(int port)
 {
-	MHD_start_daemon(MHD_USE_THREAD_PER_CONNECTION | MHD_USE_POLL_INTERNALLY | MHD_USE_DUAL_STACK,
-	                 port,
-			 nullptr, nullptr,
-			 &answer_to_connection_thunk, this,
-	                 MHD_OPTION_NOTIFY_COMPLETED, &request_completed_thunk, this, 
-	                 MHD_OPTION_END);
+	mhd = MHD_start_daemon(MHD_USE_THREAD_PER_CONNECTION | MHD_USE_POLL_INTERNALLY | MHD_USE_DUAL_STACK,
+	                       port,
+	                       nullptr, nullptr,
+	                       &answer_to_connection_thunk, this,
+	                       MHD_OPTION_NOTIFY_COMPLETED, &request_completed_thunk, this,
+	                       MHD_OPTION_END);
 }
 
 void HTTPD::add_data(const char *buf, size_t size, bool keyframe)
@@ -122,7 +131,10 @@ ssize_t HTTPD::Stream::reader_callback_thunk(void *cls, uint64_t pos, char *buf,
 ssize_t HTTPD::Stream::reader_callback(uint64_t pos, char *buf, size_t max)
 {
 	unique_lock<mutex> lock(buffer_mutex);
-	has_buffered_data.wait(lock, [this]{ return !buffered_data.empty(); });
+	has_buffered_data.wait(lock, [this]{ return should_quit || !buffered_data.empty(); });
+	if (should_quit) {
+		return 0;
+	}
 
 	ssize_t ret = 0;
 	while (max > 0 && !buffered_data.empty()) {
@@ -182,3 +194,9 @@ void HTTPD::Stream::add_data(const char *buf, size_t buf_size, HTTPD::Stream::Da
 	has_buffered_data.notify_all();	
 }
 
+void HTTPD::Stream::stop()
+{
+	unique_lock<mutex> lock(buffer_mutex);
+	should_quit = true;
+	has_buffered_data.notify_all();
+}
