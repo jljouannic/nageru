@@ -176,14 +176,16 @@ void X264SpeedControl::before_frame(float new_buffer_fill, int new_buffer_size, 
 	timestamp = t;
 
 	// update the time predictor
-	int cpu_time = cpu_time_last_frame;
-	cplx_num *= cplx_decay;
-	cplx_den *= cplx_decay;
-	cplx_num += cpu_time / presets[preset].time;
-	++cplx_den;
+	if (preset >= 0) {
+		int cpu_time = cpu_time_last_frame;
+		cplx_num *= cplx_decay;
+		cplx_den *= cplx_decay;
+		cplx_num += cpu_time / presets[preset].time;
+		++cplx_den;
 
-	stat.avg_preset += preset;
-	++stat.den;
+		stat.avg_preset += preset;
+		++stat.den;
+	}
 
 	stat.min_buffer = min(buffer_fill, stat.min_buffer);
 	stat.max_buffer = max(buffer_fill, stat.max_buffer);
