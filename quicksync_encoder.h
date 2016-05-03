@@ -55,7 +55,7 @@ class ResourcePool;
 // .cpp file.
 class QuickSyncEncoder {
 public:
-        QuickSyncEncoder(const std::string &filename, movit::ResourcePool *resource_pool, QSurface *surface, const std::string &va_display, int width, int height, AVOutputFormat *oformat, AudioEncoder *stream_audio_encoder, X264Encoder *x264_encoder);
+        QuickSyncEncoder(const std::string &filename, movit::ResourcePool *resource_pool, QSurface *surface, const std::string &va_display, int width, int height, AVOutputFormat *oformat, X264Encoder *x264_encoder);
         ~QuickSyncEncoder();
 
 	void set_stream_mux(Mux *mux);  // Does not take ownership. Must be called unless x264 is used for the stream.
@@ -64,6 +64,7 @@ public:
 	RefCountedGLsync end_frame(int64_t pts, int64_t duration, const std::vector<RefCountedFrame> &input_frames);
 	void shutdown();  // Blocking. Does not require an OpenGL context.
 	void release_gl_resources();  // Requires an OpenGL context. Must be run after shutdown.
+	int64_t global_delay() const;  // So we never get negative dts.
 
 private:
 	std::unique_ptr<QuickSyncEncoderImpl> impl;

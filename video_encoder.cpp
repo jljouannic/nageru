@@ -50,7 +50,7 @@ VideoEncoder::VideoEncoder(ResourcePool *resource_pool, QSurface *surface, const
 	}
 
 	string filename = generate_local_dump_filename(/*frame=*/0);
-	quicksync_encoder.reset(new QuickSyncEncoder(filename, resource_pool, surface, va_display, width, height, oformat, stream_audio_encoder.get(), x264_encoder.get()));
+	quicksync_encoder.reset(new QuickSyncEncoder(filename, resource_pool, surface, va_display, width, height, oformat, x264_encoder.get()));
 
 	open_output_stream();
 	stream_audio_encoder->add_mux(stream_mux.get());
@@ -90,7 +90,7 @@ void VideoEncoder::do_cut(int frame)
 		qs_needing_cleanup.emplace_back(old_encoder);
 	}).detach();
 
-	quicksync_encoder.reset(new QuickSyncEncoder(filename, resource_pool, surface, va_display, width, height, oformat, stream_audio_encoder.get(), x264_encoder.get()));
+	quicksync_encoder.reset(new QuickSyncEncoder(filename, resource_pool, surface, va_display, width, height, oformat, x264_encoder.get()));
 	quicksync_encoder->set_stream_mux(stream_mux.get());
 }
 
@@ -98,6 +98,7 @@ void VideoEncoder::add_audio(int64_t pts, std::vector<float> audio)
 {
 	lock_guard<mutex> lock(qs_mu);
 	quicksync_encoder->add_audio(pts, audio);
+	stream_audio_encoder->encode_audio(audio, pts + quicksync_encoder->global_delay());
 }
 
 bool VideoEncoder::begin_frame(GLuint *y_tex, GLuint *cbcr_tex)

@@ -194,7 +194,7 @@ FrameReorderer::Frame FrameReorderer::get_first_frame()
 
 class QuickSyncEncoderImpl {
 public:
-	QuickSyncEncoderImpl(const std::string &filename, movit::ResourcePool *resource_pool, QSurface *surface, const string &va_display, int width, int height, AVOutputFormat *oformat, AudioEncoder *stream_audio_encoder, X264Encoder *x264_encoder);
+	QuickSyncEncoderImpl(const std::string &filename, movit::ResourcePool *resource_pool, QSurface *surface, const string &va_display, int width, int height, AVOutputFormat *oformat, X264Encoder *x264_encoder);
 	~QuickSyncEncoderImpl();
 	void add_audio(int64_t pts, vector<float> audio);
 	bool begin_frame(GLuint *y_tex, GLuint *cbcr_tex);
@@ -204,6 +204,11 @@ public:
 	void set_stream_mux(Mux *mux)
 	{
 		stream_mux = mux;
+	}
+
+	// So we never get negative dts.
+	int64_t global_delay() const {
+		return int64_t(ip_period - 1) * (TIMEBASE / MAX_FPS);
 	}
 
 private:
@@ -219,11 +224,6 @@ private:
 		int64_t pts, duration;
 	};
 
-	// So we never get negative dts.
-	int64_t global_delay() const {
-		return int64_t(ip_period - 1) * (TIMEBASE / MAX_FPS);
-	}
-
 	void open_output_file(const std::string &filename);
 	void encode_thread_func();
 	void encode_remaining_frames_as_p(int encoding_frame_num, int gop_start_display_frame_num, int64_t last_dts);
@@ -231,7 +231,6 @@ private:
 	void encode_frame(PendingFrame frame, int encoding_frame_num, int display_frame_num, int gop_start_display_frame_num,
 	                  int frame_type, int64_t pts, int64_t dts, int64_t duration);
 	void storage_task_thread();
-	void encode_remaining_audio();
 	void storage_task_enqueue(storage_task task);
 	void save_codeddata(storage_task task);
 	int render_packedsequence();
@@ -276,12 +275,10 @@ private:
 	int current_storage_frame;
 
 	map<int, PendingFrame> pending_video_frames;  // under frame_queue_mutex
-	map<int64_t, vector<float>> pending_audio_frames;  // under frame_queue_mutex
 	movit::ResourcePool *resource_pool;
 	QSurface *surface;
 
 	unique_ptr<AudioEncoder> file_audio_encoder;
-	AudioEncoder *stream_audio_encoder;
 
 	unique_ptr<FrameReorderer> reorderer;
 	X264Encoder *x264_encoder;  // nullptr if not using x264.
@@ -1638,26 +1635,6 @@ void QuickSyncEncoderImpl::save_codeddata(storage_task task)
 			stream_mux->add_packet(pkt, task.pts + global_delay(), task.dts + global_delay());
 		}
 	}
-	// Encode and add all audio frames up to and including the pts of this video frame.
-	for ( ;; ) {
-		int64_t audio_pts;
-		vector<float> audio;
-		{
-			unique_lock<mutex> lock(frame_queue_mutex);
-			frame_queue_nonempty.wait(lock, [this]{ return storage_thread_should_quit || !pending_audio_frames.empty(); });
-			if (storage_thread_should_quit && pending_audio_frames.empty()) return;
-			auto it = pending_audio_frames.begin();
-			if (it->first > task.pts) break;
-			audio_pts = it->first;
-			audio = move(it->second);
-			pending_audio_frames.erase(it); 
-		}
-
-		file_audio_encoder->encode_audio(audio, audio_pts + global_delay());
-		stream_audio_encoder->encode_audio(audio, audio_pts + global_delay());
-
-		if (audio_pts == task.pts) break;
-	}
 }
 
 
@@ -1743,8 +1720,8 @@ namespace {
 
 }  // namespace
 
-QuickSyncEncoderImpl::QuickSyncEncoderImpl(const std::string &filename, movit::ResourcePool *resource_pool, QSurface *surface, const string &va_display, int width, int height, AVOutputFormat *oformat, AudioEncoder *stream_audio_encoder, X264Encoder *x264_encoder)
-	: current_storage_frame(0), resource_pool(resource_pool), surface(surface), stream_audio_encoder(stream_audio_encoder), x264_encoder(x264_encoder), frame_width(width), frame_height(height)
+QuickSyncEncoderImpl::QuickSyncEncoderImpl(const std::string &filename, movit::ResourcePool *resource_pool, QSurface *surface, const string &va_display, int width, int height, AVOutputFormat *oformat, X264Encoder *x264_encoder)
+	: current_storage_frame(0), resource_pool(resource_pool), surface(surface), x264_encoder(x264_encoder), frame_width(width), frame_height(height)
 {
 	file_audio_encoder.reset(new AudioEncoder(AUDIO_OUTPUT_CODEC_NAME, DEFAULT_AUDIO_OUTPUT_BIT_RATE, oformat));
 	open_output_file(filename);
@@ -1871,11 +1848,7 @@ bool QuickSyncEncoderImpl::begin_frame(GLuint *y_tex, GLuint *cbcr_tex)
 void QuickSyncEncoderImpl::add_audio(int64_t pts, vector<float> audio)
 {
 	assert(!is_shutdown);
-	{
-		unique_lock<mutex> lock(frame_queue_mutex);
-		pending_audio_frames[pts] = move(audio);
-	}
-	frame_queue_nonempty.notify_all();
+	file_audio_encoder->encode_audio(audio, pts + global_delay());
 }
 
 RefCountedGLsync QuickSyncEncoderImpl::end_frame(int64_t pts, int64_t duration, const vector<RefCountedFrame> &input_frames)
@@ -1943,7 +1916,9 @@ void QuickSyncEncoderImpl::shutdown()
 		storage_task_queue_changed.notify_all();
 	}
 	storage_thread.join();
-	encode_remaining_audio();
+
+	// Encode any leftover audio in the queues, and also any delayed frames.
+	file_audio_encoder->encode_last_audio();
 
 	release_encode();
 	deinit_va();
@@ -2048,25 +2023,6 @@ void QuickSyncEncoderImpl::encode_remaining_frames_as_p(int encoding_frame_num, 
 			}
 		}
 	}
-}
-
-void QuickSyncEncoderImpl::encode_remaining_audio()
-{
-	// This really ought to be empty by now, but just to be sure...
-	for (auto &pending_frame : pending_audio_frames) {
-		int64_t audio_pts = pending_frame.first;
-		vector<float> audio = move(pending_frame.second);
-
-		file_audio_encoder->encode_audio(audio, audio_pts + global_delay());
-		if (stream_audio_encoder) {
-			stream_audio_encoder->encode_audio(audio, audio_pts + global_delay());
-		}
-	}
-	pending_audio_frames.clear();
-
-	// Encode any leftover audio in the queues, and also any delayed frames.
-	// Note: stream_audio_encoder is not owned by us, so don't call encode_last_audio().
-	file_audio_encoder->encode_last_audio();
 }
 
 void QuickSyncEncoderImpl::add_packet_for_uncompressed_frame(int64_t pts, int64_t duration, const uint8_t *data)
@@ -2191,8 +2147,8 @@ void QuickSyncEncoderImpl::encode_frame(QuickSyncEncoderImpl::PendingFrame frame
 }
 
 // Proxy object.
-QuickSyncEncoder::QuickSyncEncoder(const std::string &filename, movit::ResourcePool *resource_pool, QSurface *surface, const string &va_display, int width, int height, AVOutputFormat *oformat, AudioEncoder *stream_audio_encoder, X264Encoder *x264_encoder)
-	: impl(new QuickSyncEncoderImpl(filename, resource_pool, surface, va_display, width, height, oformat, stream_audio_encoder, x264_encoder)) {}
+QuickSyncEncoder::QuickSyncEncoder(const std::string &filename, movit::ResourcePool *resource_pool, QSurface *surface, const string &va_display, int width, int height, AVOutputFormat *oformat, X264Encoder *x264_encoder)
+	: impl(new QuickSyncEncoderImpl(filename, resource_pool, surface, va_display, width, height, oformat, x264_encoder)) {}
 
 // Must be defined here because unique_ptr<> destructor needs to know the impl.
 QuickSyncEncoder::~QuickSyncEncoder() {}
@@ -2222,3 +2178,6 @@ void QuickSyncEncoder::set_stream_mux(Mux *mux)
 	impl->set_stream_mux(mux);
 }
 
+int64_t QuickSyncEncoder::global_delay() const {
+	return impl->global_delay();
+}
