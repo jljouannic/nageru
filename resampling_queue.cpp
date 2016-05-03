@@ -19,6 +19,7 @@
 
 #include "resampling_queue.h"
 
+#include <assert.h>
 #include <math.h>
 #include <stddef.h>
 #include <stdio.h>
@@ -39,6 +40,9 @@ ResamplingQueue::ResamplingQueue(unsigned freq_in, unsigned freq_out, unsigned n
 
 void ResamplingQueue::add_input_samples(double pts, const float *samples, ssize_t num_samples)
 {
+	if (num_samples == 0) {
+		return;
+	}
 	if (first_input) {
 		// Synthesize a fake length.
 		last_input_len = double(num_samples) / freq_in;
@@ -59,6 +63,12 @@ void ResamplingQueue::add_input_samples(double pts, const float *samples, ssize_
 
 bool ResamplingQueue::get_output_samples(double pts, float *samples, ssize_t num_samples)
 {
+	if (first_input) {
+		// No data yet, just return zeros.
+		memset(samples, 0, num_samples * 2 * sizeof(float));
+		return true;
+	}
+
 	double last_output_len;
 	if (first_output) {
 		// Synthesize a fake length.
@@ -71,6 +81,7 @@ bool ResamplingQueue::get_output_samples(double pts, float *samples, ssize_t num
 	// Using the time point since just before the last call to add_input_samples() as a base,
 	// estimate actual delay based on activity since then, measured in number of input samples:
 	double actual_delay = 0.0;
+	assert(last_input_len != 0);
 	actual_delay += (k_a1 - k_a0) * last_output_len / last_input_len;    // Inserted samples since k_a0, rescaled for the different time periods.
 	actual_delay += k_a0 - total_consumed_samples;                       // Samples inserted before k_a0 but not consumed yet.
 	actual_delay += vresampler.inpdist();                                // Delay in the resampler itself.
@@ -108,6 +119,7 @@ bool ResamplingQueue::get_output_samples(double pts, float *samples, ssize_t num
 	double rcorr = 1.0 - z2 - z3;
 	if (rcorr > 1.05) rcorr = 1.05;
 	if (rcorr < 0.95) rcorr = 0.95;
+	assert(!isnan(rcorr));
 	vresampler.set_rratio(rcorr);
 
 	// Finally actually resample, consuming exactly <num_samples> output samples.
