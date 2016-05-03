@@ -43,10 +43,6 @@ private:
 
 	static void free_stream(void *cls);
 
-	static void request_completed_thunk(void *cls, struct MHD_Connection *connection, void **con_cls, enum MHD_RequestTerminationCode toe);
-
-	void request_completed(struct MHD_Connection *connection, void **con_cls, enum MHD_RequestTerminationCode toe);
-
 
 	class Stream {
 	public:
@@ -54,7 +50,7 @@ private:
 			FRAMING_RAW,
 			FRAMING_METACUBE
 		};
-		Stream(Framing framing) : framing(framing) {}
+		Stream(HTTPD *parent, Framing framing) : parent(parent), framing(framing) {}
 
 		static ssize_t reader_callback_thunk(void *cls, uint64_t pos, char *buf, size_t max);
 		ssize_t reader_callback(uint64_t pos, char *buf, size_t max);
@@ -66,8 +62,10 @@ private:
 		};
 		void add_data(const char *buf, size_t size, DataType data_type);
 		void stop();
+		HTTPD *get_parent() const { return parent; }
 
 	private:
+		HTTPD *parent;
 		Framing framing;
 
 		std::mutex buffer_mutex;

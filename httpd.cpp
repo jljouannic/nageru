@@ -38,7 +38,7 @@ void HTTPD::start(int port)
 	                       port,
 	                       nullptr, nullptr,
 	                       &answer_to_connection_thunk, this,
-	                       MHD_OPTION_NOTIFY_COMPLETED, &request_completed_thunk, this,
+	                       MHD_OPTION_NOTIFY_COMPLETED, nullptr, this,
 	                       MHD_OPTION_END);
 }
 
@@ -72,7 +72,7 @@ int HTTPD::answer_to_connection(MHD_Connection *connection,
 		framing = HTTPD::Stream::FRAMING_RAW;
 	}
 
-	HTTPD::Stream *stream = new HTTPD::Stream(framing);
+	HTTPD::Stream *stream = new HTTPD::Stream(this, framing);
 	stream->add_data(header.data(), header.size(), Stream::DATA_TYPE_HEADER);
 	{
 		unique_lock<mutex> lock(streams_mutex);
@@ -89,36 +89,19 @@ int HTTPD::answer_to_connection(MHD_Connection *connection,
 		MHD_add_response_header(response, "Content-encoding", "metacube");
 	}
 	int ret = MHD_queue_response(connection, MHD_HTTP_OK, response);
-	//MHD_destroy_response(response);
+	MHD_destroy_response(response);  // Only decreases the refcount; actual free is after the request is done.
 
 	return ret;
 }
 
 void HTTPD::free_stream(void *cls)
 {
-	// FIXME: When is this actually called, if ever?
-	// Also, shouldn't we remove it from streams?
 	HTTPD::Stream *stream = (HTTPD::Stream *)cls;
-	delete stream;
-}
-
-void HTTPD::request_completed_thunk(void *cls, struct MHD_Connection *connection, void **con_cls, enum MHD_RequestTerminationCode toe)
-{
-	HTTPD *httpd = (HTTPD *)cls;
-	return httpd->request_completed(connection, con_cls, toe);
-}
-
-void HTTPD::request_completed(struct MHD_Connection *connection, void **con_cls, enum MHD_RequestTerminationCode toe)
-{
-	if (con_cls == nullptr) {
-		// Request was never set up.
-		return;
-	}
-	HTTPD::Stream *stream = (HTTPD::Stream *)*con_cls;
+	HTTPD *httpd = stream->get_parent();
 	{
-		unique_lock<mutex> lock(streams_mutex);
+		unique_lock<mutex> lock(httpd->streams_mutex);
 		delete stream;
-		streams.erase(stream);
+		httpd->streams.erase(stream);
 	}
 }
 
