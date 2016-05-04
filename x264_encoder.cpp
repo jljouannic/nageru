@@ -176,6 +176,7 @@ void X264Encoder::encode_frame(X264Encoder::QueuedFrame qf)
 	x264_nal_t *nal = nullptr;
 	int num_nal = 0;
 	x264_picture_t pic;
+	x264_picture_t *input_pic = nullptr;
 
 	if (qf.data) {
 		x264_picture_init(&pic);
@@ -189,21 +190,15 @@ void X264Encoder::encode_frame(X264Encoder::QueuedFrame qf)
 		pic.img.i_stride[1] = WIDTH / 2 * sizeof(uint16_t);
 		pic.opaque = reinterpret_cast<void *>(intptr_t(qf.duration));
 
-		if (speed_control) {
-			speed_control->before_frame(float(free_frames.size()) / X264_QUEUE_LENGTH, X264_QUEUE_LENGTH, 1e6 * qf.duration / TIMEBASE);
-		}
-		x264_encoder_encode(x264, &nal, &num_nal, &pic, &pic);
-		if (speed_control) {
-			speed_control->after_frame();
-		}
-	} else {
-		if (speed_control) {
-			speed_control->before_frame(float(free_frames.size()) / X264_QUEUE_LENGTH, X264_QUEUE_LENGTH, 1e6 * qf.duration / TIMEBASE);
-		}
-		x264_encoder_encode(x264, &nal, &num_nal, nullptr, &pic);
-		if (speed_control) {
-			speed_control->after_frame();
-		}
+		input_pic = &pic;
+	}
+
+	if (speed_control) {
+		speed_control->before_frame(float(free_frames.size()) / X264_QUEUE_LENGTH, X264_QUEUE_LENGTH, 1e6 * qf.duration / TIMEBASE);
+	}
+	x264_encoder_encode(x264, &nal, &num_nal, input_pic, &pic);
+	if (speed_control) {
+		speed_control->after_frame();
 	}
 
 	// We really need one AVPacket for the entire frame, it seems,
