@@ -11,6 +11,24 @@
 
 using namespace std;
 
+struct PacketBefore {
+	PacketBefore(const AVFormatContext *ctx) : ctx(ctx) {}
+
+	bool operator() (const AVPacket *a, const AVPacket *b) const {
+		int64_t a_dts = (a->dts == AV_NOPTS_VALUE ? a->pts : a->dts);
+		int64_t b_dts = (b->dts == AV_NOPTS_VALUE ? b->pts : b->dts);
+		AVRational a_timebase = ctx->streams[a->stream_index]->time_base;
+		AVRational b_timebase = ctx->streams[b->stream_index]->time_base;
+		if (av_compare_ts(a_dts, a_timebase, b_dts, b_timebase) != 0) {
+			return av_compare_ts(a_dts, a_timebase, b_dts, b_timebase) < 0;
+		} else {
+			return av_compare_ts(a->pts, a_timebase, b->pts, b_timebase) < 0;
+		}
+	}
+
+	const AVFormatContext * const ctx;
+};
+
 Mux::Mux(AVFormatContext *avctx, int width, int height, Codec video_codec, const string &video_extradata, const AVCodecContext *audio_ctx, int time_base, KeyFrameSignalReceiver *keyframe_signal_receiver)
 	: avctx(avctx), keyframe_signal_receiver(keyframe_signal_receiver)
 {
@@ -134,15 +152,7 @@ void Mux::unplug()
 	}
 	assert(plug_count >= 0);
 
-	sort(plugged_packets.begin(), plugged_packets.end(), [](const AVPacket *a, const AVPacket *b) {
-		int64_t a_dts = (a->dts == AV_NOPTS_VALUE ? a->pts : a->dts);
-		int64_t b_dts = (b->dts == AV_NOPTS_VALUE ? b->pts : b->dts);
-		if (a_dts != b_dts) {
-			return a_dts < b_dts;
-		} else {
-			return a->pts < b->pts;
-		}
-	});
+	sort(plugged_packets.begin(), plugged_packets.end(), PacketBefore(avctx));
 
 	for (AVPacket *pkt : plugged_packets) {
 		if (av_interleaved_write_frame(avctx, pkt) < 0) {
