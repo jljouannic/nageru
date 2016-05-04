@@ -118,24 +118,55 @@ void Mux::add_packet(const AVPacket &pkt, int64_t pts, int64_t dts)
 		assert(false);
 	}
 
+	{
+		lock_guard<mutex> lock(mu);
+		if (plug_count > 0) {
+			plugged_packets.push_back(av_packet_clone(&pkt_copy));
+		} else {
+			add_interleaved_packet(pkt_copy);
+		}
+	}
+
+	av_packet_unref(&pkt_copy);
+}
+
+void Mux::add_interleaved_packet(const AVPacket &pkt)
+{
+	if (waiting_packets.empty() || waiting_packets.front()->stream_index == pkt.stream_index) {
+		// We could still get packets of the other type with earlier pts/dts,
+		// so we'll have to queue and wait.
+		waiting_packets.push(av_packet_clone(const_cast<AVPacket *>(&pkt)));
+		return;
+	}
+
+	// Flush all the queued packets that are supposed to go before this.
+	PacketBefore before(avctx);
+	while (!waiting_packets.empty() && !before(&pkt, waiting_packets.front())) {
+		AVPacket *queued_pkt = waiting_packets.front();
+		waiting_packets.pop();
+		write_packet_with_signal(*queued_pkt);
+		av_packet_unref(queued_pkt);
+	}
+
+	if (waiting_packets.empty()) {
+		waiting_packets.push(av_packet_clone(const_cast<AVPacket *>(&pkt)));
+	} else {
+		write_packet_with_signal(pkt);
+	}
+}
+
+void Mux::write_packet_with_signal(const AVPacket &pkt)
+{
 	if (keyframe_signal_receiver) {
 		if (pkt.flags & AV_PKT_FLAG_KEY) {
 			av_write_frame(avctx, nullptr);
 			keyframe_signal_receiver->signal_keyframe();
 		}
 	}
-
-	{
-		lock_guard<mutex> lock(mu);
-		if (plug_count > 0) {
-			plugged_packets.push_back(av_packet_clone(&pkt_copy));
-		} else if (av_interleaved_write_frame(avctx, &pkt_copy) < 0) {
-			fprintf(stderr, "av_interleaved_write_frame() failed\n");
-			exit(1);
-		}
+	if (av_write_frame(avctx, const_cast<AVPacket *>(&pkt)) < 0) {
+		fprintf(stderr, "av_interleaved_write_frame() failed\n");
+		exit(1);
 	}
-
-	av_packet_unref(&pkt_copy);
 }
 
 void Mux::plug()
@@ -155,10 +186,7 @@ void Mux::unplug()
 	sort(plugged_packets.begin(), plugged_packets.end(), PacketBefore(avctx));
 
 	for (AVPacket *pkt : plugged_packets) {
-		if (av_interleaved_write_frame(avctx, pkt) < 0) {
-			fprintf(stderr, "av_interleaved_write_frame() failed\n");
-			exit(1);
-		}
+		add_interleaved_packet(*pkt);
 		av_packet_free(&pkt);
 	}
 	plugged_packets.clear();

@@ -10,6 +10,7 @@ extern "C" {
 }
 
 #include <mutex>
+#include <queue>
 #include <vector>
 
 class KeyFrameSignalReceiver {
@@ -42,10 +43,24 @@ public:
 	void unplug();
 
 private:
+	void add_interleaved_packet(const AVPacket &pkt);  // Must be called with <mu> held.
+	void write_packet_with_signal(const AVPacket &pkt);  // Must be called with <mu> held.
+
 	std::mutex mu;
 	AVFormatContext *avctx;  // Protected by <mu>.
 	int plug_count = 0;  // Protected by <mu>.
 	std::vector<AVPacket *> plugged_packets;  // Protected by <mu>.
+
+	// We need to do our own interleaving since we do explicit flushes
+	// before each keyframe. This queue contains every packet that we
+	// couldn't send yet, in add order. Essentially, we can't send a packet
+	// before we know we cannot receive an earlier (dts-wise) packet
+	// from another stream. This means that this queue will either contain
+	// video packets only or audio packets only, and as soon as a packet
+	// of the other type comes in, we can empty the flush the queue up
+	// to that point.
+	// Protected by <mu>.
+	std::queue<AVPacket *> waiting_packets;
 
 	AVStream *avstream_video, *avstream_audio;
 	KeyFrameSignalReceiver *keyframe_signal_receiver;
