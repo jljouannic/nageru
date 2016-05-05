@@ -167,6 +167,7 @@ void Mux::write_packet_with_signal(const AVPacket &pkt)
 		fprintf(stderr, "av_interleaved_write_frame() failed\n");
 		exit(1);
 	}
+	avio_flush(avctx->pb);
 }
 
 void Mux::plug()
