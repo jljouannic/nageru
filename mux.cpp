@@ -145,7 +145,7 @@ void Mux::add_interleaved_packet(const AVPacket &pkt)
 		AVPacket *queued_pkt = waiting_packets.front();
 		waiting_packets.pop();
 		write_packet_with_signal(*queued_pkt);
-		av_packet_unref(queued_pkt);
+		av_packet_free(&queued_pkt);
 	}
 
 	if (waiting_packets.empty()) {
