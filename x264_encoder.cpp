@@ -93,6 +93,33 @@ void X264Encoder::init_x264()
 	} else {
 		param.rc.i_vbv_max_bitrate = global_flags.x264_vbv_max_bitrate;
 	}
+	if (param.rc.i_vbv_max_bitrate > 0) {
+		// If the user wants VBV control to cap the max rate, it is
+		// also reasonable to assume that they are fine with the stream
+		// constantly being around that rate even for very low-complexity
+		// content; the obvious and extreme example being a static
+		// black picture.
+		//
+		// One would think it's fine to have low-complexity codec use
+		// less bitrate, but it seems to cause problems in practice;
+		// e.g. VLC seems to often drop the stream (similar to a buffer
+		// underrun) in such cases, but only when streaming from Nageru,
+		// not when reading a dump of the same stream from disk.
+		// I'm not 100% sure whether it's in VLC (possibly some buffering
+		// in the HTTP layer), in microhttpd or somewhere in Nageru itself,
+		// but it's a typical case of problems that can arise. Similarly,
+		// TCP's congestion control is not always fond of the rate staying
+		// low for a while and then rising quickly -- a variation on the same
+		// problem.
+		//
+		// We solve this by simply asking x264 to fill in dummy bits
+		// in these cases, so that the bitrate stays reasonable constant.
+		// It's a waste of bandwidth, but it makes things go much more
+		// smoothly in these cases. (We don't do it if VBV control is off
+		// in general, not the least because it makes no sense and x264
+		// thus ignores the parameter.)
+		param.rc.b_filler = 1;
+	}
 
 	// Occasionally players have problem with extremely low quantizers;
 	// be on the safe side. Shouldn't affect quality in any meaningful way.
