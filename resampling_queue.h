@@ -47,7 +47,8 @@
 
 class ResamplingQueue {
 public:
-	ResamplingQueue(unsigned freq_in, unsigned freq_out, unsigned num_channels = 2);
+	// card_num is for debugging outputs only.
+	ResamplingQueue(unsigned card_num, unsigned freq_in, unsigned freq_out, unsigned num_channels = 2);
 
 	// Note: pts is always in seconds.
 	void add_input_samples(double pts, const float *samples, ssize_t num_samples);
@@ -58,6 +59,7 @@ private:
 
 	VResampler vresampler;
 
+	unsigned card_num;
 	unsigned freq_in, freq_out, num_channels;
 
 	bool first_input = true, first_output = true;

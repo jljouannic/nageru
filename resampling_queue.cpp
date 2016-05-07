@@ -26,8 +26,8 @@
 #include <string.h>
 #include <zita-resampler/vresampler.h>
 
-ResamplingQueue::ResamplingQueue(unsigned freq_in, unsigned freq_out, unsigned num_channels)
-	: freq_in(freq_in), freq_out(freq_out), num_channels(num_channels),
+ResamplingQueue::ResamplingQueue(unsigned card_num, unsigned freq_in, unsigned freq_out, unsigned num_channels)
+	: card_num(card_num), freq_in(freq_in), freq_out(freq_out), num_channels(num_channels),
 	  ratio(double(freq_out) / double(freq_in))
 {
 	vresampler.setup(ratio, num_channels, /*hlen=*/32);
@@ -129,8 +129,8 @@ bool ResamplingQueue::get_output_samples(double pts, float *samples, ssize_t num
 		if (buffer.empty()) {
 			// This should never happen unless delay is set way too low,
 			// or we're dropping a lot of data.
-			fprintf(stderr, "PANIC: Out of input samples to resample, still need %d output samples!\n",
-				int(vresampler.out_count));
+			fprintf(stderr, "Card %u: PANIC: Out of input samples to resample, still need %d output samples! (correction factor is %f)\n",
+				card_num, int(vresampler.out_count), rcorr);
 			memset(vresampler.out_data, 0, vresampler.out_count * 2 * sizeof(float));
 			return false;
 		}

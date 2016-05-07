@@ -853,9 +853,7 @@ void Mixer::process_audio_one_frame(int64_t frame_pts_int, int num_samples)
 		samples_card.resize(num_samples * 2);
 		{
 			unique_lock<mutex> lock(cards[card_index].audio_mutex);
-			if (!cards[card_index].resampling_queue->get_output_samples(double(frame_pts_int) / TIMEBASE, &samples_card[0], num_samples)) {
-				printf("Card %d reported previous underrun.\n", card_index);
-			}
+			cards[card_index].resampling_queue->get_output_samples(double(frame_pts_int) / TIMEBASE, &samples_card[0], num_samples);
 		}
 		if (card_index == selected_audio_card) {
 			samples_out = move(samples_card);
