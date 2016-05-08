@@ -95,8 +95,8 @@ bool ResamplingQueue::get_output_samples(double pts, float *samples, ssize_t num
 		}
 		total_consumed_samples -= delay_samples_to_add;  // Equivalent to increasing k_a0 and k_a1.
 		err += delay_samples_to_add;
-		first_output = false;
 	}
+	first_output = false;
 
 	// Compute loop filter coefficients for the two filters. We need to compute them
 	// every time, since they depend on the number of samples the user asked for.
