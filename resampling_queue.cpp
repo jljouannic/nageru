@@ -147,7 +147,8 @@ bool ResamplingQueue::get_output_samples(double pts, float *samples, ssize_t num
 		vresampler.inp_count = num_input_samples;
 		vresampler.inp_data = inbuf;
 
-		vresampler.process();
+		int err = vresampler.process();
+		assert(err == 0);
 
 		size_t consumed_samples = num_input_samples - vresampler.inp_count;
 		total_consumed_samples += consumed_samples;

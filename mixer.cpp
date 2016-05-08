@@ -290,7 +290,7 @@ void Mixer::configure_card(unsigned card_index, const QSurfaceFormat &format, Ca
 	card->frame_allocator.reset(new PBOFrameAllocator(8 << 20, WIDTH, HEIGHT));  // 8 MB.
 	card->capture->set_video_frame_allocator(card->frame_allocator.get());
 	card->surface = create_surface(format);
-	card->resampling_queue.reset(new ResamplingQueue(OUTPUT_FREQUENCY, OUTPUT_FREQUENCY, 2));
+	card->resampling_queue.reset(new ResamplingQueue(card_index, OUTPUT_FREQUENCY, OUTPUT_FREQUENCY, 2));
 	card->capture->configure_card();
 }
 
@@ -410,7 +410,7 @@ void Mixer::bm_frame(unsigned card_index, uint16_t timecode,
 		if (dropped_frames > MAX_FPS * 2) {
 			fprintf(stderr, "Card %d lost more than two seconds (or time code jumping around; from 0x%04x to 0x%04x), resetting resampler\n",
 				card_index, card->last_timecode, timecode);
-			card->resampling_queue.reset(new ResamplingQueue(OUTPUT_FREQUENCY, OUTPUT_FREQUENCY, 2));
+			card->resampling_queue.reset(new ResamplingQueue(card_index, OUTPUT_FREQUENCY, OUTPUT_FREQUENCY, 2));
 			dropped_frames = 0;
 		} else if (dropped_frames > 0) {
 			// Insert silence as needed.
