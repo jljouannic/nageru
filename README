@@ -12,7 +12,7 @@ Features:
 
  - Proper sound support: Syncing of multiple unrelated sources through
    high-quality resampling, freely selectable input, cue out for headphones,
-   dynamic range compression, simple EQ (lowpass), level meters conforming
+   dynamic range compression, simple EQ (low-cut), level meters conforming
    to EBU R128.
 
  - Theme engine encapsulating the design demands of each individual
