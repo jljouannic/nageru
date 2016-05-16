@@ -4,6 +4,7 @@ extern "C" {
 #include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <sys/mman.h>
 #include <epoxy/gl.h>
 
 #include <QApplication>
@@ -51,6 +52,17 @@ int main(int argc, char *argv[])
 	mainWindow.show();
 
 	app.installEventFilter(&mainWindow);  // For white balance color picking.
+
+	// Even on an otherwise unloaded system, it would seem writing the recording
+	// to disk (potentially terabytes of data as time goes by) causes Nageru
+	// to be pushed out of RAM. If we have the right privileges, simply lock us
+	// into memory for better realtime behavior.
+	if (mlockall(MCL_CURRENT | MCL_FUTURE) == -1) {
+		perror("mlockall()");
+		fprintf(stderr, "Failed to lock Nageru into RAM. You probably want to\n");
+		fprintf(stderr, "increase \"memlock\" for your user in limits.conf\n");
+		fprintf(stderr, "for better realtime behavior.\n");
+	}
 
 	int rc = app.exec();
 	global_mixer->quit();
