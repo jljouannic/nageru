@@ -74,8 +74,6 @@ with:
 
 Exceptions as of May 2016:
 
-  - Mesa in stretch is too old; you need Mesa from unstable to get
-    11.2.x.
   - You want kernel 4.6.0 or newer to get any use of the patches in
     patches/ for persistent USB memory (see next paragraph).
 
