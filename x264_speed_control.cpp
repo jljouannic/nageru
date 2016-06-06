@@ -26,6 +26,8 @@ X264SpeedControl::X264SpeedControl(x264_t *x264, float f_speed, int i_buffer_siz
 	cplx_den = .1;
 	stat.min_buffer = buffer_size;
 	stat.max_buffer = 0;
+	stat.avg_preset = 0.0;
+	stat.den = 0;
 }
 
 X264SpeedControl::~X264SpeedControl()
