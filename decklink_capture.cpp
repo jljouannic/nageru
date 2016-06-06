@@ -58,7 +58,7 @@ size_t memcpy_interleaved_fastpath(uint8_t *dest1, uint8_t *dest2, const uint8_t
 		memcpy_interleaved(dest1, dest2, src, n2);
 		dest1 += n2 / 2;
 		dest2 += n2 / 2;
-		if (n2 % 1) {
+		if (n2 % 2) {
 			swap(dest1, dest2);
 		}
 		src = aligned_src;
