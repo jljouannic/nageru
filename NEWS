@@ -20,6 +20,10 @@ Nageru 1.3.0, not released yet
  - You can now override the default stream-to-card mapping with --map-signal=
    on the command line.
 
+ - Nageru now tries to lock itself into RAM if it has the permissions to do
+   so, for better realtime behavior. (Writing the stream to disk tends to
+   fill the buffer cache, eventually paging less-used parts of Nageru out.)
+
  - Various fixes for deadlocks, memory leaks, and many other errors.
 
 
