@@ -81,6 +81,9 @@ Exceptions as of June 2016:
     also lack some workarounds for LPM (link power management) and bandwidth
     allocation issues with USB3.
 
+  - There is a critical bug fix with x264 speed control in
+    928bd9d5def4f0ca5071ea176a11b816a01e6495, pushed to git mid-June 2016.
+
 
 The patches/ directory contains a patch that helps zita-resampler performance.
 It is meant for upstream, but was not in at the time Nageru was released.
