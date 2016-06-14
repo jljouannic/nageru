@@ -125,7 +125,21 @@ void X264Encoder::init_x264()
 	// be on the safe side. Shouldn't affect quality in any meaningful way.
 	param.rc.i_qp_min = 5;
 
-	// TODO: more flags here, via x264_param_parse().
+	for (const string &str : global_flags.x264_extra_param) {
+		const size_t pos = str.find(',');
+		if (pos == string::npos) {
+			if (x264_param_parse(&param, str.c_str(), nullptr) != 0) {
+				fprintf(stderr, "ERROR: x264 rejected parameter '%s'\n", str.c_str());
+			}
+		} else {
+			const string key = str.substr(0, pos);
+			const string value = str.substr(pos + 1);
+			if (x264_param_parse(&param, key.c_str(), value.c_str()) != 0) {
+				fprintf(stderr, "ERROR: x264 rejected parameter '%s' set to '%s'\n",
+					key.c_str(), value.c_str());
+			}
+		}
+	}
 
 	x264_param_apply_profile(&param, "high");
 

@@ -33,6 +33,7 @@ void usage()
 	fprintf(stderr, "                                  default: same as --x264-bitrate, that is, one-second VBV)\n");
 	fprintf(stderr, "      --x264-vbv-max-bitrate      x264 local max bitrate (in kilobit/sec per --vbv-bufsize,\n");
 	fprintf(stderr, "                                  0 = no limit, default: same as --x264-bitrate, i.e., CBR)\n");
+	fprintf(stderr, "      --x264-param=NAME[,VALUE]   set any x264 parameter, for fine tuning\n");
 	fprintf(stderr, "      --http-mux=NAME             mux to use for HTTP streams (default " DEFAULT_STREAM_MUX_NAME ")\n");
 	fprintf(stderr, "      --http-audio-codec=NAME     audio codec to use for HTTP streams\n");
 	fprintf(stderr, "                                  (default is to use the same as for the recording)\n");
@@ -65,6 +66,7 @@ void parse_flags(int argc, char * const argv[])
 		{ "x264-bitrate", required_argument, 0, 1011 },
 		{ "x264-vbv-bufsize", required_argument, 0, 1012 },
 		{ "x264-vbv-max-bitrate", required_argument, 0, 1013 },
+		{ "x264-param", required_argument, 0, 1017 },
 		{ "http-mux", required_argument, 0, 1004 },
 		{ "http-coarse-timebase", no_argument, 0, 1005 },
 		{ "http-audio-codec", required_argument, 0, 1006 },
@@ -146,6 +148,9 @@ void parse_flags(int argc, char * const argv[])
 			break;
 		case 1013:
 			global_flags.x264_vbv_max_bitrate = atoi(optarg);
+			break;
+		case 1017:
+			global_flags.x264_extra_param.push_back(optarg);
 			break;
 		case 1002:
 			global_flags.flat_audio = true;
