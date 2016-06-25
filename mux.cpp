@@ -29,8 +29,8 @@ struct PacketBefore {
 	const AVFormatContext * const ctx;
 };
 
-Mux::Mux(AVFormatContext *avctx, int width, int height, Codec video_codec, const string &video_extradata, const AVCodecContext *audio_ctx, int time_base, KeyFrameSignalReceiver *keyframe_signal_receiver)
-	: avctx(avctx), keyframe_signal_receiver(keyframe_signal_receiver)
+Mux::Mux(AVFormatContext *avctx, int width, int height, Codec video_codec, const string &video_extradata, const AVCodecContext *audio_ctx, int time_base)
+	: avctx(avctx)
 {
 	AVCodec *codec_video = avcodec_find_encoder((video_codec == CODEC_H264) ? AV_CODEC_ID_H264 : AV_CODEC_ID_RAWVIDEO);
 	avstream_video = avformat_new_stream(avctx, codec_video);
@@ -123,47 +123,16 @@ void Mux::add_packet(const AVPacket &pkt, int64_t pts, int64_t dts)
 		if (plug_count > 0) {
 			plugged_packets.push_back(av_packet_clone(&pkt_copy));
 		} else {
-			add_interleaved_packet(pkt_copy);
+			write_packet_or_die(pkt_copy);
 		}
 	}
 
 	av_packet_unref(&pkt_copy);
 }
 
-void Mux::add_interleaved_packet(const AVPacket &pkt)
+void Mux::write_packet_or_die(const AVPacket &pkt)
 {
-	if (waiting_packets.empty() || waiting_packets.front()->stream_index == pkt.stream_index) {
-		// We could still get packets of the other type with earlier pts/dts,
-		// so we'll have to queue and wait.
-		waiting_packets.push(av_packet_clone(const_cast<AVPacket *>(&pkt)));
-		return;
-	}
-
-	// Flush all the queued packets that are supposed to go before this.
-	PacketBefore before(avctx);
-	while (!waiting_packets.empty() && !before(&pkt, waiting_packets.front())) {
-		AVPacket *queued_pkt = waiting_packets.front();
-		waiting_packets.pop();
-		write_packet_with_signal(*queued_pkt);
-		av_packet_free(&queued_pkt);
-	}
-
-	if (waiting_packets.empty()) {
-		waiting_packets.push(av_packet_clone(const_cast<AVPacket *>(&pkt)));
-	} else {
-		write_packet_with_signal(pkt);
-	}
-}
-
-void Mux::write_packet_with_signal(const AVPacket &pkt)
-{
-	if (keyframe_signal_receiver) {
-		if (pkt.flags & AV_PKT_FLAG_KEY) {
-			av_write_frame(avctx, nullptr);
-			keyframe_signal_receiver->signal_keyframe();
-		}
-	}
-	if (av_write_frame(avctx, const_cast<AVPacket *>(&pkt)) < 0) {
+	if (av_interleaved_write_frame(avctx, const_cast<AVPacket *>(&pkt)) < 0) {
 		fprintf(stderr, "av_interleaved_write_frame() failed\n");
 		exit(1);
 	}
@@ -187,7 +156,7 @@ void Mux::unplug()
 	sort(plugged_packets.begin(), plugged_packets.end(), PacketBefore(avctx));
 
 	for (AVPacket *pkt : plugged_packets) {
-		add_interleaved_packet(*pkt);
+		write_packet_or_die(*pkt);
 		av_packet_free(&pkt);
 	}
 	plugged_packets.clear();

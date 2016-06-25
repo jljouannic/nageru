@@ -120,7 +120,9 @@ void VideoEncoder::open_output_stream()
 	avctx->oformat = oformat;
 
 	uint8_t *buf = (uint8_t *)av_malloc(MUX_BUFFER_SIZE);
-	avctx->pb = avio_alloc_context(buf, MUX_BUFFER_SIZE, 1, this, nullptr, &VideoEncoder::write_packet_thunk, nullptr);
+	avctx->pb = avio_alloc_context(buf, MUX_BUFFER_SIZE, 1, this, nullptr, nullptr, nullptr);
+	avctx->pb->write_data_type = &VideoEncoder::write_packet2_thunk;
+	avctx->pb->ignore_boundary_point = 1;
 
 	Mux::Codec video_codec;
 	if (global_flags.uncompressed_video_to_http) {
@@ -137,26 +139,22 @@ void VideoEncoder::open_output_stream()
 	}
 
 	int time_base = global_flags.stream_coarse_timebase ? COARSE_TIMEBASE : TIMEBASE;
-	stream_mux_writing_header = true;
-	stream_mux.reset(new Mux(avctx, width, height, video_codec, video_extradata, stream_audio_encoder->get_ctx(), time_base, this));
-	stream_mux_writing_header = false;
-	httpd->set_header(stream_mux_header);
-	stream_mux_header.clear();
+	stream_mux.reset(new Mux(avctx, width, height, video_codec, video_extradata, stream_audio_encoder->get_ctx(), time_base));
 }
 
-int VideoEncoder::write_packet_thunk(void *opaque, uint8_t *buf, int buf_size)
+int VideoEncoder::write_packet2_thunk(void *opaque, uint8_t *buf, int buf_size, AVIODataMarkerType type, int64_t time)
 {
 	VideoEncoder *video_encoder = (VideoEncoder *)opaque;
-	return video_encoder->write_packet(buf, buf_size);
+	return video_encoder->write_packet2(buf, buf_size, type, time);
 }
 
-int VideoEncoder::write_packet(uint8_t *buf, int buf_size)
+int VideoEncoder::write_packet2(uint8_t *buf, int buf_size, AVIODataMarkerType type, int64_t time)
 {
-	if (stream_mux_writing_header) {
+	if (type == AVIO_DATA_MARKER_HEADER) {
 		stream_mux_header.append((char *)buf, buf_size);
+		httpd->set_header(stream_mux_header);
 	} else {
-		httpd->add_data((char *)buf, buf_size, stream_mux_writing_keyframes);
-		stream_mux_writing_keyframes = false;
+		httpd->add_data((char *)buf, buf_size, type == AVIO_DATA_MARKER_SYNC_POINT);
 	}
 	return buf_size;
 }

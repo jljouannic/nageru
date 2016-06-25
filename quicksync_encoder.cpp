@@ -1942,7 +1942,7 @@ void QuickSyncEncoderImpl::open_output_file(const std::string &filename)
 	}
 
 	string video_extradata = "";  // FIXME: See other comment about global headers.
-	file_mux.reset(new Mux(avctx, frame_width, frame_height, Mux::CODEC_H264, video_extradata, file_audio_encoder->get_ctx(), TIMEBASE, nullptr));
+	file_mux.reset(new Mux(avctx, frame_width, frame_height, Mux::CODEC_H264, video_extradata, file_audio_encoder->get_ctx(), TIMEBASE));
 }
 
 void QuickSyncEncoderImpl::encode_thread_func()
