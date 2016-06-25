@@ -55,7 +55,9 @@ VideoEncoder::VideoEncoder(ResourcePool *resource_pool, QSurface *surface, const
 	open_output_stream();
 	stream_audio_encoder->add_mux(stream_mux.get());
 	quicksync_encoder->set_stream_mux(stream_mux.get());
-	x264_encoder->set_mux(stream_mux.get());
+	if (global_flags.x264_video_to_http) {
+		x264_encoder->set_mux(stream_mux.get());
+	}
 }
 
 VideoEncoder::~VideoEncoder()
