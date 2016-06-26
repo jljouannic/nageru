@@ -1,4 +1,4 @@
-Nageru 1.3.0, not released yet
+Nageru 1.3.0, June 26th, 2016
 
  - It is now possible, given enough CPU power (e.g., a quad-core Haswell or
    faster desktop CPU), to output a stream that is suitable for streaming
