@@ -75,7 +75,7 @@ MainWindow::MainWindow()
 	transition_btn3 = ui->transition_btn3;
 	qRegisterMetaType<string>("std::string");
 	qRegisterMetaType<vector<string>>("std::vector<std::string>");
-	connect(ui->me_preview, &GLWidget::transition_names_updated, this, &MainWindow::set_transition_names);
+	connect(ui->me_live, &GLWidget::transition_names_updated, this, &MainWindow::set_transition_names);
 	qRegisterMetaType<Mixer::Output>("Mixer::Output");
 }
 
