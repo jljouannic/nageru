@@ -250,6 +250,11 @@ public:
 		locut_enabled = enabled;
 	}
 
+	bool get_locut_enabled() const
+	{
+		return locut_enabled;
+	}
+
 	float get_limiter_threshold_dbfs()
 	{
 		return limiter_threshold_dbfs;
@@ -275,9 +280,19 @@ public:
 		limiter_enabled = enabled;
 	}
 
+	bool get_limiter_enabled() const
+	{
+		return limiter_enabled;
+	}
+
 	void set_compressor_enabled(bool enabled)
 	{
 		compressor_enabled = enabled;
+	}
+
+	bool get_compressor_enabled() const
+	{
+		return compressor_enabled;
 	}
 
 	void set_gain_staging_db(float gain_db)
@@ -291,6 +306,12 @@ public:
 	{
 		std::unique_lock<std::mutex> lock(compressor_mutex);
 		level_compressor_enabled = enabled;
+	}
+
+	bool get_gain_staging_auto() const
+	{
+		std::unique_lock<std::mutex> lock(compressor_mutex);
+		return level_compressor_enabled;
 	}
 
 	void set_final_makeup_gain_db(float gain_db)
@@ -473,7 +494,7 @@ private:
 	std::atomic<bool> should_cut{false};
 
 	audio_level_callback_t audio_level_callback = nullptr;
-	std::mutex compressor_mutex;
+	mutable std::mutex compressor_mutex;
 	Ebu_r128_proc r128;  // Under compressor_mutex.
 	CorrelationMeasurer correlation;  // Under compressor_mutex.
 

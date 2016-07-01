@@ -120,6 +120,13 @@ void MainWindow::mixer_created(Mixer *mixer)
 		connect(ui_display->wb_button, &QPushButton::clicked, bind(&MainWindow::wb_button_clicked, this, i));
 	}
 
+	// TODO: Fetch all of the values these for completeness,
+	// not just the enable knobs implied by --flat-audio.
+	ui->locut_enabled->setChecked(global_mixer->get_locut_enabled());
+	ui->gainstaging_auto_checkbox->setChecked(global_mixer->get_gain_staging_auto());
+	ui->limiter_enabled->setChecked(global_mixer->get_limiter_enabled());
+	ui->compressor_enabled->setChecked(global_mixer->get_compressor_enabled());
+
 	char buf[256];
 	snprintf(buf, sizeof(buf), "%.1f dB", mixer->get_limiter_threshold_dbfs());
 	ui->limiter_threshold_db_display->setText(buf);

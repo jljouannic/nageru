@@ -249,6 +249,7 @@ Mixer::Mixer(const QSurfaceFormat &format, unsigned num_cards)
 	// except the final makeup gain.
 	if (global_flags.flat_audio) {
 		set_locut_enabled(false);
+		set_gain_staging_auto(false);
 		set_limiter_enabled(false);
 		set_compressor_enabled(false);
 	}
