@@ -41,6 +41,11 @@ int main(int argc, char *argv[])
 	fmt.setProfile(QSurfaceFormat::CoreProfile);
 	fmt.setMajorVersion(3);
 	fmt.setMinorVersion(1);
+
+	// Turn off vsync, since Qt generally gives us at most frame rate
+	// (display frequency) / (number of QGLWidgets active).
+	fmt.setSwapInterval(0);
+
 	QSurfaceFormat::setDefaultFormat(fmt);
 
 	QGLFormat::setDefaultFormat(QGLFormat::fromSurfaceFormat(fmt));
