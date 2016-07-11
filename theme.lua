@@ -240,7 +240,7 @@ function needs_scale(signals, signal_num, width, height)
 		-- We assume this is already correctly scaled at load time.
 		return false
 	end
-	assert(signal_num == INPUT0_SIGNAL_NUM or signal_num == INPUT1_SIGNAL_NUM)
+	assert(is_plain_signal(signal_num))
 	return (signals:get_width(signal_num) ~= width or signals:get_height(signal_num) ~= height)
 end
 
@@ -259,6 +259,10 @@ end
 -- Called only once, at the start of the program.
 function num_channels()
 	return 4
+end
+
+function is_plain_signal(num)
+	return num == INPUT0_SIGNAL_NUM or num == INPUT1_SIGNAL_NUM
 end
 
 -- Helper function to write e.g. “720p60”. The difference between this
@@ -349,11 +353,8 @@ function channel_color(channel)
 end
 
 function channel_involved_in(channel, signal_num)
-	if signal_num == INPUT0_SIGNAL_NUM then
-		return channel == 2
-	end
-	if signal_num == INPUT1_SIGNAL_NUM then
-		return channel == 3
+	if is_plain_signal(signal_num) then
+		return channel == (signal_num + 2)
 	end
 	if signal_num == SBS_SIGNAL_NUM then
 		return (channel == 2 or channel == 3)
@@ -413,21 +414,15 @@ function get_transitions(t)
 		return {"Cut"}
 	end
 
-	if (live_signal_num == INPUT0_SIGNAL_NUM or
-	    live_signal_num == INPUT1_SIGNAL_NUM or
-	    live_signal_num == STATIC_SIGNAL_NUM) and
-	   (preview_signal_num == INPUT0_SIGNAL_NUM or
-	    preview_signal_num == INPUT1_SIGNAL_NUM or
-	    preview_signal_num == STATIC_SIGNAL_NUM) then
+	if (is_plain_signal(live_signal_num) or live_signal_num == STATIC_SIGNAL_NUM) and
+	   (is_plain_signal(preview_signal_num) or preview_signal_num == STATIC_SIGNAL_NUM) then
 		return {"Cut", "", "Fade"}
 	end
 
 	-- Various zooms.
-	if live_signal_num == SBS_SIGNAL_NUM and
-	   (preview_signal_num == INPUT0_SIGNAL_NUM or preview_signal_num == INPUT1_SIGNAL_NUM) then
+	if live_signal_num == SBS_SIGNAL_NUM and is_plain_signal(preview_signal_num) then
 		return {"Cut", "Zoom in"}
-	elseif (live_signal_num == INPUT0_SIGNAL_NUM or live_signal_num == INPUT1_SIGNAL_NUM) and
-	       preview_signal_num == SBS_SIGNAL_NUM then
+	elseif is_plain_signal(live_signal_num) and preview_signal_num == SBS_SIGNAL_NUM then
 		return {"Cut", "Zoom out"}
 	end
 
@@ -465,8 +460,7 @@ function transition_clicked(num, t)
 			return
 		end
 
-		if (live_signal_num == INPUT0_SIGNAL_NUM and preview_signal_num == INPUT1_SIGNAL_NUM) or
-		   (live_signal_num == INPUT1_SIGNAL_NUM and preview_signal_num == INPUT0_SIGNAL_NUM) then
+		if (is_plain_signal(live_signal_num) and is_plain_signal(preview_signal_num)) then
 			-- We can't zoom between these. Just make a cut.
 			io.write("Cutting from " .. live_signal_num .. " to " .. live_signal_num .. "\n")
 			local temp = live_signal_num
@@ -475,8 +469,7 @@ function transition_clicked(num, t)
 			return
 		end
 
-		if live_signal_num == SBS_SIGNAL_NUM and
-		   (preview_signal_num == INPUT0_SIGNAL_NUM or preview_signal_num == INPUT1_SIGNAL_NUM) then
+		if live_signal_num == SBS_SIGNAL_NUM and is_plain_signal(preview_signal_num) then
 			-- Zoom in from SBS to single.
 			transition_start = t
 			transition_end = t + 1.0
@@ -484,8 +477,7 @@ function transition_clicked(num, t)
 			zoom_dst = 1.0
 			zoom_poi = preview_signal_num
 			preview_signal_num = SBS_SIGNAL_NUM
-		elseif (live_signal_num == INPUT0_SIGNAL_NUM or live_signal_num == INPUT1_SIGNAL_NUM) and
-		       preview_signal_num == SBS_SIGNAL_NUM then
+		elseif is_plain_signal(live_signal_num) and preview_signal_num == SBS_SIGNAL_NUM then
 			-- Zoom out from single to SBS.
 			transition_start = t
 			transition_end = t + 1.0
@@ -500,11 +492,9 @@ function transition_clicked(num, t)
 
 		-- Fade.
 		if (live_signal_num ~= preview_signal_num) and
-		   (live_signal_num == INPUT0_SIGNAL_NUM or
-		    live_signal_num == INPUT1_SIGNAL_NUM or
+		   (is_plain_signal(live_signal_num) or
 		    live_signal_num == STATIC_SIGNAL_NUM) and
-		   (preview_signal_num == INPUT0_SIGNAL_NUM or
-		    preview_signal_num == INPUT1_SIGNAL_NUM or
+		   (is_plain_signal(preview_signal_num) or
 		    preview_signal_num == STATIC_SIGNAL_NUM) then
 			transition_start = t
 			transition_end = t + 1.0
@@ -575,7 +565,7 @@ function get_chain(num, t, width, height, signals)
 	last_resolution = input_resolution
 
 	if num == 0 then  -- Live.
-		if live_signal_num == INPUT0_SIGNAL_NUM or live_signal_num == INPUT1_SIGNAL_NUM then  -- Plain input.
+		if is_plain_signal(live_signal_num) then  -- Plain inputs.
 			local input_type = get_input_type(signals, live_signal_num)
 			local input_scale = needs_scale(signals, live_signal_num, width, height)
 			local chain = simple_chains[input_type][input_scale][true]
