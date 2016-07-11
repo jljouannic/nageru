@@ -15,8 +15,10 @@ local zoom_poi = 0   -- which input to zoom in on
 local fade_src_signal = 0
 local fade_dst_signal = 0
 
-local input0_neutral_color = {0.5, 0.5, 0.5}
-local input1_neutral_color = {0.5, 0.5, 0.5}
+local neutral_colors = {
+	{0.5, 0.5, 0.5},  -- Input 0.
+	{0.5, 0.5, 0.5}   -- Input 1.
+}
 
 local live_signal_num = 0
 local preview_signal_num = 1
@@ -309,13 +311,12 @@ end
 -- Called at the start of the program, and then each frame for live
 -- channels in case they change resolution.
 function channel_name(channel)
-	if channel == 2 then
-		return "Input 1 (" .. get_channel_resolution(0) .. ")"
-	elseif channel == 3 then
-		return "Input 2 (" .. get_channel_resolution(1) .. ")"
-	elseif channel == 4 then
+	local signal_num = channel - 2
+	if is_plain_signal(signal_num) then
+		return "Input " .. (signal_num + 1) .. " (" .. get_channel_resolution(signal_num) .. ")"
+	elseif signal_num == SBS_SIGNAL_NUM then
 		return "Side-by-side"
-	elseif channel == 5 then
+	elseif signal_num == STATIC_SIGNAL_NUM then
 		return "Static picture"
 	end
 end
@@ -373,17 +374,15 @@ end
 -- Returns if a given channel supports setting white balance (starting from 2).
 -- Called only once for each channel, at the start of the program.
 function supports_set_wb(channel)
-	return channel == 2 or channel == 3
+	return is_plain_signal(channel - 2)
 end
 
 -- API ENTRY POINT
 -- Gets called with a new gray point when the white balance is changing.
 -- The color is in linear light (not sRGB gamma).
 function set_wb(channel, red, green, blue)
-	if channel == 2 then
-		input0_neutral_color = { red, green, blue }
-	elseif channel == 3 then
-		input1_neutral_color = { red, green, blue }
+	if is_plain_signal(channel - 2) then
+		neutral_colors[channel - 2 + 1] = { red, green, blue }
 	end
 end
 
@@ -614,7 +613,7 @@ function get_chain(num, t, width, height, signals)
 			prepare = function()
 				chain.input:connect_signal(INPUT0_SIGNAL_NUM)
 				set_scale_parameters_if_needed(chain, width, height)
-				set_neutral_color(chain.wb_effect, input0_neutral_color)
+				set_neutral_color(chain.wb_effect, neutral_colors[1])
 			end
 			return chain.chain, prepare
 		end
@@ -638,25 +637,15 @@ function get_chain(num, t, width, height, signals)
 	end
 
 	-- Individual preview inputs.
-	if num == INPUT0_SIGNAL_NUM + 2 then
-		local input_type = get_input_type(signals, INPUT0_SIGNAL_NUM)
-		local input_scale = needs_scale(signals, INPUT0_SIGNAL_NUM, width, height)
+	if is_plain_signal(num - 2) then
+		local signal_num = num - 2
+		local input_type = get_input_type(signals, signal_num)
+		local input_scale = needs_scale(signals, signal_num, width, height)
 		local chain = simple_chains[input_type][input_scale][false]
 		prepare = function()
-			chain.input:connect_signal(INPUT0_SIGNAL_NUM)
+			chain.input:connect_signal(signal_num)
 			set_scale_parameters_if_needed(chain, width, height)
-			set_neutral_color(chain.wb_effect, input0_neutral_color)
-		end
-		return chain.chain, prepare
-	end
-	if num == INPUT1_SIGNAL_NUM + 2 then
-		local input_type = get_input_type(signals, INPUT1_SIGNAL_NUM)
-		local input_scale = needs_scale(signals, INPUT1_SIGNAL_NUM, width, height)
-		local chain = simple_chains[input_type][input_scale][false]
-		prepare = function()
-			chain.input:connect_signal(INPUT1_SIGNAL_NUM)
-			set_scale_parameters_if_needed(chain, width, height)
-			set_neutral_color(chain.wb_effect, input1_neutral_color)
+			set_neutral_color(chain.wb_effect, neutral_colors[signal_num + 1])
 		end
 		return chain.chain, prepare
 	end
@@ -778,8 +767,8 @@ end
 function prepare_sbs_chain(chain, t, screen_width, screen_height, input_resolution)
 	chain.input0.input:connect_signal(0)
 	chain.input1.input:connect_signal(1)
-	set_neutral_color(chain.input0.wb_effect, input0_neutral_color)
-	set_neutral_color(chain.input1.wb_effect, input1_neutral_color)
+	set_neutral_color(chain.input0.wb_effect, neutral_colors[1])
+	set_neutral_color(chain.input1.wb_effect, neutral_colors[2])
 
 	-- First input is positioned (16,48) from top-left.
 	local width0 = round(848 * screen_width/1280.0)
@@ -839,10 +828,8 @@ function set_neutral_color(effect, color)
 end
 
 function set_neutral_color_from_signal(effect, signal)
-	if signal == INPUT0_SIGNAL_NUM then
-		set_neutral_color(effect, input0_neutral_color)
-	else
-		set_neutral_color(effect, input1_neutral_color)
+	if is_plain_signal(signal) then
+		set_neutral_color(effect, neutral_colors[signal - INPUT0_SIGNAL_NUM + 1])
 	end
 end
 
