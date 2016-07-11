@@ -697,10 +697,15 @@ function place_rectangle(resample_effect, resize_effect, padding_effect, x0, y0,
 
 	-- Cull.
 	if x0 > screen_width or x1 < 0.0 or y0 > screen_height or y1 < 0.0 then
-		resample_effect:set_int("width", 1)
-		resample_effect:set_int("height", 1)
-		resample_effect:set_float("zoom_x", screen_width)
-		resample_effect:set_float("zoom_y", screen_height)
+		if resample_effect ~= nil then
+			resample_effect:set_int("width", 1)
+			resample_effect:set_int("height", 1)
+			resample_effect:set_float("zoom_x", screen_width)
+			resample_effect:set_float("zoom_y", screen_height)
+		else
+			resize_effect:set_int("width", 1)
+			resize_effect:set_int("height", 1)
+		end
 		padding_effect:set_int("left", screen_width + 100)
 		padding_effect:set_int("top", screen_height + 100)
 		return
