@@ -764,6 +764,26 @@ function lerp(a, b, t)
 	return a + (b - a) * t
 end
 
+function lerp_pos(a, b, t)
+	return {
+		x0 = lerp(a.x0, b.x0, t),
+		y0 = lerp(a.y0, b.y0, t),
+		x1 = lerp(a.x1, b.x1, t),
+		y1 = lerp(a.y1, b.y1, t)
+	}
+end
+
+function pos_from_top_left(x, y, width, height, screen_width, screen_height)
+	local xs = screen_width / 1280.0
+	local ys = screen_height / 720.0
+	return {
+		x0 = round(xs * x),
+		y0 = round(ys * y),
+		x1 = round(xs * (x + width)),
+		y1 = round(ys * (y + height))
+	}
+end
+
 function prepare_sbs_chain(chain, t, screen_width, screen_height, input_resolution)
 	chain.input0.input:connect_signal(0)
 	chain.input1.input:connect_signal(1)
@@ -771,56 +791,42 @@ function prepare_sbs_chain(chain, t, screen_width, screen_height, input_resoluti
 	set_neutral_color(chain.input1.wb_effect, neutral_colors[2])
 
 	-- First input is positioned (16,48) from top-left.
-	local width0 = round(848 * screen_width/1280.0)
-	local height0 = round(width0 * 9.0 / 16.0)
-
-	local top0 = 48 * screen_height/720.0
-	local left0 = 16 * screen_width/1280.0
-	local bottom0 = top0 + height0
-	local right0 = left0 + width0
-
 	-- Second input is positioned (16,48) from the bottom-right.
-	local width1 = round(384 * screen_width/1280.0)
-	local height1 = round(216 * screen_height/720.0)
+	local pos0 = pos_from_top_left(16, 48, 848, 477, screen_width, screen_height)
+	local pos1 = pos_from_top_left(1280 - 384 - 16, 720 - 216 - 48, 384, 216, screen_width, screen_height)
 
-	local bottom1 = screen_height - 48 * screen_height/720.0
-	local right1 = screen_width - 16 * screen_width/1280.0
-	local top1 = bottom1 - height1
-	local left1 = right1 - width1
-
-	-- Interpolate between the fullscreen and side-by-side views.
-	local scale0, tx0, tx0
+	local pos_fs = { x0 = 0, y0 = 0, x1 = screen_width, y1 = screen_height }
+	local affine_param
 	if zoom_poi == INPUT0_SIGNAL_NUM then
-		local new_left0 = lerp(left0, 0, t)
-		local new_right0 = lerp(right0, screen_width, t)
-		local new_top0 = lerp(top0, 0, t)
-		local new_bottom0 = lerp(bottom0, screen_height, t)
-
-		scale0 = (new_right0 - new_left0) / width0  -- Same vertically and horizonally.
-		tx0 = new_left0 - left0 * scale0
-		ty0 = new_top0 - top0 * scale0
+		affine_param = find_affine_param(pos0, lerp_pos(pos0, pos_fs, t))
 	else
-		local new_left1 = lerp(left1, 0, t)
-		local new_right1 = lerp(right1, screen_width, t)
-		local new_top1 = lerp(top1, 0, t)
-		local new_bottom1 = lerp(bottom1, screen_height, t)
-
-		scale0 = (new_right1 - new_left1) / width1  -- Same vertically and horizonally.
-		tx0 = new_left1 - left1 * scale0
-		ty0 = new_top1 - top1 * scale0
+		affine_param = find_affine_param(pos1, lerp_pos(pos1, pos_fs, t))
 	end
 
-	top0 = top0 * scale0 + ty0
-	bottom0 = bottom0 * scale0 + ty0
-	left0 = left0 * scale0 + tx0
-	right0 = right0 * scale0 + tx0
+	-- NOTE: input_resolution is not 1-indexed, unlike usual Lua arrays.
+	place_rectangle_with_affine(chain.input0.resample_effect, chain.input0.resize_effect, chain.input0.padding_effect, pos0, affine_param, screen_width, screen_height, input_resolution[0].width, input_resolution[0].height)
+	place_rectangle_with_affine(chain.input1.resample_effect, chain.input1.resize_effect, chain.input1.padding_effect, pos1, affine_param, screen_width, screen_height, input_resolution[1].width, input_resolution[1].height)
+end
 
-	top1 = top1 * scale0 + ty0
-	bottom1 = bottom1 * scale0 + ty0
-	left1 = left1 * scale0 + tx0
-	right1 = right1 * scale0 + tx0
-	place_rectangle(chain.input0.resample_effect, chain.input0.resize_effect, chain.input0.padding_effect, left0, top0, right0, bottom0, screen_width, screen_height, input_resolution[0].width, input_resolution[0].height)
-	place_rectangle(chain.input1.resample_effect, chain.input1.resize_effect, chain.input1.padding_effect, left1, top1, right1, bottom1, screen_width, screen_height, input_resolution[1].width, input_resolution[1].height)
+-- Find the transformation that changes the first rectangle to the second one.
+function find_affine_param(a, b)
+	local sx = (b.x1 - b.x0) / (a.x1 - a.x0)
+	local sy = (b.y1 - b.y0) / (a.y1 - a.y0)
+	return {
+		sx = sx,
+		sy = sy,
+		tx = b.x0 - a.x0 * sx,
+		ty = b.y0 - a.y0 * sy
+	}
+end
+
+function place_rectangle_with_affine(resample_effect, resize_effect, padding_effect, pos, aff, screen_width, screen_height, input_width, input_height)
+	local x0 = pos.x0 * aff.sx + aff.tx
+	local x1 = pos.x1 * aff.sx + aff.tx
+	local y0 = pos.y0 * aff.sy + aff.ty
+	local y1 = pos.y1 * aff.sy + aff.ty
+
+	place_rectangle(resample_effect, resize_effect, padding_effect, x0, y0, x1, y1, screen_width, screen_height, input_width, input_height)
 end
 
 function set_neutral_color(effect, color)
