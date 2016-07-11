@@ -63,6 +63,7 @@ void ResamplingQueue::add_input_samples(double pts, const float *samples, ssize_
 
 bool ResamplingQueue::get_output_samples(double pts, float *samples, ssize_t num_samples)
 {
+	assert(num_samples > 0);
 	if (first_input) {
 		// No data yet, just return zeros.
 		memset(samples, 0, num_samples * 2 * sizeof(float));

@@ -361,6 +361,7 @@ void Mixer::bm_frame(unsigned card_index, uint16_t timecode,
 	}
 
 	int64_t frame_length = int64_t(TIMEBASE) * video_format.frame_rate_den / video_format.frame_rate_nom;
+	assert(frame_length > 0);
 
 	size_t num_samples = (audio_frame.len > audio_offset) ? (audio_frame.len - audio_offset) / audio_format.num_channels / (audio_format.bits_per_sample / 8) : 0;
 	if (num_samples > OUTPUT_FREQUENCY / 10) {
