@@ -9,6 +9,7 @@
 
 struct Flags {
 	int num_cards = 2;
+	int num_fake_cards = 0;
 	std::string va_display;
 	bool uncompressed_video_to_http = false;
 	bool x264_video_to_http = false;

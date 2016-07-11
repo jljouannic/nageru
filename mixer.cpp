@@ -32,6 +32,7 @@
 #include "context.h"
 #include "decklink_capture.h"
 #include "defs.h"
+#include "fake_capture.h"
 #include "flags.h"
 #include "video_encoder.h"
 #include "pbo_frame_allocator.h"
@@ -163,28 +164,43 @@ Mixer::Mixer(const QSurfaceFormat &format, unsigned num_cards)
 	// Start listening for clients only once VideoEncoder has written its header, if any.
 	httpd.start(9095);
 
-	// First try initializing the PCI devices, then USB, until we have the desired number of cards.
+	// First try initializing the fake devices, then PCI devices, then USB,
+	// until we have the desired number of cards.
 	unsigned num_pci_devices = 0, num_usb_devices = 0;
 	unsigned card_index = 0;
 
-	IDeckLinkIterator *decklink_iterator = CreateDeckLinkIteratorInstance();
-	if (decklink_iterator != nullptr) {
-		for ( ; card_index < num_cards; ++card_index) {
-			IDeckLink *decklink;
-			if (decklink_iterator->Next(&decklink) != S_OK) {
-				break;
-			}
+	assert(global_flags.num_fake_cards >= 0);  // Enforced in flags.cpp.
+	unsigned num_fake_cards = global_flags.num_fake_cards;
 
-			configure_card(card_index, format, new DeckLinkCapture(decklink, card_index));
-			++num_pci_devices;
+	assert(num_fake_cards <= num_cards);  // Enforced in flags.cpp.
+	for ( ; card_index < num_fake_cards; ++card_index) {
+		configure_card(card_index, format, new FakeCapture(card_index));
+	}
+
+	if (global_flags.num_fake_cards > 0) {
+		fprintf(stderr, "Initialized %d fake cards.\n", global_flags.num_fake_cards);
+	}
+
+	if (card_index < num_cards) {
+		IDeckLinkIterator *decklink_iterator = CreateDeckLinkIteratorInstance();
+		if (decklink_iterator != nullptr) {
+			for ( ; card_index < num_cards; ++card_index) {
+				IDeckLink *decklink;
+				if (decklink_iterator->Next(&decklink) != S_OK) {
+					break;
+				}
+
+				configure_card(card_index, format, new DeckLinkCapture(decklink, card_index - num_fake_cards));
+				++num_pci_devices;
+			}
+			decklink_iterator->Release();
+			fprintf(stderr, "Found %d DeckLink PCI card(s).\n", num_pci_devices);
+		} else {
+			fprintf(stderr, "DeckLink drivers not found. Probing for USB cards only.\n");
 		}
-		decklink_iterator->Release();
-		fprintf(stderr, "Found %d DeckLink PCI card(s).\n", num_pci_devices);
-	} else {
-		fprintf(stderr, "DeckLink drivers not found. Probing for USB cards only.\n");
 	}
 	for ( ; card_index < num_cards; ++card_index) {
-		configure_card(card_index, format, new BMUSBCapture(card_index - num_pci_devices));
+		configure_card(card_index, format, new BMUSBCapture(card_index - num_pci_devices - num_fake_cards));
 		++num_usb_devices;
 	}
 
