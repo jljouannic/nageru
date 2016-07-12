@@ -205,6 +205,7 @@ Mixer::Mixer(const QSurfaceFormat &format, unsigned num_cards)
 	}
 
 	if (num_usb_devices > 0) {
+		has_bmusb_thread = true;
 		BMUSBCapture::start_bm_thread();
 	}
 
@@ -283,7 +284,9 @@ Mixer::~Mixer()
 {
 	resource_pool->release_glsl_program(cbcr_program_num);
 	glDeleteBuffers(1, &cbcr_vbo);
-	BMUSBCapture::stop_bm_thread();
+	if (has_bmusb_thread) {
+		BMUSBCapture::stop_bm_thread();
+	}
 
 	for (unsigned card_index = 0; card_index < num_cards; ++card_index) {
 		{

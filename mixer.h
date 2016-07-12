@@ -424,6 +424,7 @@ private:
 	int64_t pts_int = 0;  // In TIMEBASE units.
 
 	std::mutex bmusb_mutex;
+	bool has_bmusb_thread = false;
 	struct CaptureCard {
 		CaptureInterface *capture;
 		std::unique_ptr<PBOFrameAllocator> frame_allocator;
