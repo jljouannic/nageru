@@ -81,11 +81,11 @@ function make_sbs_input(chain, signal, deint, hq)
 end
 
 -- The main live chain.
-function make_sbs_chain(input0_deint, input1_deint, hq)
+function make_sbs_chain(input0_type, input1_type, hq)
 	local chain = EffectChain.new(16, 9)
 
-	local input0 = make_sbs_input(chain, INPUT0_SIGNAL_NUM, input0_deint, hq)
-	local input1 = make_sbs_input(chain, INPUT1_SIGNAL_NUM, input1_deint, hq)
+	local input0 = make_sbs_input(chain, INPUT0_SIGNAL_NUM, input0_type == "livedeint", hq)
+	local input1 = make_sbs_input(chain, INPUT1_SIGNAL_NUM, input1_type == "livedeint", hq)
 
 	input0.padding_effect:set_vec4("border_color", 0.0, 0.0, 0.0, 1.0)
 	input1.padding_effect:set_vec4("border_color", 0.0, 0.0, 0.0, 0.0)
@@ -106,9 +106,7 @@ local sbs_chains = make_cartesian_product({
 	{"live", "livedeint"},  -- input1_type
 	{true, false}           -- hq
 }, function(input0_type, input1_type, hq)
-	local input0_deint = (input0_type == "livedeint")
-	local input1_deint = (input1_type == "livedeint")
-	return make_sbs_chain(input0_deint, input1_deint, hq)
+	return make_sbs_chain(input0_type, input1_type, hq)
 end)
 
 function make_fade_input(chain, signal, live, deint, scale)
