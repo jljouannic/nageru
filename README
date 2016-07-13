@@ -45,8 +45,7 @@ Nageru is in beta stage. It currently needs:
 
  - libmicrohttpd for the embedded web server.
 
- - x264 for encoding high-quality video suitable for streaming to end users
-   (but see below).
+ - x264 for encoding high-quality video suitable for streaming to end users.
 
  - ffmpeg for muxing, and for encoding audio.
 
@@ -80,9 +79,6 @@ Exceptions as of June 2016:
   - You want kernel 4.6.0 or newer to get zerocopy USB. Older kernels
     also lack some workarounds for LPM (link power management) and bandwidth
     allocation issues with USB3.
-
-  - There is a critical bug fix with x264 speed control in
-    928bd9d5def4f0ca5071ea176a11b816a01e6495, pushed to git mid-June 2016.
 
   - Nageru depends on an avformat API for marking block boundaries in the
     muxed byte stream that didn't enter ffmpeg before
