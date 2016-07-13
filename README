@@ -47,7 +47,8 @@ Nageru is in beta stage. It currently needs:
 
  - x264 for encoding high-quality video suitable for streaming to end users.
 
- - ffmpeg for muxing, and for encoding audio.
+ - ffmpeg for muxing, and for encoding audio. You will need at least
+   version 3.1.
 
  - Working OpenGL; Movit works with almost any modern OpenGL implementation.
    Nageru has been tested with Intel on Mesa (you want 11.2 or newer, due
@@ -77,8 +78,7 @@ Exceptions as of June 2016:
     performance, but also for stability.
 
   - Nageru depends on an avformat API for marking block boundaries in the
-    muxed byte stream that didn't enter ffmpeg before
-    4e7a9212820a56bc731c09b2f11ae1422d070837, pushed to git late June 2016.
+    muxed byte stream that didn't enter ffmpeg before version 3.1.
 
 
 The patches/ directory contains a patch that helps zita-resampler performance.
