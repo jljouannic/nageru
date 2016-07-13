@@ -104,7 +104,7 @@ be saved live to local disk.
 If you have a fast CPU (typically a quadcore desktop; most laptops will spend
 most of their CPU on running Nageru itself), you can use x264 for the outgoing
 stream instead of Quick Sync; it is much better quality for the same bitrate,
-and also has proper bitrate controls. Simple add --http-x264-video on the
+and also has proper bitrate controls. Simply add --http-x264-video on the
 command line. (You may also need to add something like "--x264-preset veryfast",
 since the default "medium" preset might be too CPU-intensive, but YMMV.)
 The stream saved to disk will still be the Quick Sync-encoded stream, as it is
