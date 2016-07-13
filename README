@@ -76,10 +76,6 @@ Exceptions as of June 2016:
     use git) if you want zerocopy USB. Zerocopy USB helps not only for
     performance, but also for stability.
 
-  - You want kernel 4.6.0 or newer to get zerocopy USB. Older kernels
-    also lack some workarounds for LPM (link power management) and bandwidth
-    allocation issues with USB3.
-
   - Nageru depends on an avformat API for marking block boundaries in the
     muxed byte stream that didn't enter ffmpeg before
     4e7a9212820a56bc731c09b2f11ae1422d070837, pushed to git late June 2016.
