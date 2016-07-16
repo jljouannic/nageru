@@ -7,6 +7,8 @@
 
 #include "metacube2.h"
 
+#include <arpa/inet.h>
+
 /*
  * https://www.ece.cmu.edu/~koopman/pubs/KoopmanCRCWebinar9May2012.pdf
  * recommends this for messages as short as ours (see table at page 34).
@@ -42,6 +44,15 @@ uint16_t metacube2_compute_crc(const struct metacube2_block_header *hdr)
 		if (bit) {
 			crc ^= METACUBE2_CRC_POLYNOMIAL;
 		}
+	}
+
+	/*
+	 * Invert the checksum for metadata packets, so that clients that
+	 * don't understand metadata will ignore it as broken. There will
+	 * probably be logging, but apart from that, it's harmless.
+	 */
+	if (ntohs(hdr->flags) & METACUBE_FLAGS_METADATA) {
+		crc ^= 0xffff;
 	}
 
 	return crc;

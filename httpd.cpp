@@ -1,5 +1,6 @@
 #include <arpa/inet.h>
 #include <assert.h>
+#include <endian.h>
 #include <microhttpd.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -174,6 +175,26 @@ void HTTPD::Stream::add_data(const char *buf, size_t buf_size, HTTPD::Stream::Da
 		buffered_data.emplace_back((char *)&hdr, sizeof(hdr));
 	}
 	buffered_data.emplace_back(buf, buf_size);
+
+	// Send a Metacube2 timestamp every keyframe.
+	if (framing == FRAMING_METACUBE && data_type == DATA_TYPE_KEYFRAME) {
+		timespec now;
+		clock_gettime(CLOCK_REALTIME, &now);
+
+		metacube2_timestamp_packet packet;
+		packet.type = htobe64(METACUBE_METADATA_TYPE_ENCODER_TIMESTAMP);
+		packet.tv_sec = htobe64(now.tv_sec);
+		packet.tv_nsec = htobe64(now.tv_nsec);
+
+		metacube2_block_header hdr;
+		memcpy(hdr.sync, METACUBE2_SYNC, sizeof(hdr.sync));
+		hdr.size = htonl(sizeof(packet));
+		hdr.flags = htons(METACUBE_FLAGS_METADATA);
+		hdr.csum = htons(metacube2_compute_crc(&hdr));
+		buffered_data.emplace_back((char *)&hdr, sizeof(hdr));
+		buffered_data.emplace_back((char *)&packet, sizeof(packet));
+	}
+
 	has_buffered_data.notify_all();	
 }
 
