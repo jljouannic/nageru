@@ -67,6 +67,9 @@ int main(int argc, char *argv[])
 		fprintf(stderr, "Failed to lock Nageru into RAM. You probably want to\n");
 		fprintf(stderr, "increase \"memlock\" for your user in limits.conf\n");
 		fprintf(stderr, "for better realtime behavior.\n");
+		uses_mlock = false;
+	} else {
+		uses_mlock = true;
 	}
 
 	int rc = app.exec();

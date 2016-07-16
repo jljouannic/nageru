@@ -27,6 +27,8 @@
 #include <utility>
 #include <vector>
 #include <arpa/inet.h>
+#include <sys/time.h>
+#include <sys/resource.h>
 
 #include "bmusb/bmusb.h"
 #include "context.h"
@@ -46,6 +48,7 @@ using namespace std;
 using namespace std::placeholders;
 
 Mixer *global_mixer = nullptr;
+bool uses_mlock = false;
 
 namespace {
 
@@ -681,11 +684,49 @@ void Mixer::thread_func()
 		double elapsed = now.tv_sec - start.tv_sec +
 			1e-9 * (now.tv_nsec - start.tv_nsec);
 		if (frame % 100 == 0) {
-			printf("%d frames (%d dropped) in %.3f seconds = %.1f fps (%.1f ms/frame)\n",
+		// check our memory usage, to see if we are close to our mlockall()
+		// limit (if at all set).
+		rusage used;
+		if (getrusage(RUSAGE_SELF, &used) == -1) {
+			perror("getrusage(RUSAGE_SELF)");
+			assert(false);
+		}
+
+		rlimit limit;
+		if (getrlimit(RLIMIT_MEMLOCK, &limit) == -1) {
+			perror("getrlimit(RLIMIT_MEMLOCK)");
+			assert(false);
+		}
+
+			printf("%d frames (%d dropped) in %.3f seconds = %.1f fps (%.1f ms/frame)",
 				frame, stats_dropped_frames, elapsed, frame / elapsed,
 				1e3 * elapsed / frame);
 		//	chain->print_phase_timing();
+
+			if (uses_mlock) {
+				// Check our memory usage, to see if we are close to our mlockall()
+				// limit (if at all set).
+				rusage used;
+				if (getrusage(RUSAGE_SELF, &used) == -1) {
+					perror("getrusage(RUSAGE_SELF)");
+					assert(false);
+				}
+
+				rlimit limit;
+				if (getrlimit(RLIMIT_MEMLOCK, &limit) == -1) {
+					perror("getrlimit(RLIMIT_MEMLOCK)");
+					assert(false);
+				}
+
+				printf(", using %ld / %ld MB lockable memory (%.1f%%)",
+					long(used.ru_maxrss / 1024),
+					long(limit.rlim_cur / 1048576),
+					float(100.0 * (used.ru_maxrss * 1024.0) / limit.rlim_cur));
+			}
+
+			printf("\n");
 		}
+
 
 		if (should_cut.exchange(false)) {  // Test and clear.
 			video_encoder->do_cut(frame);

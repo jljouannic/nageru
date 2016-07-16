@@ -542,5 +542,6 @@ private:
 };
 
 extern Mixer *global_mixer;
+extern bool uses_mlock;
 
 #endif  // !defined(_MIXER_H)
