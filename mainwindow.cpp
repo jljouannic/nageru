@@ -139,12 +139,11 @@ void MainWindow::mixer_created(Mixer *mixer)
 		global_mixer->set_locut_enabled(state == Qt::Checked);
 	});
 
-	// Not QDial::valueChanged, as we call setValue() all the time.
-	connect(ui->gainstaging_knob, &QAbstractSlider::sliderMoved, this, &MainWindow::gain_staging_knob_changed);
+	connect(ui->gainstaging_knob, &QAbstractSlider::valueChanged, this, &MainWindow::gain_staging_knob_changed);
 	connect(ui->gainstaging_auto_checkbox, &QCheckBox::stateChanged, [this](int state){
 		global_mixer->set_gain_staging_auto(state == Qt::Checked);
 	});
-	connect(ui->makeup_gain_knob, &QAbstractSlider::sliderMoved, this, &MainWindow::final_makeup_gain_knob_changed);
+	connect(ui->makeup_gain_knob, &QAbstractSlider::valueChanged, this, &MainWindow::final_makeup_gain_knob_changed);
 	connect(ui->makeup_gain_auto_checkbox, &QCheckBox::stateChanged, [this](int state){
 		global_mixer->set_final_makeup_gain_auto(state == Qt::Checked);
 	});
@@ -287,11 +286,15 @@ void MainWindow::audio_level_callback(float level_lufs, float peak_db, float glo
 			ui->peak_display->setStyleSheet("");
 		}
 
+		ui->gainstaging_knob->blockSignals(true);
 		ui->gainstaging_knob->setValue(lrintf(gain_staging_db * 10.0f));
+		ui->gainstaging_knob->blockSignals(false);
 		snprintf(buf, sizeof(buf), "%+.1f dB", gain_staging_db);
 		ui->gainstaging_db_display->setText(buf);
 
+		ui->makeup_gain_knob->blockSignals(true);
 		ui->makeup_gain_knob->setValue(lrintf(final_makeup_gain_db * 10.0f));
+		ui->makeup_gain_knob->blockSignals(false);
 		snprintf(buf, sizeof(buf), "%+.1f dB", final_makeup_gain_db);
 		ui->makeup_gain_db_display->setText(buf);
 	});
