@@ -71,14 +71,11 @@ with:
     libavcodec-dev libavformat-dev libswscale-dev libavresample-dev \
     libmovit-dev libegl1-mesa-dev libasound2-dev libx264-dev
 
-Exceptions as of June 2016:
+Exceptions as of July 2016:
 
   - You need libusb 1.0.21 or newer (not yet released; you will need to
     use git) if you want zerocopy USB. Zerocopy USB helps not only for
     performance, but also for stability.
-
-  - Nageru depends on an avformat API for marking block boundaries in the
-    muxed byte stream that didn't enter ffmpeg before version 3.1.
 
 
 The patches/ directory contains a patch that helps zita-resampler performance.
