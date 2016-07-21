@@ -195,6 +195,7 @@ void FakeCapture::producer_thread_func()
 		video_format.frame_rate_nom = FAKE_FPS;
 		video_format.frame_rate_den = 1;
 		video_format.has_signal = true;
+		video_format.is_connected = false;
 
 		FrameAllocator::Frame video_frame = video_frame_allocator->alloc_frame();
 		if (video_frame.data != nullptr) {

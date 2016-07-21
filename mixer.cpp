@@ -506,6 +506,7 @@ void Mixer::bm_frame(unsigned card_index, uint16_t timecode,
 	}
 	userdata->last_interlaced = video_format.interlaced;
 	userdata->last_has_signal = video_format.has_signal;
+	userdata->last_is_connected = video_format.is_connected;
 	userdata->last_frame_rate_nom = video_format.frame_rate_nom;
 	userdata->last_frame_rate_den = video_format.frame_rate_den;
 	RefCountedFrame frame(video_frame);

@@ -269,7 +269,10 @@ end
 -- there's no signal.
 function get_channel_resolution(signal_num)
 	res = last_resolution[signal_num]
-	if (not res) or res.height <= 0 then
+	if (not res) or not res.is_connected then
+		return "disconnected"
+	end
+	if res.height <= 0 then
 		return "no signal"
 	end
 	if not res.has_signal then
@@ -558,6 +561,7 @@ function get_chain(num, t, width, height, signals)
 			width = signals:get_width(signal_num),
 			height = signals:get_height(signal_num),
 			interlaced = signals:get_interlaced(signal_num),
+			is_connected = signals:get_is_connected(signal_num),
 			has_signal = signals:get_has_signal(signal_num),
 			frame_rate_nom = signals:get_frame_rate_nom(signal_num),
 			frame_rate_den = signals:get_frame_rate_den(signal_num)
