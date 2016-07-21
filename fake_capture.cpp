@@ -10,6 +10,9 @@
 #include <string.h>
 #include <math.h>
 #include <unistd.h>
+#if __SSE2__
+#include <immintrin.h>
+#endif
 #include <cstddef>
 
 #include "bmusb/bmusb.h"
@@ -28,11 +31,25 @@ using namespace std;
 
 namespace {
 
-// TODO: SSE2-optimize (or at least write full int64s) if speed becomes a problem.
-
 void memset2(uint8_t *s, const uint8_t c[2], size_t n)
 {
-	for (size_t i = 0; i < n; ++i) {
+	size_t i = 0;
+#if __SSE2__
+	const uint8_t c_expanded[16] = {
+		c[0], c[1], c[0], c[1], c[0], c[1], c[0], c[1],
+		c[0], c[1], c[0], c[1], c[0], c[1], c[0], c[1]
+	};
+	__m128i cc = *(__m128i *)c_expanded;
+	__m128i *out = (__m128i *)s;
+
+	for ( ; i < (n & ~15); i += 16) {
+		_mm_storeu_si128(out++, cc);
+		_mm_storeu_si128(out++, cc);
+	}
+
+	s = (uint8_t *)out;
+#endif
+	for ( ; i < n; ++i) {
 		*s++ = c[0];
 		*s++ = c[1];
 	}
@@ -40,7 +57,23 @@ void memset2(uint8_t *s, const uint8_t c[2], size_t n)
 
 void memset4(uint8_t *s, const uint8_t c[4], size_t n)
 {
-	for (size_t i = 0; i < n; ++i) {
+	size_t i = 0;
+#if __SSE2__
+	const uint8_t c_expanded[16] = {
+		c[0], c[1], c[2], c[3], c[0], c[1], c[2], c[3],
+		c[0], c[1], c[2], c[3], c[0], c[1], c[2], c[3]
+	};
+	__m128i cc = *(__m128i *)c_expanded;
+	__m128i *out = (__m128i *)s;
+
+	for ( ; i < (n & ~7); i += 8) {
+		_mm_storeu_si128(out++, cc);
+		_mm_storeu_si128(out++, cc);
+	}
+
+	s = (uint8_t *)out;
+#endif
+	for ( ; i < n; ++i) {
 		*s++ = c[0];
 		*s++ = c[1];
 		*s++ = c[2];
