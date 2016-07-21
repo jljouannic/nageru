@@ -8,6 +8,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <math.h>
 #include <unistd.h>
 #include <cstddef>
 
@@ -134,6 +135,22 @@ void FakeCapture::set_audio_input(uint32_t audio_input_id)
 	assert(audio_input_id == 0);
 }
 
+namespace {
+
+void add_time(double t, timespec *ts)
+{
+	ts->tv_nsec += lrint(t * 1e9);
+	ts->tv_sec += ts->tv_nsec / 1000000000;
+	ts->tv_nsec %= 1000000000;
+}
+
+bool timespec_less_than(const timespec &a, const timespec &b)
+{
+	return make_pair(a.tv_sec, a.tv_nsec) < make_pair(b.tv_sec, b.tv_nsec);
+}
+
+}  // namespace
+
 void FakeCapture::producer_thread_func()
 {
 	uint16_t timecode = 0;
@@ -141,10 +158,36 @@ void FakeCapture::producer_thread_func()
 	if (has_dequeue_callbacks) {
 		dequeue_init_callback();
 	}
-	while (!producer_thread_should_quit) {
-		usleep(1000000 / FAKE_FPS);  // Rather approximate frame rate.
 
-		if (producer_thread_should_quit) break;
+	timespec next_frame;
+	clock_gettime(CLOCK_MONOTONIC, &next_frame);
+	add_time(1.0 / FAKE_FPS, &next_frame);
+
+	while (!producer_thread_should_quit) {
+		timespec now;
+		clock_gettime(CLOCK_MONOTONIC, &now);
+
+		if (timespec_less_than(now, next_frame)) {
+			// Wait until the next frame.
+			if (clock_nanosleep(CLOCK_MONOTONIC, TIMER_ABSTIME,
+                                            &next_frame, nullptr) == -1) {
+				if (errno == EINTR) continue;  // Re-check the flag and then sleep again.
+				perror("clock_nanosleep");
+				exit(1);
+			}
+		} else {
+			// We've seemingly missed a frame. If we're more than one second behind,
+			// reset the timer; otherwise, just keep going.
+			timespec limit = next_frame;
+			++limit.tv_sec;
+			if (!timespec_less_than(now, limit)) {
+				fprintf(stderr, "More than one second of missed fake frames; resetting clock.\n");
+				next_frame = now;
+			}
+		}
+
+		// Figure out when the next frame is to be, then compute the current one.
+		add_time(1.0 / FAKE_FPS, &next_frame);
 
 		VideoFormat video_format;
 		video_format.width = WIDTH;
