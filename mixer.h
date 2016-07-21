@@ -49,7 +49,6 @@ class ResourcePool;
 namespace movit {
 class YCbCrInput;
 }
-class QOpenGLContext;
 class QSurfaceFormat;
 
 // For any card that's not the master (where we pick out the frames as they
@@ -431,7 +430,6 @@ private:
 
 		// Stuff for the OpenGL context (for texture uploading).
 		QSurface *surface;
-		QOpenGLContext *context;
 
 		struct NewFrame {
 			RefCountedFrame frame;
