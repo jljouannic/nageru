@@ -36,7 +36,9 @@ Nageru is in beta stage. It currently needs:
  - Two or more Blackmagic USB3 or PCI cards, either HDMI or SDI.
    The PCI cards need Blackmagic's own drivers installed. The USB3 cards
    are driven through the “bmusb” driver embedded in bmusb/, using libusb-1.0.
-   You want a recent kernel (4.6.0 or newer) and libusb-1.0; see below.
+   If you want zerocopy USB, you need libusb 1.0.21-rc1 or newer,
+   as well as a recent kernel (4.6.0 or newer). Zerocopy USB helps not only
+   for performance, but also for stability.
 
  - Movit, my GPU-based video filter library (https://movit.sesse.net).
    You will need at least version 1.3.1.
@@ -73,9 +75,7 @@ with:
 
 Exceptions as of July 2016:
 
-  - You need libusb 1.0.21 or newer (not yet released; you will need to
-    use git) if you want zerocopy USB. Zerocopy USB helps not only for
-    performance, but also for stability.
+  - libusb 1.0.21-rc1 is not yet in Debian.
 
 
 The patches/ directory contains a patch that helps zita-resampler performance.
