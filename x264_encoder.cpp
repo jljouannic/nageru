@@ -100,7 +100,7 @@ void X264Encoder::init_x264()
 		// content; the obvious and extreme example being a static
 		// black picture.
 		//
-		// One would think it's fine to have low-complexity codec use
+		// One would think it's fine to have low-complexity content use
 		// less bitrate, but it seems to cause problems in practice;
 		// e.g. VLC seems to often drop the stream (similar to a buffer
 		// underrun) in such cases, but only when streaming from Nageru,
