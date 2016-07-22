@@ -301,6 +301,12 @@ public:
 		gain_staging_db = gain_db;
 	}
 
+	float get_gain_staging_db() const
+	{
+		std::unique_lock<std::mutex> lock(compressor_mutex);
+		return gain_staging_db;
+	}
+
 	void set_gain_staging_auto(bool enabled)
 	{
 		std::unique_lock<std::mutex> lock(compressor_mutex);
@@ -324,6 +330,12 @@ public:
 	{
 		std::unique_lock<std::mutex> lock(compressor_mutex);
 		final_makeup_gain_auto = enabled;
+	}
+
+	bool get_final_makeup_gain_auto() const
+	{
+		std::unique_lock<std::mutex> lock(compressor_mutex);
+		return final_makeup_gain_auto;
 	}
 
 	void schedule_cut()

@@ -44,6 +44,14 @@ void usage()
 	fprintf(stderr, "      --http-coarse-timebase      use less timebase for HTTP (recommended for muxers\n");
 	fprintf(stderr, "                                  that handle large pts poorly, like e.g. MP4)\n");
 	fprintf(stderr, "      --flat-audio                start with most audio processing turned off\n");
+	fprintf(stderr, "                                    (can be overridden by e.g. --enable-limiter)\n");
+	fprintf(stderr, "      --gain-staging=DB           set initial gain staging to the given value\n");
+	fprintf(stderr, "                                    (--disable-gain-staging-auto)\n");
+	fprintf(stderr, "      --disable-locut             turn off locut filter (also --enable)\n");
+	fprintf(stderr, "      --disable-gain-staging-auto  turn off automatic gain staging (also --enable)\n");
+	fprintf(stderr, "      --disable-compressor        turn off regular compressor (also --enable)\n");
+	fprintf(stderr, "      --disable-limiter           turn off limiter (also --enable)\n");
+	fprintf(stderr, "      --disable-makeup-gain-auto  turn off auto-adjustment of final makeup gain (also --enable)\n");
 	fprintf(stderr, "      --disable-alsa-output       disable audio monitoring via ALSA\n");
 	fprintf(stderr, "      --no-flush-pbos             do not explicitly signal texture data uploads\n");
 	fprintf(stderr, "                                    (will give display corruption, but makes it\n");
@@ -74,6 +82,17 @@ void parse_flags(int argc, char * const argv[])
 		{ "http-audio-codec", required_argument, 0, 1006 },
 		{ "http-audio-bitrate", required_argument, 0, 1007 },
 		{ "flat-audio", no_argument, 0, 1002 },
+		{ "gain-staging", required_argument, 0, 1018 },
+		{ "disable-locut", no_argument, 0, 1019 },
+		{ "enable-locut", no_argument, 0, 1020 },
+		{ "disable-gain-staging-auto", no_argument, 0, 1021 },
+		{ "enable-gain-staging-auto", no_argument, 0, 1022 },
+		{ "disable-compressor", no_argument, 0, 1023 },
+		{ "enable-compressor", no_argument, 0, 1024 },
+		{ "disable-limiter", no_argument, 0, 1025 },
+		{ "enable-limiter", no_argument, 0, 1026 },
+		{ "disable-makeup-gain-auto", no_argument, 0, 1027 },
+		{ "enable-makeup-gain-auto", no_argument, 0, 1028 },
 		{ "disable-alsa-output", no_argument, 0, 1014 },
 		{ "no-flush-pbos", no_argument, 0, 1003 },
 		{ 0, 0, 0, 0 }
@@ -158,7 +177,46 @@ void parse_flags(int argc, char * const argv[])
 			global_flags.x264_extra_param.push_back(optarg);
 			break;
 		case 1002:
-			global_flags.flat_audio = true;
+			// If --flat-audio is given, turn off everything that messes with the sound,
+			// except the final makeup gain.
+			global_flags.locut_enabled = false;
+			global_flags.gain_staging_auto = false;
+			global_flags.compressor_enabled = false;
+			global_flags.limiter_enabled = false;
+			break;
+		case 1018:
+			global_flags.initial_gain_staging_db = atof(optarg);
+			global_flags.gain_staging_auto = false;
+			break;
+		case 1019:
+			global_flags.locut_enabled = false;
+			break;
+		case 1020:
+			global_flags.locut_enabled = true;
+			break;
+		case 1021:
+			global_flags.gain_staging_auto = false;
+			break;
+		case 1022:
+			global_flags.gain_staging_auto = true;
+			break;
+		case 1023:
+			global_flags.compressor_enabled = false;
+			break;
+		case 1024:
+			global_flags.compressor_enabled = true;
+			break;
+		case 1025:
+			global_flags.limiter_enabled = false;
+			break;
+		case 1026:
+			global_flags.limiter_enabled = true;
+			break;
+		case 1027:
+			global_flags.final_makeup_gain_auto = false;
+			break;
+		case 1028:
+			global_flags.final_makeup_gain_auto = true;
 			break;
 		case 1014:
 			global_flags.enable_alsa_output = false;

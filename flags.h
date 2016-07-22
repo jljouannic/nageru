@@ -14,7 +14,12 @@ struct Flags {
 	bool uncompressed_video_to_http = false;
 	bool x264_video_to_http = false;
 	std::string theme_filename = "theme.lua";
-	bool flat_audio = false;
+	bool locut_enabled = true;
+	bool gain_staging_auto = true;
+	float initial_gain_staging_db = 0.0f;
+	bool compressor_enabled = true;
+	bool limiter_enabled = true;
+	bool final_makeup_gain_auto = true;
 	bool flush_pbos = true;
 	std::string stream_mux_name = DEFAULT_STREAM_MUX_NAME;
 	bool stream_coarse_timebase = false;

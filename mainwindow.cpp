@@ -129,11 +129,13 @@ void MainWindow::mixer_created(Mixer *mixer)
 	}
 
 	// TODO: Fetch all of the values these for completeness,
-	// not just the enable knobs implied by --flat-audio.
+	// not just the enable knobs implied by flags.
 	ui->locut_enabled->setChecked(global_mixer->get_locut_enabled());
+	ui->gainstaging_knob->setValue(global_mixer->get_gain_staging_db());
 	ui->gainstaging_auto_checkbox->setChecked(global_mixer->get_gain_staging_auto());
-	ui->limiter_enabled->setChecked(global_mixer->get_limiter_enabled());
 	ui->compressor_enabled->setChecked(global_mixer->get_compressor_enabled());
+	ui->limiter_enabled->setChecked(global_mixer->get_limiter_enabled());
+	ui->makeup_gain_auto_checkbox->setChecked(global_mixer->get_final_makeup_gain_auto());
 
 	char buf[256];
 	snprintf(buf, sizeof(buf), "%.1f dB", mixer->get_limiter_threshold_dbfs());
