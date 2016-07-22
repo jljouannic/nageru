@@ -716,34 +716,20 @@ void Mixer::thread_func()
 		double elapsed = now.tv_sec - start.tv_sec +
 			1e-9 * (now.tv_nsec - start.tv_nsec);
 		if (frame % 100 == 0) {
-		// check our memory usage, to see if we are close to our mlockall()
-		// limit (if at all set).
-		rusage used;
-		if (getrusage(RUSAGE_SELF, &used) == -1) {
-			perror("getrusage(RUSAGE_SELF)");
-			assert(false);
-		}
-
-		rlimit limit;
-		if (getrlimit(RLIMIT_MEMLOCK, &limit) == -1) {
-			perror("getrlimit(RLIMIT_MEMLOCK)");
-			assert(false);
-		}
-
 			printf("%d frames (%d dropped) in %.3f seconds = %.1f fps (%.1f ms/frame)",
 				frame, stats_dropped_frames, elapsed, frame / elapsed,
 				1e3 * elapsed / frame);
 		//	chain->print_phase_timing();
 
-			if (uses_mlock) {
-				// Check our memory usage, to see if we are close to our mlockall()
-				// limit (if at all set).
-				rusage used;
-				if (getrusage(RUSAGE_SELF, &used) == -1) {
-					perror("getrusage(RUSAGE_SELF)");
-					assert(false);
-				}
+			// Check our memory usage, to see if we are close to our mlockall()
+			// limit (if at all set).
+			rusage used;
+			if (getrusage(RUSAGE_SELF, &used) == -1) {
+				perror("getrusage(RUSAGE_SELF)");
+				assert(false);
+			}
 
+			if (uses_mlock) {
 				rlimit limit;
 				if (getrlimit(RLIMIT_MEMLOCK, &limit) == -1) {
 					perror("getrlimit(RLIMIT_MEMLOCK)");
@@ -754,6 +740,9 @@ void Mixer::thread_func()
 					long(used.ru_maxrss / 1024),
 					long(limit.rlim_cur / 1048576),
 					float(100.0 * (used.ru_maxrss * 1024.0) / limit.rlim_cur));
+			} else {
+				printf(", using %ld MB memory (not locked)",
+					long(used.ru_maxrss / 1024));
 			}
 
 			printf("\n");
