@@ -37,6 +37,8 @@ public:
 	// Does a cut of the disk stream immediately ("frame" is used for the filename only).
 	void do_cut(int frame);
 
+	void change_x264_bitrate(unsigned rate_kbit);
+
 private:
 	void open_output_stream();
 	static int write_packet2_thunk(void *opaque, uint8_t *buf, int buf_size, AVIODataMarkerType type, int64_t time);

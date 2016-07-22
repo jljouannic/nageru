@@ -33,6 +33,7 @@ public:
 
 public slots:
 	void cut_triggered();
+	void x264_bitrate_triggered();
 	void exit_triggered();
 	void about_triggered();
 	void transition_clicked(int transition_number);

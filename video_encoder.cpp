@@ -96,6 +96,11 @@ void VideoEncoder::do_cut(int frame)
 	quicksync_encoder->set_stream_mux(stream_mux.get());
 }
 
+void VideoEncoder::change_x264_bitrate(unsigned rate_kbit)
+{
+	x264_encoder->change_bitrate(rate_kbit);
+}
+
 void VideoEncoder::add_audio(int64_t pts, std::vector<float> audio)
 {
 	lock_guard<mutex> lock(qs_mu);

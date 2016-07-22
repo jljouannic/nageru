@@ -14,6 +14,24 @@ extern "C" {
 
 using namespace std;
 
+namespace {
+
+void update_vbv_settings(x264_param_t *param)
+{
+	if (global_flags.x264_vbv_buffer_size < 0) {
+		param->rc.i_vbv_buffer_size = param->rc.i_bitrate;  // One-second VBV.
+	} else {
+		param->rc.i_vbv_buffer_size = global_flags.x264_vbv_buffer_size;
+	}
+	if (global_flags.x264_vbv_max_bitrate < 0) {
+		param->rc.i_vbv_max_bitrate = param->rc.i_bitrate;  // CBR.
+	} else {
+		param->rc.i_vbv_max_bitrate = global_flags.x264_vbv_max_bitrate;
+	}
+}
+
+}  // namespace
+
 X264Encoder::X264Encoder(AVOutputFormat *oformat)
 	: wants_global_headers(oformat->flags & AVFMT_GLOBALHEADER)
 {
@@ -83,16 +101,7 @@ void X264Encoder::init_x264()
 
 	param.rc.i_rc_method = X264_RC_ABR;
 	param.rc.i_bitrate = global_flags.x264_bitrate;
-	if (global_flags.x264_vbv_buffer_size < 0) {
-		param.rc.i_vbv_buffer_size = param.rc.i_bitrate;  // One-second VBV.
-	} else {
-		param.rc.i_vbv_buffer_size = global_flags.x264_vbv_buffer_size;
-	}
-	if (global_flags.x264_vbv_max_bitrate < 0) {
-		param.rc.i_vbv_max_bitrate = param.rc.i_bitrate;  // CBR.
-	} else {
-		param.rc.i_vbv_max_bitrate = global_flags.x264_vbv_max_bitrate;
-	}
+	update_vbv_settings(&param);
 	if (param.rc.i_vbv_max_bitrate > 0) {
 		// If the user wants VBV control to cap the max rate, it is
 		// also reasonable to assume that they are fine with the stream
@@ -232,6 +241,17 @@ void X264Encoder::encode_frame(X264Encoder::QueuedFrame qf)
 		pic.opaque = reinterpret_cast<void *>(intptr_t(qf.duration));
 
 		input_pic = &pic;
+	}
+
+	// See if we have a new bitrate to change to.
+	unsigned new_rate = new_bitrate_kbit.exchange(0);  // Read and clear.
+	if (new_rate != 0) {
+		x264_param_t param;
+		x264_encoder_parameters(x264, &param);
+		param.rc.i_bitrate = new_rate;
+		update_vbv_settings(&param);
+		x264_encoder_reconfig(x264, &param);
+		printf("changing rate to %u\n", new_rate);
 	}
 
 	if (speed_control) {

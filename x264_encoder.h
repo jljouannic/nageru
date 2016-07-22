@@ -50,6 +50,10 @@ public:
 
 	std::string get_global_headers() const { return global_headers; }
 
+	void change_bitrate(unsigned rate_kbit) {
+		new_bitrate_kbit = rate_kbit;
+	}
+
 private:
 	struct QueuedFrame {
 		int64_t pts, duration;
@@ -74,6 +78,8 @@ private:
 	std::atomic<bool> should_quit{false};
 	x264_t *x264;
 	std::unique_ptr<X264SpeedControl> speed_control;
+
+	std::atomic<unsigned> new_bitrate_kbit{0};  // 0 for no change.
 
 	// Protects everything below it.
 	std::mutex mu;

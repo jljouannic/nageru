@@ -7,6 +7,7 @@
 #include <string>
 #include <vector>
 #include <QBoxLayout>
+#include <QInputDialog>
 #include <QKeySequence>
 #include <QLabel>
 #include <QMetaType>
@@ -17,6 +18,7 @@
 #include <QString>
 
 #include "aboutdialog.h"
+#include "flags.h"
 #include "glwidget.h"
 #include "lrameter.h"
 #include "mixer.h"
@@ -61,7 +63,13 @@ MainWindow::MainWindow()
 	// The menus.
 	connect(ui->cut_action, &QAction::triggered, this, &MainWindow::cut_triggered);
 	connect(ui->exit_action, &QAction::triggered, this, &MainWindow::exit_triggered);
-	connect(ui->about_action, &QAction::triggered, this, &MainWindow::about_triggered),
+	connect(ui->about_action, &QAction::triggered, this, &MainWindow::about_triggered);
+
+	if (global_flags.x264_video_to_http) {
+		connect(ui->x264_bitrate_action, &QAction::triggered, this, &MainWindow::x264_bitrate_triggered);
+	} else {
+		ui->x264_bitrate_action->setEnabled(false);
+	}
 
 	// Hook up the transition buttons. (Keyboard shortcuts are set in set_transition_names().)
 	// TODO: Make them dynamic.
@@ -185,6 +193,16 @@ void MainWindow::mixer_shutting_down()
 void MainWindow::cut_triggered()
 {
 	global_mixer->schedule_cut();
+}
+
+void MainWindow::x264_bitrate_triggered()
+{
+	bool ok;
+	int new_bitrate = QInputDialog::getInt(this, "Change x264 bitrate", "Choose new bitrate for x264 HTTP output (from 100–100,000 kbit/sec):", global_flags.x264_bitrate, /*min=*/100, /*max=*/100000, /*step=*/100, &ok);
+	if (ok && new_bitrate >= 100 && new_bitrate <= 100000) {
+		global_flags.x264_bitrate = new_bitrate;
+		global_mixer->change_x264_bitrate(new_bitrate);
+	}
 }
 
 void MainWindow::exit_triggered()

@@ -387,6 +387,10 @@ public:
 		cards[card_index].capture->set_audio_input(input);
 	}
 
+	void change_x264_bitrate(unsigned rate_kbit) {
+		video_encoder->change_x264_bitrate(rate_kbit);
+	}
+
 private:
 	void configure_card(unsigned card_index, CaptureInterface *capture, bool is_fake_capture);
 	void bm_frame(unsigned card_index, uint16_t timecode,

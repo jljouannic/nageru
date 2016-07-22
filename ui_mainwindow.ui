@@ -878,7 +878,7 @@
      <x>0</x>
      <y>0</y>
      <width>1089</width>
-     <height>19</height>
+     <height>23</height>
     </rect>
    </property>
    <widget class="QMenu" name="menuWhat">
@@ -886,6 +886,7 @@
      <string>&amp;Video</string>
     </property>
     <addaction name="cut_action"/>
+    <addaction name="x264_bitrate_action"/>
     <addaction name="exit_action"/>
    </widget>
    <widget class="QMenu" name="menu_Help">
@@ -910,6 +911,11 @@
   <action name="about_action">
    <property name="text">
     <string>&amp;About Nageru…</string>
+   </property>
+  </action>
+  <action name="x264_bitrate_action">
+   <property name="text">
+    <string>Change &amp;x264 bitrate…</string>
    </property>
   </action>
  </widget>
