@@ -75,7 +75,8 @@ with:
 
 Exceptions as of July 2016:
 
-  - libusb 1.0.21-rc1 is not yet in Debian.
+  - libusb 1.0.21-rc1 is not yet in stretch or sid; you need to fetch it
+    from experimental.
 
 
 The patches/ directory contains a patch that helps zita-resampler performance.
