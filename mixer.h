@@ -388,12 +388,15 @@ public:
 	}
 
 private:
-	void configure_card(unsigned card_index, const QSurfaceFormat &format, CaptureInterface *capture);
+	void configure_card(unsigned card_index, CaptureInterface *capture, bool is_fake_capture);
 	void bm_frame(unsigned card_index, uint16_t timecode,
 		FrameAllocator::Frame video_frame, size_t video_offset, VideoFormat video_format,
 		FrameAllocator::Frame audio_frame, size_t audio_offset, AudioFormat audio_format);
+	void bm_hotplug_add(libusb_device *dev);
+	void bm_hotplug_remove(unsigned card_index);
 	void place_rectangle(movit::Effect *resample_effect, movit::Effect *padding_effect, float x0, float y0, float x1, float y1);
 	void thread_func();
+	void handle_hotplugged_cards();
 	void schedule_audio_resampling_tasks(unsigned dropped_frames, int num_samples_per_frame, int length_per_frame);
 	void render_one_frame(int64_t duration);
 	void send_audio_level_callback();
@@ -425,11 +428,12 @@ private:
 	std::mutex bmusb_mutex;
 	bool has_bmusb_thread = false;
 	struct CaptureCard {
-		CaptureInterface *capture;
+		CaptureInterface *capture = nullptr;
+		bool is_fake_capture;
 		std::unique_ptr<PBOFrameAllocator> frame_allocator;
 
 		// Stuff for the OpenGL context (for texture uploading).
-		QSurface *surface;
+		QSurface *surface = nullptr;
 
 		struct NewFrame {
 			RefCountedFrame frame;
@@ -458,6 +462,11 @@ private:
 	void get_one_frame_from_each_card(unsigned master_card_index, CaptureCard::NewFrame new_frames[MAX_CARDS], bool has_new_frame[MAX_CARDS], int num_samples[MAX_CARDS]);
 
 	InputState input_state;
+
+	// Cards we have been noticed about being hotplugged, but haven't tried adding yet.
+	// Protected by its own mutex.
+	std::mutex hotplug_mutex;
+	std::vector<libusb_device *> hotplugged_cards;
 
 	class OutputChannel {
 	public:

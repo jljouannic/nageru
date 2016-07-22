@@ -61,6 +61,7 @@ public:
 	void configure_card() override;
 	void start_bm_capture() override;
 	void stop_dequeue_thread() override;
+	bool get_disconnected() const override { return false; }
 
 	std::map<uint32_t, VideoMode> get_available_video_modes() const override;
 	void set_video_mode(uint32_t video_mode_id) override;

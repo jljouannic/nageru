@@ -81,6 +81,9 @@ public:
 	void start_bm_capture() override;
 	void stop_dequeue_thread() override;
 
+	// TODO: Can the API communicate this to us somehow, for e.g. Thunderbolt cards?
+	bool get_disconnected() const override { return false; }
+
 	std::map<uint32_t, VideoMode> get_available_video_modes() const override { return video_modes; }
 	void set_video_mode(uint32_t video_mode_id) override;
 	uint32_t get_current_video_mode() const override { return current_video_mode; }

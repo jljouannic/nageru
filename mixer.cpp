@@ -177,7 +177,7 @@ Mixer::Mixer(const QSurfaceFormat &format, unsigned num_cards)
 
 	assert(num_fake_cards <= num_cards);  // Enforced in flags.cpp.
 	for ( ; card_index < num_fake_cards; ++card_index) {
-		configure_card(card_index, format, new FakeCapture(card_index));
+		configure_card(card_index, new FakeCapture(card_index), /*is_fake_capture=*/true);
 	}
 
 	if (global_flags.num_fake_cards > 0) {
@@ -193,7 +193,7 @@ Mixer::Mixer(const QSurfaceFormat &format, unsigned num_cards)
 					break;
 				}
 
-				configure_card(card_index, format, new DeckLinkCapture(decklink, card_index - num_fake_cards));
+				configure_card(card_index, new DeckLinkCapture(decklink, card_index - num_fake_cards), /*is_fake_capture=*/false);
 				++num_pci_devices;
 			}
 			decklink_iterator->Release();
@@ -203,12 +203,15 @@ Mixer::Mixer(const QSurfaceFormat &format, unsigned num_cards)
 		}
 	}
 	for ( ; card_index < num_cards; ++card_index) {
-		configure_card(card_index, format, new BMUSBCapture(card_index - num_pci_devices - num_fake_cards));
+		BMUSBCapture *capture = new BMUSBCapture(card_index - num_pci_devices - num_fake_cards);
+		capture->set_card_disconnected_callback(bind(&Mixer::bm_hotplug_remove, this, card_index));
+		configure_card(card_index, capture, /*is_fake_capture=*/false);
 		++num_usb_devices;
 	}
 
 	if (num_usb_devices > 0) {
 		has_bmusb_thread = true;
+		BMUSBCapture::set_card_connected_callback(bind(&Mixer::bm_hotplug_add, this, _1));
 		BMUSBCapture::start_bm_thread();
 	}
 
@@ -303,17 +306,33 @@ Mixer::~Mixer()
 	video_encoder.reset(nullptr);
 }
 
-void Mixer::configure_card(unsigned card_index, const QSurfaceFormat &format, CaptureInterface *capture)
+void Mixer::configure_card(unsigned card_index, CaptureInterface *capture, bool is_fake_capture)
 {
 	printf("Configuring card %d...\n", card_index);
 
 	CaptureCard *card = &cards[card_index];
+	if (card->capture != nullptr) {
+		card->capture->stop_dequeue_thread();
+		delete card->capture;
+	}
 	card->capture = capture;
+	card->is_fake_capture = is_fake_capture;
 	card->capture->set_frame_callback(bind(&Mixer::bm_frame, this, card_index, _1, _2, _3, _4, _5, _6, _7));
-	card->frame_allocator.reset(new PBOFrameAllocator(8 << 20, WIDTH, HEIGHT));  // 8 MB.
+	if (card->frame_allocator == nullptr) {
+		card->frame_allocator.reset(new PBOFrameAllocator(8 << 20, WIDTH, HEIGHT));  // 8 MB.
+	}
 	card->capture->set_video_frame_allocator(card->frame_allocator.get());
-	card->surface = create_surface(format);
-	card->resampling_queue.reset(new ResamplingQueue(card_index, OUTPUT_FREQUENCY, OUTPUT_FREQUENCY, 2));
+	if (card->surface == nullptr) {
+		card->surface = create_surface_with_same_format(mixer_surface);
+	}
+	{
+		unique_lock<mutex> lock(cards[card_index].audio_mutex);
+		card->resampling_queue.reset(new ResamplingQueue(card_index, OUTPUT_FREQUENCY, OUTPUT_FREQUENCY, 2));
+	}
+	while (!card->new_frames.empty()) card->new_frames.pop();
+	card->fractional_samples = 0;
+	card->last_timecode = -1;
+	card->next_local_pts = 0;
 	card->capture->configure_card();
 }
 
@@ -610,6 +629,17 @@ void Mixer::bm_frame(unsigned card_index, uint16_t timecode,
 	}
 }
 
+void Mixer::bm_hotplug_add(libusb_device *dev)
+{
+	lock_guard<mutex> lock(hotplug_mutex);
+	hotplugged_cards.push_back(dev);
+}
+
+void Mixer::bm_hotplug_remove(unsigned card_index)
+{
+	cards[card_index].new_frames_changed.notify_all();
+}
+
 void Mixer::thread_func()
 {
 	eglBindAPI(EGL_OPENGL_API);
@@ -630,7 +660,6 @@ void Mixer::thread_func()
 		bool has_new_frame[MAX_CARDS] = { false };
 		int num_samples[MAX_CARDS] = { 0 };
 
-		// TODO: Add a timeout.
 		unsigned master_card_index = theme->map_signal(master_clock_channel);
 		assert(master_card_index < num_cards);
 
@@ -638,6 +667,8 @@ void Mixer::thread_func()
 		schedule_audio_resampling_tasks(new_frames[master_card_index].dropped_frames, num_samples[master_card_index], new_frames[master_card_index].length);
 		stats_dropped_frames += new_frames[master_card_index].dropped_frames;
 		send_audio_level_callback();
+
+		handle_hotplugged_cards();
 
 		for (unsigned card_index = 0; card_index < num_cards; ++card_index) {
 			if (card_index == master_card_index || !has_new_frame[card_index]) {
@@ -751,9 +782,19 @@ void Mixer::thread_func()
 
 void Mixer::get_one_frame_from_each_card(unsigned master_card_index, CaptureCard::NewFrame new_frames[MAX_CARDS], bool has_new_frame[MAX_CARDS], int num_samples[MAX_CARDS])
 {
+start:
 	// The first card is the master timer, so wait for it to have a new frame.
+	// TODO: Add a timeout.
 	unique_lock<mutex> lock(bmusb_mutex);
-	cards[master_card_index].new_frames_changed.wait(lock, [this, master_card_index]{ return !cards[master_card_index].new_frames.empty(); });
+	cards[master_card_index].new_frames_changed.wait(lock, [this, master_card_index]{ return !cards[master_card_index].new_frames.empty() || cards[master_card_index].capture->get_disconnected(); });
+
+	if (cards[master_card_index].new_frames.empty()) {
+		// We were woken up, but not due to a new frame. Deal with it
+		// and then restart.
+		assert(cards[master_card_index].capture->get_disconnected());
+		handle_hotplugged_cards();
+		goto start;
+	}
 
 	for (unsigned card_index = 0; card_index < num_cards; ++card_index) {
 		CaptureCard *card = &cards[card_index];
@@ -787,6 +828,52 @@ void Mixer::get_one_frame_from_each_card(unsigned master_card_index, CaptureCard
 		}
 	}
 }
+
+void Mixer::handle_hotplugged_cards()
+{
+	// Check for cards that have been disconnected since last frame.
+	for (unsigned card_index = 0; card_index < num_cards; ++card_index) {
+		CaptureCard *card = &cards[card_index];
+		if (card->capture->get_disconnected()) {
+			fprintf(stderr, "Card %u went away, replacing with a fake card.\n", card_index);
+			configure_card(card_index, new FakeCapture(card_index), /*is_fake_capture=*/true);
+			card->queue_length_policy.reset(card_index);
+			card->capture->start_bm_capture();
+		}
+	}
+
+	// Check for cards that have been connected since last frame.
+	vector<libusb_device *> hotplugged_cards_copy;
+	{
+		lock_guard<mutex> lock(hotplug_mutex);
+		swap(hotplugged_cards, hotplugged_cards_copy);
+	}
+	for (libusb_device *new_dev : hotplugged_cards_copy) {
+		// Look for a fake capture card where we can stick this in.
+		int free_card_index = -1;
+		for (unsigned card_index = 0; card_index < num_cards; ++card_index) {
+			if (cards[card_index].is_fake_capture) {
+				free_card_index = int(card_index);
+				break;
+			}
+		}
+
+		if (free_card_index == -1) {
+			fprintf(stderr, "New card plugged in, but no free slots -- ignoring.\n");
+			libusb_unref_device(new_dev);
+		} else {
+			// BMUSBCapture takes ownership.
+			fprintf(stderr, "New card plugged in, choosing slot %d.\n", free_card_index);
+			CaptureCard *card = &cards[free_card_index];
+			BMUSBCapture *capture = new BMUSBCapture(free_card_index, new_dev);
+			configure_card(free_card_index, capture, /*is_fake_capture=*/false);
+			card->queue_length_policy.reset(free_card_index);
+			capture->set_card_disconnected_callback(bind(&Mixer::bm_hotplug_remove, this, free_card_index));
+			capture->start_bm_capture();
+		}
+	}
+}
+
 
 void Mixer::schedule_audio_resampling_tasks(unsigned dropped_frames, int num_samples_per_frame, int length_per_frame)
 {
