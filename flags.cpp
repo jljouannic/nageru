@@ -11,6 +11,39 @@ using namespace std;
 
 Flags global_flags;
 
+// Long options that have no corresponding short option.
+enum LongOption {
+	OPTION_VA_DISPLAY = 1000,
+	OPTION_HTTP_UNCOMPRESSED_VIDEO,
+	OPTION_HTTP_X264_VIDEO,
+	OPTION_X264_PRESET,
+	OPTION_X264_TUNE,
+	OPTION_X264_SPEEDCONTROL,
+	OPTION_X264_SPEEDCONTROL_VERBOSE,
+	OPTION_X264_BITRATE,
+	OPTION_X264_VBV_BUFSIZE,
+	OPTION_X264_VBV_MAX_BITRATE,
+	OPTION_X264_PARAM,
+	OPTION_HTTP_MUX,
+	OPTION_HTTP_COARSE_TIMEBASE,
+	OPTION_HTTP_AUDIO_CODEC,
+	OPTION_HTTP_AUDIO_BITRATE,
+	OPTION_FLAT_AUDIO,
+	OPTION_GAIN_STAGING,
+	OPTION_DISABLE_LOCUT,
+	OPTION_ENABLE_LOCUT,
+	OPTION_DISABLE_GAIN_STAGING_AUTO,
+	OPTION_ENABLE_GAIN_STAGING_AUTO,
+	OPTION_DISABLE_COMPRESSOR,
+	OPTION_ENABLE_COMPRESSOR,
+	OPTION_DISABLE_LIMITER,
+	OPTION_ENABLE_LIMITER,
+	OPTION_DISABLE_MAKEUP_GAIN_AUTO,
+	OPTION_ENABLE_MAKEUP_GAIN_AUTO,
+	OPTION_DISABLE_ALSA_OUTPUT,
+	OPTION_NO_FLUSH_PBOS
+};
+
 void usage()
 {
 	fprintf(stderr, "Usage: nageru [OPTION]...\n");
@@ -66,35 +99,35 @@ void parse_flags(int argc, char * const argv[])
 		{ "num-fake-cards", required_argument, 0, 'C' },
 		{ "theme", required_argument, 0, 't' },
 		{ "map-signal", required_argument, 0, 'm' },
-		{ "va-display", required_argument, 0, 1000 },
-		{ "http-uncompressed-video", no_argument, 0, 1001 },
-		{ "http-x264-video", no_argument, 0, 1008 },
-		{ "x264-preset", required_argument, 0, 1009 },
-		{ "x264-tune", required_argument, 0, 1010 },
-		{ "x264-speedcontrol", no_argument, 0, 1015 },
-		{ "x264-speedcontrol-verbose", no_argument, 0, 1016 },
-		{ "x264-bitrate", required_argument, 0, 1011 },
-		{ "x264-vbv-bufsize", required_argument, 0, 1012 },
-		{ "x264-vbv-max-bitrate", required_argument, 0, 1013 },
-		{ "x264-param", required_argument, 0, 1017 },
-		{ "http-mux", required_argument, 0, 1004 },
-		{ "http-coarse-timebase", no_argument, 0, 1005 },
-		{ "http-audio-codec", required_argument, 0, 1006 },
-		{ "http-audio-bitrate", required_argument, 0, 1007 },
-		{ "flat-audio", no_argument, 0, 1002 },
-		{ "gain-staging", required_argument, 0, 1018 },
-		{ "disable-locut", no_argument, 0, 1019 },
-		{ "enable-locut", no_argument, 0, 1020 },
-		{ "disable-gain-staging-auto", no_argument, 0, 1021 },
-		{ "enable-gain-staging-auto", no_argument, 0, 1022 },
-		{ "disable-compressor", no_argument, 0, 1023 },
-		{ "enable-compressor", no_argument, 0, 1024 },
-		{ "disable-limiter", no_argument, 0, 1025 },
-		{ "enable-limiter", no_argument, 0, 1026 },
-		{ "disable-makeup-gain-auto", no_argument, 0, 1027 },
-		{ "enable-makeup-gain-auto", no_argument, 0, 1028 },
-		{ "disable-alsa-output", no_argument, 0, 1014 },
-		{ "no-flush-pbos", no_argument, 0, 1003 },
+		{ "va-display", required_argument, 0, OPTION_VA_DISPLAY },
+		{ "http-uncompressed-video", no_argument, 0, OPTION_HTTP_UNCOMPRESSED_VIDEO },
+		{ "http-x264-video", no_argument, 0, OPTION_HTTP_X264_VIDEO },
+		{ "x264-preset", required_argument, 0, OPTION_X264_PRESET },
+		{ "x264-tune", required_argument, 0, OPTION_X264_TUNE },
+		{ "x264-speedcontrol", no_argument, 0, OPTION_X264_SPEEDCONTROL },
+		{ "x264-speedcontrol-verbose", no_argument, 0, OPTION_X264_SPEEDCONTROL_VERBOSE },
+		{ "x264-bitrate", required_argument, 0, OPTION_X264_BITRATE },
+		{ "x264-vbv-bufsize", required_argument, 0, OPTION_X264_VBV_BUFSIZE },
+		{ "x264-vbv-max-bitrate", required_argument, 0, OPTION_X264_VBV_MAX_BITRATE },
+		{ "x264-param", required_argument, 0, OPTION_X264_PARAM },
+		{ "http-mux", required_argument, 0, OPTION_HTTP_MUX },
+		{ "http-coarse-timebase", no_argument, 0, OPTION_HTTP_COARSE_TIMEBASE },
+		{ "http-audio-codec", required_argument, 0, OPTION_HTTP_AUDIO_CODEC },
+		{ "http-audio-bitrate", required_argument, 0, OPTION_HTTP_AUDIO_BITRATE },
+		{ "flat-audio", no_argument, 0, OPTION_FLAT_AUDIO },
+		{ "gain-staging", required_argument, 0, OPTION_GAIN_STAGING },
+		{ "disable-locut", no_argument, 0, OPTION_DISABLE_LOCUT },
+		{ "enable-locut", no_argument, 0, OPTION_ENABLE_LOCUT },
+		{ "disable-gain-staging-auto", no_argument, 0, OPTION_DISABLE_GAIN_STAGING_AUTO },
+		{ "enable-gain-staging-auto", no_argument, 0, OPTION_ENABLE_GAIN_STAGING_AUTO },
+		{ "disable-compressor", no_argument, 0, OPTION_DISABLE_COMPRESSOR },
+		{ "enable-compressor", no_argument, 0, OPTION_ENABLE_COMPRESSOR },
+		{ "disable-limiter", no_argument, 0, OPTION_DISABLE_LIMITER },
+		{ "enable-limiter", no_argument, 0, OPTION_ENABLE_LIMITER },
+		{ "disable-makeup-gain-auto", no_argument, 0, OPTION_DISABLE_MAKEUP_GAIN_AUTO },
+		{ "enable-makeup-gain-auto", no_argument, 0, OPTION_ENABLE_MAKEUP_GAIN_AUTO },
+		{ "disable-alsa-output", no_argument, 0, OPTION_DISABLE_ALSA_OUTPUT },
+		{ "no-flush-pbos", no_argument, 0, OPTION_NO_FLUSH_PBOS },
 		{ 0, 0, 0, 0 }
 	};
 	for ( ;; ) {
@@ -131,52 +164,52 @@ void parse_flags(int argc, char * const argv[])
 			global_flags.default_stream_mapping[signal_num] = card_num;
 			break;
 		}
-		case 1000:
+		case OPTION_VA_DISPLAY:
 			global_flags.va_display = optarg;
 			break;
-		case 1001:
+		case OPTION_HTTP_UNCOMPRESSED_VIDEO:
 			global_flags.uncompressed_video_to_http = true;
 			break;
-		case 1004:
+		case OPTION_HTTP_MUX:
 			global_flags.stream_mux_name = optarg;
 			break;
-		case 1005:
+		case OPTION_HTTP_COARSE_TIMEBASE:
 			global_flags.stream_coarse_timebase = true;
 			break;
-		case 1006:
+		case OPTION_HTTP_AUDIO_CODEC:
 			global_flags.stream_audio_codec_name = optarg;
 			break;
-		case 1007:
+		case OPTION_HTTP_AUDIO_BITRATE:
 			global_flags.stream_audio_codec_bitrate = atoi(optarg) * 1000;
 			break;
-		case 1008:
+		case OPTION_HTTP_X264_VIDEO:
 			global_flags.x264_video_to_http = true;
 			break;
-		case 1009:
+		case OPTION_X264_PRESET:
 			global_flags.x264_preset = optarg;
 			break;
-		case 1010:
+		case OPTION_X264_TUNE:
 			global_flags.x264_tune = optarg;
 			break;
-		case 1015:
+		case OPTION_X264_SPEEDCONTROL:
 			global_flags.x264_speedcontrol = true;
 			break;
-		case 1016:
+		case OPTION_X264_SPEEDCONTROL_VERBOSE:
 			global_flags.x264_speedcontrol_verbose = true;
 			break;
-		case 1011:
+		case OPTION_X264_BITRATE:
 			global_flags.x264_bitrate = atoi(optarg);
 			break;
-		case 1012:
+		case OPTION_X264_VBV_BUFSIZE:
 			global_flags.x264_vbv_buffer_size = atoi(optarg);
 			break;
-		case 1013:
+		case OPTION_X264_VBV_MAX_BITRATE:
 			global_flags.x264_vbv_max_bitrate = atoi(optarg);
 			break;
-		case 1017:
+		case OPTION_X264_PARAM:
 			global_flags.x264_extra_param.push_back(optarg);
 			break;
-		case 1002:
+		case OPTION_FLAT_AUDIO:
 			// If --flat-audio is given, turn off everything that messes with the sound,
 			// except the final makeup gain.
 			global_flags.locut_enabled = false;
@@ -184,44 +217,44 @@ void parse_flags(int argc, char * const argv[])
 			global_flags.compressor_enabled = false;
 			global_flags.limiter_enabled = false;
 			break;
-		case 1018:
+		case OPTION_GAIN_STAGING:
 			global_flags.initial_gain_staging_db = atof(optarg);
 			global_flags.gain_staging_auto = false;
 			break;
-		case 1019:
+		case OPTION_DISABLE_LOCUT:
 			global_flags.locut_enabled = false;
 			break;
-		case 1020:
+		case OPTION_ENABLE_LOCUT:
 			global_flags.locut_enabled = true;
 			break;
-		case 1021:
+		case OPTION_DISABLE_GAIN_STAGING_AUTO:
 			global_flags.gain_staging_auto = false;
 			break;
-		case 1022:
+		case OPTION_ENABLE_GAIN_STAGING_AUTO:
 			global_flags.gain_staging_auto = true;
 			break;
-		case 1023:
+		case OPTION_DISABLE_COMPRESSOR:
 			global_flags.compressor_enabled = false;
 			break;
-		case 1024:
+		case OPTION_ENABLE_COMPRESSOR:
 			global_flags.compressor_enabled = true;
 			break;
-		case 1025:
+		case OPTION_DISABLE_LIMITER:
 			global_flags.limiter_enabled = false;
 			break;
-		case 1026:
+		case OPTION_ENABLE_LIMITER:
 			global_flags.limiter_enabled = true;
 			break;
-		case 1027:
+		case OPTION_DISABLE_MAKEUP_GAIN_AUTO:
 			global_flags.final_makeup_gain_auto = false;
 			break;
-		case 1028:
+		case OPTION_ENABLE_MAKEUP_GAIN_AUTO:
 			global_flags.final_makeup_gain_auto = true;
 			break;
-		case 1014:
+		case OPTION_DISABLE_ALSA_OUTPUT:
 			global_flags.enable_alsa_output = false;
 			break;
-		case 1003:
+		case OPTION_NO_FLUSH_PBOS:
 			global_flags.flush_pbos = false;
 			break;
 		case 'h':
