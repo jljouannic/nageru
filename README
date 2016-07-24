@@ -130,7 +130,7 @@ contact information and link to the latest version.
 
 
 Legalese: TL;DR: Everything is GPLv3-or-newer compatible, and see
-Intel's copyright license at h264encode.h.
+Intel's copyright license at quicksync_encoder.h.
 
 
 Nageru is Copyright (C) 2015 Steinar H. Gunderson <steinar+nageru@gunderson.no>.
@@ -155,7 +155,7 @@ You should have received a copy of the GNU General Public License
 along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 
-Portions of h264encode.h and h264encode.cpp:
+Portions of quicksync_encoder.h and quicksync_encoder.cpp:
 
 Copyright (c) 2007-2013 Intel Corporation. All Rights Reserved.
 
