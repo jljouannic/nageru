@@ -46,6 +46,7 @@ class QOpenGLContext;
 using namespace movit;
 using namespace std;
 using namespace std::placeholders;
+using namespace bmusb;
 
 Mixer *global_mixer = nullptr;
 bool uses_mlock = false;

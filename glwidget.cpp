@@ -190,7 +190,7 @@ void GLWidget::show_context_menu(unsigned signal_num, const QPoint &pos)
 	// The same for resolution.
 	QMenu mode_submenu;
 	QActionGroup mode_group(&mode_submenu);
-	std::map<uint32_t, VideoMode> video_modes = global_mixer->get_available_video_modes(current_card);
+	std::map<uint32_t, bmusb::VideoMode> video_modes = global_mixer->get_available_video_modes(current_card);
 	uint32_t current_video_mode = global_mixer->get_current_video_mode(current_card);
 	bool has_auto_mode = false;
 	for (const auto &mode : video_modes) {

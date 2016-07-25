@@ -7,6 +7,8 @@
 
 #include "bmusb/bmusb.h"
 
+namespace bmusb {
+
 class FakeCapture : public CaptureInterface
 {
 public:
@@ -95,5 +97,7 @@ private:
 	std::atomic<bool> producer_thread_should_quit{false};
 	std::thread producer_thread;
 };
+
+}  // namespace bmusb
 
 #endif  // !defined(_FAKE_CAPTURE_H)

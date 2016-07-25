@@ -12,7 +12,7 @@
 // An allocator that allocates straight into OpenGL pinned memory.
 // Meant for video frames only. We use a queue rather than a stack,
 // since we want to maximize pipelineability.
-class PBOFrameAllocator : public FrameAllocator {
+class PBOFrameAllocator : public bmusb::FrameAllocator {
 public:
 	// Note: You need to have an OpenGL context when calling
 	// the constructor.

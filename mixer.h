@@ -352,7 +352,7 @@ public:
 		return cards[card_index].capture->get_description();
 	}
 
-	std::map<uint32_t, VideoMode> get_available_video_modes(unsigned card_index) const {
+	std::map<uint32_t, bmusb::VideoMode> get_available_video_modes(unsigned card_index) const {
 		assert(card_index < num_cards);
 		return cards[card_index].capture->get_available_video_modes();
 	}
@@ -404,10 +404,10 @@ public:
 	}
 
 private:
-	void configure_card(unsigned card_index, CaptureInterface *capture, bool is_fake_capture);
+	void configure_card(unsigned card_index, bmusb::CaptureInterface *capture, bool is_fake_capture);
 	void bm_frame(unsigned card_index, uint16_t timecode,
-		FrameAllocator::Frame video_frame, size_t video_offset, VideoFormat video_format,
-		FrameAllocator::Frame audio_frame, size_t audio_offset, AudioFormat audio_format);
+		bmusb::FrameAllocator::Frame video_frame, size_t video_offset, bmusb::VideoFormat video_format,
+		bmusb::FrameAllocator::Frame audio_frame, size_t audio_offset, bmusb::AudioFormat audio_format);
 	void bm_hotplug_add(libusb_device *dev);
 	void bm_hotplug_remove(unsigned card_index);
 	void place_rectangle(movit::Effect *resample_effect, movit::Effect *padding_effect, float x0, float y0, float x1, float y1);
@@ -444,7 +444,7 @@ private:
 	std::mutex bmusb_mutex;
 	bool has_bmusb_thread = false;
 	struct CaptureCard {
-		CaptureInterface *capture = nullptr;
+		bmusb::CaptureInterface *capture = nullptr;
 		bool is_fake_capture;
 		std::unique_ptr<PBOFrameAllocator> frame_allocator;
 

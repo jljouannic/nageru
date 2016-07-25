@@ -11,16 +11,16 @@
 
 #include "bmusb/bmusb.h"
 
-void release_refcounted_frame(FrameAllocator::Frame *frame);
+void release_refcounted_frame(bmusb::FrameAllocator::Frame *frame);
 
-typedef std::shared_ptr<FrameAllocator::Frame> RefCountedFrameBase;
+typedef std::shared_ptr<bmusb::FrameAllocator::Frame> RefCountedFrameBase;
 
 class RefCountedFrame : public RefCountedFrameBase {
 public:
 	RefCountedFrame() {}
 
-	RefCountedFrame(const FrameAllocator::Frame &frame)
-		: RefCountedFrameBase(new FrameAllocator::Frame(frame), release_refcounted_frame) {}
+	RefCountedFrame(const bmusb::FrameAllocator::Frame &frame)
+		: RefCountedFrameBase(new bmusb::FrameAllocator::Frame(frame), release_refcounted_frame) {}
 };
 
 #endif  // !defined(_REF_COUNTED_FRAME_H)

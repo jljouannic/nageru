@@ -29,6 +29,7 @@ constexpr uint8_t crs[NUM_COLORS] = { 240, 34, 110, 128 };
 
 using namespace std;
 
+namespace bmusb {
 namespace {
 
 void memset2(uint8_t *s, const uint8_t c[2], size_t n)
@@ -263,3 +264,5 @@ void FakeCapture::producer_thread_func()
 		dequeue_cleanup_callback();
 	}
 }
+
+}  // namespace bmusb

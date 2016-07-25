@@ -104,7 +104,7 @@ PBOFrameAllocator::~PBOFrameAllocator()
 }
 //static int sumsum = 0;
 
-FrameAllocator::Frame PBOFrameAllocator::alloc_frame()
+bmusb::FrameAllocator::Frame PBOFrameAllocator::alloc_frame()
 {
         Frame vf;
 

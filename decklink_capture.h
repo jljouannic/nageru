@@ -14,7 +14,7 @@ class IDeckLinkDisplayMode;
 
 // TODO: Adjust CaptureInterface to be a little less bmusb-centric.
 // There are too many member functions here that don't really do anything.
-class DeckLinkCapture : public CaptureInterface, IDeckLinkInputCallback
+class DeckLinkCapture : public bmusb::CaptureInterface, IDeckLinkInputCallback
 {
 public:
 	DeckLinkCapture(IDeckLink *card, int card_index);  // Takes ownership of <card>.
@@ -33,7 +33,7 @@ public:
 		IDeckLinkAudioInputPacket *audio_frame) override;
 
 	// CaptureInterface.
-	void set_video_frame_allocator(FrameAllocator *allocator) override
+	void set_video_frame_allocator(bmusb::FrameAllocator *allocator) override
 	{
 		video_frame_allocator = allocator;
 		if (owned_video_frame_allocator.get() != allocator) {
@@ -41,13 +41,13 @@ public:
 		}
 	}
 
-	FrameAllocator *get_video_frame_allocator() override
+	bmusb::FrameAllocator *get_video_frame_allocator() override
 	{
 		return video_frame_allocator;
 	}
 
 	// Does not take ownership.
-	void set_audio_frame_allocator(FrameAllocator *allocator) override
+	void set_audio_frame_allocator(bmusb::FrameAllocator *allocator) override
 	{
 		audio_frame_allocator = allocator;
 		if (owned_audio_frame_allocator.get() != allocator) {
@@ -55,12 +55,12 @@ public:
 		}
 	}
 
-	FrameAllocator *get_audio_frame_allocator() override
+	bmusb::FrameAllocator *get_audio_frame_allocator() override
 	{
 		return audio_frame_allocator;
 	}
 
-	void set_frame_callback(frame_callback_t callback) override
+	void set_frame_callback(bmusb::frame_callback_t callback) override
 	{
 		frame_callback = callback;
 	}
@@ -84,7 +84,7 @@ public:
 	// TODO: Can the API communicate this to us somehow, for e.g. Thunderbolt cards?
 	bool get_disconnected() const override { return false; }
 
-	std::map<uint32_t, VideoMode> get_available_video_modes() const override { return video_modes; }
+	std::map<uint32_t, bmusb::VideoMode> get_available_video_modes() const override { return video_modes; }
 	void set_video_mode(uint32_t video_mode_id) override;
 	uint32_t get_current_video_mode() const override { return current_video_mode; }
 
@@ -109,11 +109,11 @@ private:
 	std::function<void()> dequeue_init_callback = nullptr;
 	std::function<void()> dequeue_cleanup_callback = nullptr;
 
-	FrameAllocator *video_frame_allocator = nullptr;
-	FrameAllocator *audio_frame_allocator = nullptr;
-	std::unique_ptr<FrameAllocator> owned_video_frame_allocator;
-	std::unique_ptr<FrameAllocator> owned_audio_frame_allocator;
-	frame_callback_t frame_callback = nullptr;
+	bmusb::FrameAllocator *video_frame_allocator = nullptr;
+	bmusb::FrameAllocator *audio_frame_allocator = nullptr;
+	std::unique_ptr<bmusb::FrameAllocator> owned_video_frame_allocator;
+	std::unique_ptr<bmusb::FrameAllocator> owned_audio_frame_allocator;
+	bmusb::frame_callback_t frame_callback = nullptr;
 
 	IDeckLinkConfiguration *config = nullptr;
 
@@ -122,7 +122,7 @@ private:
 	BMDTimeValue frame_duration;
 	BMDTimeScale time_scale;
 
-	std::map<uint32_t, VideoMode> video_modes;
+	std::map<uint32_t, bmusb::VideoMode> video_modes;
 	BMDDisplayMode current_video_mode;
 
 	std::map<uint32_t, std::string> video_inputs;
