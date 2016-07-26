@@ -38,7 +38,7 @@ public:
 
 class Theme {
 public:
-	Theme(const char *filename, movit::ResourcePool *resource_pool, unsigned num_cards);
+	Theme(const std::string &filename, const std::vector<std::string> &search_dirs, movit::ResourcePool *resource_pool, unsigned num_cards);
 	~Theme();
 
 	struct Chain {

@@ -13,6 +13,7 @@ struct Flags {
 	std::string va_display;
 	bool uncompressed_video_to_http = false;
 	bool x264_video_to_http = false;
+	std::vector<std::string> theme_dirs { ".", "/usr/local/share/nageru" };
 	std::string theme_filename = "theme.lua";
 	bool locut_enabled = true;
 	bool gain_staging_auto = true;

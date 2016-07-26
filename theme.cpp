@@ -708,7 +708,7 @@ int call_num_channels(lua_State *L)
 
 }  // namespace
 
-Theme::Theme(const char *filename, ResourcePool *resource_pool, unsigned num_cards)
+Theme::Theme(const string &filename, const vector<string> &search_dirs, ResourcePool *resource_pool, unsigned num_cards)
 	: resource_pool(resource_pool), num_cards(num_cards), signal_to_card_mapping(global_flags.default_stream_mapping)
 {
 	L = luaL_newstate();
@@ -727,11 +727,36 @@ Theme::Theme(const char *filename, ResourcePool *resource_pool, unsigned num_car
 	register_class("MixEffect", MixEffect_funcs);
 	register_class("InputStateInfo", InputStateInfo_funcs);
 
-	// Run script.
+	// Run script. Search through all directories until we find a file that will load
+	// (as in, does not return LUA_ERRFILE); then run it. We store load errors
+	// from all the attempts, and show them once we know we can't find any of them.
 	lua_settop(L, 0);
-	if (luaL_dofile(L, filename)) {
-		fprintf(stderr, "error: %s\n", lua_tostring(L, -1));
+	vector<string> errors;
+	bool success = false;
+	for (size_t i = 0; i < search_dirs.size(); ++i) {
+		string path = search_dirs[i] + "/" + filename;
+		int err = luaL_loadfile(L, path.c_str());
+		if (err == 0) {
+			// Success; actually call the code.
+			if (lua_pcall(L, 0, LUA_MULTRET, 0)) {
+				fprintf(stderr, "Error when running %s: %s\n", path.c_str(), lua_tostring(L, -1));
+				exit(1);
+			}
+			success = true;
+			break;
+		}
+		errors.push_back(lua_tostring(L, -1));
 		lua_pop(L, 1);
+		if (err != LUA_ERRFILE) {
+			// The file actually loaded, but failed to parse somehow. Abort; don't try the next one.
+			break;
+		}
+	}
+
+	if (!success) {
+		for (const string &error : errors) {
+			fprintf(stderr, "%s\n", error.c_str());
+		}
 		exit(1);
 	}
 	assert(lua_gettop(L) == 0);

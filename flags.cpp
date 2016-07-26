@@ -52,6 +52,7 @@ void usage()
 	fprintf(stderr, "  -c, --num-cards                 set number of input cards, including fake cards (default 2)\n");
 	fprintf(stderr, "  -C, --num-fake-cards            set number of fake cards (default 0)\n");
 	fprintf(stderr, "  -t, --theme=FILE                choose theme (default theme.lua)\n");
+	fprintf(stderr, "  -I, --theme-dir=DIR             search for theme in this directory (can be given multiple times)\n");
 	fprintf(stderr, "  -v, --va-display=SPEC           VA-API device for H.264 encoding\n");
 	fprintf(stderr, "                                    ($DISPLAY spec or /dev/dri/render* path)\n");
 	fprintf(stderr, "  -m, --map-signal=SIGNAL,CARD    set a default card mapping (can be given multiple times)\n");
@@ -98,6 +99,7 @@ void parse_flags(int argc, char * const argv[])
 		{ "num-cards", required_argument, 0, 'c' },
 		{ "num-fake-cards", required_argument, 0, 'C' },
 		{ "theme", required_argument, 0, 't' },
+		{ "theme-dir", required_argument, 0, 'I' },
 		{ "map-signal", required_argument, 0, 'm' },
 		{ "va-display", required_argument, 0, OPTION_VA_DISPLAY },
 		{ "http-uncompressed-video", no_argument, 0, OPTION_HTTP_UNCOMPRESSED_VIDEO },
@@ -130,6 +132,7 @@ void parse_flags(int argc, char * const argv[])
 		{ "no-flush-pbos", no_argument, 0, OPTION_NO_FLUSH_PBOS },
 		{ 0, 0, 0, 0 }
 	};
+	vector<string> theme_dirs;
 	for ( ;; ) {
 		int option_index = 0;
 		int c = getopt_long(argc, argv, "c:C:t:v:m:", long_options, &option_index);
@@ -146,6 +149,9 @@ void parse_flags(int argc, char * const argv[])
 			break;
 		case 't':
 			global_flags.theme_filename = optarg;
+			break;
+		case 'I':
+			theme_dirs.push_back(optarg);
 			break;
 		case 'm': {
 			char *ptr = strchr(optarg, ',');
@@ -292,6 +298,9 @@ void parse_flags(int argc, char * const argv[])
 		global_flags.x264_preset = "faster";
 	} else if (global_flags.x264_preset.empty()) {
 		global_flags.x264_preset = X264_DEFAULT_PRESET;
+	}
+	if (!theme_dirs.empty()) {
+		global_flags.theme_dirs = theme_dirs;
 	}
 
 	for (pair<int, int> mapping : global_flags.default_stream_mapping) {
