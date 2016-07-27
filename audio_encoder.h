@@ -3,6 +3,7 @@
 #ifndef _AUDIO_ENCODER_H
 #define _AUDIO_ENCODER_H 1
 
+#include <memory>
 #include <string>
 #include <vector>
 
@@ -13,6 +14,14 @@ extern "C" {
 }
 
 #include "mux.h"
+
+static inline void avcodec_parameters_free_unique(AVCodecParameters *codec_par)
+{
+	avcodec_parameters_free(&codec_par);
+}
+
+typedef std::unique_ptr<AVCodecParameters, decltype(avcodec_parameters_free_unique)*>
+AVCodecParametersWithDeleter;
 
 class AudioEncoder {
 public:
@@ -25,7 +34,7 @@ public:
 	void encode_audio(const std::vector<float> &audio, int64_t audio_pts);
 	void encode_last_audio();
 
-	const AVCodecContext *get_ctx() { return ctx; }
+	AVCodecParametersWithDeleter get_codec_parameters();
 
 private:
 	void encode_audio_one_frame(const float *audio, size_t num_samples, int64_t audio_pts);

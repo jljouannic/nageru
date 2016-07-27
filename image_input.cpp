@@ -163,7 +163,7 @@ shared_ptr<const ImageInput::Image> ImageInput::load_image_raw(const string &pat
 
 	int stream_index = -1;
 	for (unsigned i = 0; i < format_ctx->nb_streams; ++i) {
-		if (format_ctx->streams[i]->codec->codec_type == AVMEDIA_TYPE_VIDEO) {
+		if (format_ctx->streams[i]->codecpar->codec_type == AVMEDIA_TYPE_VIDEO) {
 			stream_index = i;
 			break;
 		}

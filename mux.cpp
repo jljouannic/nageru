@@ -29,44 +29,41 @@ struct PacketBefore {
 	const AVFormatContext * const ctx;
 };
 
-Mux::Mux(AVFormatContext *avctx, int width, int height, Codec video_codec, const string &video_extradata, const AVCodecContext *audio_ctx, int time_base)
+Mux::Mux(AVFormatContext *avctx, int width, int height, Codec video_codec, const string &video_extradata, const AVCodecParameters *audio_codecpar, int time_base)
 	: avctx(avctx)
 {
-	AVCodec *codec_video = avcodec_find_encoder((video_codec == CODEC_H264) ? AV_CODEC_ID_H264 : AV_CODEC_ID_RAWVIDEO);
-	avstream_video = avformat_new_stream(avctx, codec_video);
+	avstream_video = avformat_new_stream(avctx, nullptr);
 	if (avstream_video == nullptr) {
 		fprintf(stderr, "avformat_new_stream() failed\n");
 		exit(1);
 	}
 	avstream_video->time_base = AVRational{1, time_base};
-	avstream_video->codec->codec_type = AVMEDIA_TYPE_VIDEO;
+	avstream_video->codecpar->codec_type = AVMEDIA_TYPE_VIDEO;
 	if (video_codec == CODEC_H264) {
-		avstream_video->codec->codec_id = AV_CODEC_ID_H264;
+		avstream_video->codecpar->codec_id = AV_CODEC_ID_H264;
 	} else {
 		assert(video_codec == CODEC_NV12);
-		avstream_video->codec->codec_id = AV_CODEC_ID_RAWVIDEO;
-		avstream_video->codec->codec_tag = avcodec_pix_fmt_to_codec_tag(AV_PIX_FMT_NV12);
+		avstream_video->codecpar->codec_id = AV_CODEC_ID_RAWVIDEO;
+		avstream_video->codecpar->codec_tag = avcodec_pix_fmt_to_codec_tag(AV_PIX_FMT_NV12);
 	}
-	avstream_video->codec->width = width;
-	avstream_video->codec->height = height;
-	avstream_video->codec->time_base = AVRational{1, time_base};
-	avstream_video->codec->ticks_per_frame = 1;  // or 2?
+	avstream_video->codecpar->width = width;
+	avstream_video->codecpar->height = height;
 
 	// Colorspace details. Closely correspond to settings in EffectChain_finalize,
 	// as noted in each comment.
 	// Note that the H.264 stream also contains this information and depending on the
 	// mux, this might simply get ignored. See sps_rbsp().
-	avstream_video->codec->color_primaries = AVCOL_PRI_BT709;  // RGB colorspace (inout_format.color_space).
-	avstream_video->codec->color_trc = AVCOL_TRC_UNSPECIFIED;  // Gamma curve (inout_format.gamma_curve).
-	avstream_video->codec->colorspace = AVCOL_SPC_SMPTE170M;  // YUV colorspace (output_ycbcr_format.luma_coefficients).
-	avstream_video->codec->color_range = AVCOL_RANGE_MPEG;  // Full vs. limited range (output_ycbcr_format.full_range).
-	avstream_video->codec->chroma_sample_location = AVCHROMA_LOC_LEFT;  // Chroma sample location. See chroma_offset_0[] in Mixer::subsample_chroma().
-	avstream_video->codec->field_order = AV_FIELD_PROGRESSIVE;
+	avstream_video->codecpar->color_primaries = AVCOL_PRI_BT709;  // RGB colorspace (inout_format.color_space).
+	avstream_video->codecpar->color_trc = AVCOL_TRC_UNSPECIFIED;  // Gamma curve (inout_format.gamma_curve).
+	avstream_video->codecpar->color_space = AVCOL_SPC_SMPTE170M;  // YUV colorspace (output_ycbcr_format.luma_coefficients).
+	avstream_video->codecpar->color_range = AVCOL_RANGE_MPEG;  // Full vs. limited range (output_ycbcr_format.full_range).
+	avstream_video->codecpar->chroma_location = AVCHROMA_LOC_LEFT;  // Chroma sample location. See chroma_offset_0[] in Mixer::subsample_chroma().
+	avstream_video->codecpar->field_order = AV_FIELD_PROGRESSIVE;
 
 	if (!video_extradata.empty()) {
-		avstream_video->codec->extradata = (uint8_t *)av_malloc(video_extradata.size());
-		avstream_video->codec->extradata_size = video_extradata.size();
-		memcpy(avstream_video->codec->extradata, video_extradata.data(), video_extradata.size());
+		avstream_video->codecpar->extradata = (uint8_t *)av_malloc(video_extradata.size());
+		avstream_video->codecpar->extradata_size = video_extradata.size();
+		memcpy(avstream_video->codecpar->extradata, video_extradata.data(), video_extradata.size());
 	}
 
 	avstream_audio = avformat_new_stream(avctx, nullptr);
@@ -75,7 +72,10 @@ Mux::Mux(AVFormatContext *avctx, int width, int height, Codec video_codec, const
 		exit(1);
 	}
 	avstream_audio->time_base = AVRational{1, time_base};
-	avcodec_copy_context(avstream_audio->codec, audio_ctx);
+	if (avcodec_parameters_copy(avstream_audio->codecpar, audio_codecpar) < 0) {
+		fprintf(stderr, "avcodec_parameters_copy() failed\n");
+		exit(1);
+	}
 
 	AVDictionary *options = NULL;
 	vector<pair<string, string>> opts = MUX_OPTS;
