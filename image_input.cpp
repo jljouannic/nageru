@@ -189,6 +189,7 @@ shared_ptr<const ImageInput::Image> ImageInput::load_image_raw(const string &pat
 	// Read packets until we have a frame or there are none left.
 	int frame_finished = 0;
 	auto frame = av_frame_alloc_unique();
+	bool eof = false;
 	do {
 		AVPacket pkt;
 		unique_ptr<AVPacket, decltype(av_packet_unref)*> pkt_cleanup(
@@ -196,29 +197,28 @@ shared_ptr<const ImageInput::Image> ImageInput::load_image_raw(const string &pat
 		av_init_packet(&pkt);
 		pkt.data = nullptr;
 		pkt.size = 0;
-		if (av_read_frame(format_ctx.get(), &pkt) < 0) {
+		if (av_read_frame(format_ctx.get(), &pkt) == 0) {
+			if (pkt.stream_index != stream_index) {
+				continue;
+			}
+			if (avcodec_send_packet(codec_ctx, &pkt) < 0) {
+				fprintf(stderr, "%s: Cannot send packet to codec.\n", pathname.c_str());
+				return nullptr;
+			}
+		} else {
+			eof = true;  // Or error, but ignore that for the time being.
+		}
+
+		int err = avcodec_receive_frame(codec_ctx, frame.get());
+		if (err == 0) {
+			frame_finished = true;
 			break;
-		}
-		if (pkt.stream_index != stream_index) {
-			continue;
-		}
-
-		if (avcodec_decode_video2(codec_ctx, frame.get(), &frame_finished, &pkt) < 0) {
-			fprintf(stderr, "%s: Cannot decode frame\n", pathname.c_str());
+		} else if (err != AVERROR(EAGAIN)) {
+			fprintf(stderr, "%s: Cannot receive frame from codec.\n", pathname.c_str());
 			return nullptr;
 		}
-	} while (!frame_finished);
+	} while (!eof);
 
-	// See if there's a cached frame for us.
-	if (!frame_finished) {
-		AVPacket pkt;
-		pkt.data = nullptr;
-		pkt.size = 0;
-		if (avcodec_decode_video2(codec_ctx, frame.get(), &frame_finished, &pkt) < 0) {
-			fprintf(stderr, "%s: Cannot decode frame\n", pathname.c_str());
-			return nullptr;
-		}
-	}
 	if (!frame_finished) {
 		fprintf(stderr, "%s: Decoder did not output frame.\n", pathname.c_str());
 		return nullptr;
