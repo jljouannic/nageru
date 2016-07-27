@@ -2,11 +2,14 @@ CXX=g++
 INSTALL=install
 EMBEDDED_BMUSB=no
 PKG_MODULES := Qt5Core Qt5Gui Qt5Widgets Qt5OpenGLExtensions Qt5OpenGL libusb-1.0 movit lua52 libmicrohttpd epoxy x264
-ifeq ($(EMBEDDED_BMUSB),no)
-  PKG_MODULES += bmusb
-endif
 CXXFLAGS := -O2 -g -std=gnu++11 -Wall -Wno-deprecated-declarations -fPIC $(shell pkg-config --cflags $(PKG_MODULES)) -pthread -DMOVIT_SHADER_DIR=\"$(shell pkg-config --variable=shaderdir movit)\" -Idecklink/
 LDFLAGS=$(shell pkg-config --libs $(PKG_MODULES)) -lEGL -lGL -pthread -lva -lva-drm -lva-x11 -lX11 -lavformat -lavcodec -lavutil -lswscale -lavresample -lzita-resampler -lasound -ldl
+
+ifeq ($(EMBEDDED_BMUSB),yes)
+  CXXFLAGS += -Ibmusb/
+else
+  PKG_MODULES += bmusb
+endif
 
 # Qt objects
 OBJS=glwidget.o main.o mainwindow.o vumeter.o lrameter.o vu_common.o correlation_meter.o aboutdialog.o
