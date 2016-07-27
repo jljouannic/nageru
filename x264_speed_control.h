@@ -105,7 +105,6 @@ private:
 	float dither = 0.0f;
 
 	bool first = true;
-	bool buffer_complete = false;
 
 	struct
 	{
