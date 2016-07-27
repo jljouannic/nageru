@@ -2,7 +2,7 @@ CXX=g++
 INSTALL=install
 EMBEDDED_BMUSB=no
 PKG_MODULES := Qt5Core Qt5Gui Qt5Widgets Qt5OpenGLExtensions Qt5OpenGL libusb-1.0 movit lua52 libmicrohttpd epoxy x264
-CXXFLAGS ?= -O2 -g -Wall -Wno-deprecated-declarations  # Will be overridden by environment.
+CXXFLAGS ?= -O2 -g -Wall  # Will be overridden by environment.
 CXXFLAGS += -std=gnu++11 -fPIC $(shell pkg-config --cflags $(PKG_MODULES)) -pthread -DMOVIT_SHADER_DIR=\"$(shell pkg-config --variable=shaderdir movit)\" -Idecklink/
 
 ifeq ($(EMBEDDED_BMUSB),yes)
