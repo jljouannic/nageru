@@ -2,14 +2,15 @@ CXX=g++
 INSTALL=install
 EMBEDDED_BMUSB=no
 PKG_MODULES := Qt5Core Qt5Gui Qt5Widgets Qt5OpenGLExtensions Qt5OpenGL libusb-1.0 movit lua52 libmicrohttpd epoxy x264
-CXXFLAGS := -O2 -g -std=gnu++11 -Wall -Wno-deprecated-declarations -fPIC $(shell pkg-config --cflags $(PKG_MODULES)) -pthread -DMOVIT_SHADER_DIR=\"$(shell pkg-config --variable=shaderdir movit)\" -Idecklink/
-LDFLAGS=$(shell pkg-config --libs $(PKG_MODULES)) -lEGL -lGL -pthread -lva -lva-drm -lva-x11 -lX11 -lavformat -lavcodec -lavutil -lswscale -lavresample -lzita-resampler -lasound -ldl
+CXXFLAGS ?= -O2 -g -Wall -Wno-deprecated-declarations  # Will be overridden by environment.
+CXXFLAGS += -std=gnu++11 -fPIC $(shell pkg-config --cflags $(PKG_MODULES)) -pthread -DMOVIT_SHADER_DIR=\"$(shell pkg-config --variable=shaderdir movit)\" -Idecklink/
 
 ifeq ($(EMBEDDED_BMUSB),yes)
-  CXXFLAGS += -Ibmusb/
+  CPPFLAGS += -Ibmusb/
 else
   PKG_MODULES += bmusb
 endif
+LDLIBS=$(shell pkg-config --libs $(PKG_MODULES)) -lEGL -lGL -pthread -lva -lva-drm -lva-x11 -lX11 -lavformat -lavcodec -lavutil -lswscale -lavresample -lzita-resampler -lasound -ldl
 
 # Qt objects
 OBJS=glwidget.o main.o mainwindow.o vumeter.o lrameter.o vu_common.o correlation_meter.o aboutdialog.o
@@ -43,7 +44,7 @@ endif
 all: nageru
 
 nageru: $(OBJS)
-	$(CXX) -o $@ $^ $(LDFLAGS)
+	$(CXX) -o $@ $^ $(LDFLAGS) $(LDLIBS)
 
 mainwindow.o: mainwindow.cpp ui_mainwindow.h ui_display.h
 
