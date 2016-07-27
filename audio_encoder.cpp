@@ -118,24 +118,35 @@ void AudioEncoder::encode_audio_one_frame(const float *audio, size_t num_samples
 		exit(1);
 	}
 
-	AVPacket pkt;
-	av_init_packet(&pkt);
-	pkt.data = nullptr;
-	pkt.size = 0;
-	int got_output = 0;
-	avcodec_encode_audio2(ctx, &pkt, audio_frame, &got_output);
-	if (got_output) {
-		pkt.stream_index = 1;
-		pkt.flags = 0;
-		for (Mux *mux : muxes) {
-			mux->add_packet(pkt, pkt.pts, pkt.dts);
+	int err = avcodec_send_frame(ctx, audio_frame);
+	if (err < 0) {
+		fprintf(stderr, "avcodec_send_frame() failed with error %d\n", err);
+		exit(1);
+	}
+
+	for ( ;; ) {  // Termination condition within loop.
+		AVPacket pkt;
+		av_init_packet(&pkt);
+		pkt.data = nullptr;
+		pkt.size = 0;
+		int err = avcodec_receive_packet(ctx, &pkt);
+		if (err == 0) {
+			pkt.stream_index = 1;
+			pkt.flags = 0;
+			for (Mux *mux : muxes) {
+				mux->add_packet(pkt, pkt.pts, pkt.dts);
+			}
+			av_packet_unref(&pkt);
+		} else if (err == AVERROR(EAGAIN)) {
+			break;
+		} else {
+			fprintf(stderr, "avcodec_receive_frame() failed with error %d\n", err);
+			exit(1);
 		}
 	}
 
 	av_freep(&audio_frame->data[0]);
-
 	av_frame_unref(audio_frame);
-	av_free_packet(&pkt);
 }
 
 void AudioEncoder::encode_last_audio()
@@ -150,20 +161,24 @@ void AudioEncoder::encode_last_audio()
 	if (ctx->codec->capabilities & AV_CODEC_CAP_DELAY) {
 		// Collect any delayed frames.
 		for ( ;; ) {
-			int got_output = 0;
 			AVPacket pkt;
 			av_init_packet(&pkt);
 			pkt.data = nullptr;
 			pkt.size = 0;
-			avcodec_encode_audio2(ctx, &pkt, nullptr, &got_output);
-			if (!got_output) break;
-
-			pkt.stream_index = 1;
-			pkt.flags = 0;
-			for (Mux *mux : muxes) {
-				mux->add_packet(pkt, pkt.pts, pkt.dts);
+			int err = avcodec_receive_packet(ctx, &pkt);
+			if (err == 0) {
+				pkt.stream_index = 1;
+				pkt.flags = 0;
+				for (Mux *mux : muxes) {
+					mux->add_packet(pkt, pkt.pts, pkt.dts);
+				}
+				av_packet_unref(&pkt);
+			} else if (err == AVERROR_EOF) {
+				break;
+			} else {
+				fprintf(stderr, "avcodec_receive_frame() failed with error %d\n", err);
+				exit(1);
 			}
-			av_free_packet(&pkt);
 		}
 	}
 }
