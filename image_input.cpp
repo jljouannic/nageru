@@ -18,6 +18,7 @@ extern "C" {
 #include <mutex>
 #include <thread>
 
+#include "ffmpeg_raii.h"
 #include "flags.h"
 
 using namespace std;
@@ -99,50 +100,6 @@ shared_ptr<const ImageInput::Image> ImageInput::load_image(const string &pathnam
 	return all_images[pathname];
 }
 
-// Some helpers to make RAII versions of FFmpeg objects.
-// The cleanup functions don't interact all that well with unique_ptr,
-// so things get a bit messy and verbose, but overall it's worth it to ensure
-// we never leak things by accident in error paths.
-
-namespace {
-
-void avformat_close_input_unique(AVFormatContext *format_ctx)
-{
-	avformat_close_input(&format_ctx);
-}
-
-unique_ptr<AVFormatContext, decltype(avformat_close_input_unique)*>
-avformat_open_input_unique(const char *pathname,
-                           AVInputFormat *fmt, AVDictionary **options)
-{
-	AVFormatContext *format_ctx = nullptr;
-	if (avformat_open_input(&format_ctx, pathname, fmt, options) != 0) {
-		format_ctx = nullptr;
-	}
-	return unique_ptr<AVFormatContext, decltype(avformat_close_input_unique)*>(
-		format_ctx, avformat_close_input_unique);
-}
-
-void av_frame_free_unique(AVFrame *frame)
-{
-	av_frame_free(&frame);
-}
-
-unique_ptr<AVFrame, decltype(av_frame_free_unique)*>
-av_frame_alloc_unique()
-{
-	AVFrame *frame = av_frame_alloc();
-	return unique_ptr<AVFrame, decltype(av_frame_free_unique)*>(
-		frame, av_frame_free_unique);
-}
-
-void avcodec_free_context_unique(AVCodecContext *codec_ctx)
-{
-	avcodec_free_context(&codec_ctx);
-}
-
-}  // namespace
-
 shared_ptr<const ImageInput::Image> ImageInput::load_image_raw(const string &pathname)
 {
 	// Note: Call before open, not after; otherwise, there's a race.
@@ -179,10 +136,8 @@ shared_ptr<const ImageInput::Image> ImageInput::load_image_raw(const string &pat
 	}
 
 	const AVCodecParameters *codecpar = format_ctx->streams[stream_index]->codecpar;
-	AVCodecContext *codec_ctx = avcodec_alloc_context3(nullptr);
-	unique_ptr<AVCodecContext, decltype(avcodec_free_context_unique)*> codec_ctx_free(
-		codec_ctx, avcodec_free_context_unique);
-	if (avcodec_parameters_to_context(codec_ctx, codecpar) < 0) {
+	AVCodecContextWithDeleter codec_ctx = avcodec_alloc_context3_unique(nullptr);
+	if (avcodec_parameters_to_context(codec_ctx.get(), codecpar) < 0) {
 		fprintf(stderr, "%s: Cannot fill codec parameters\n", pathname.c_str());
 		return nullptr;
 	}
@@ -191,16 +146,16 @@ shared_ptr<const ImageInput::Image> ImageInput::load_image_raw(const string &pat
 		fprintf(stderr, "%s: Cannot find decoder\n", pathname.c_str());
 		return nullptr;
 	}
-	if (avcodec_open2(codec_ctx, codec, nullptr) < 0) {
+	if (avcodec_open2(codec_ctx.get(), codec, nullptr) < 0) {
 		fprintf(stderr, "%s: Cannot open decoder\n", pathname.c_str());
 		return nullptr;
 	}
 	unique_ptr<AVCodecContext, decltype(avcodec_close)*> codec_ctx_cleanup(
-		codec_ctx, avcodec_close);
+		codec_ctx.get(), avcodec_close);
 
 	// Read packets until we have a frame or there are none left.
 	int frame_finished = 0;
-	auto frame = av_frame_alloc_unique();
+	AVFrameWithDeleter frame = av_frame_alloc_unique();
 	bool eof = false;
 	do {
 		AVPacket pkt;
@@ -213,7 +168,7 @@ shared_ptr<const ImageInput::Image> ImageInput::load_image_raw(const string &pat
 			if (pkt.stream_index != stream_index) {
 				continue;
 			}
-			if (avcodec_send_packet(codec_ctx, &pkt) < 0) {
+			if (avcodec_send_packet(codec_ctx.get(), &pkt) < 0) {
 				fprintf(stderr, "%s: Cannot send packet to codec.\n", pathname.c_str());
 				return nullptr;
 			}
@@ -221,7 +176,7 @@ shared_ptr<const ImageInput::Image> ImageInput::load_image_raw(const string &pat
 			eof = true;  // Or error, but ignore that for the time being.
 		}
 
-		int err = avcodec_receive_frame(codec_ctx, frame.get());
+		int err = avcodec_receive_frame(codec_ctx.get(), frame.get());
 		if (err == 0) {
 			frame_finished = true;
 			break;

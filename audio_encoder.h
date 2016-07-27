@@ -13,15 +13,8 @@ extern "C" {
 #include <libavutil/frame.h>
 }
 
+#include "ffmpeg_raii.h"
 #include "mux.h"
-
-static inline void avcodec_parameters_free_unique(AVCodecParameters *codec_par)
-{
-	avcodec_parameters_free(&codec_par);
-}
-
-typedef std::unique_ptr<AVCodecParameters, decltype(avcodec_parameters_free_unique)*>
-AVCodecParametersWithDeleter;
 
 class AudioEncoder {
 public:
