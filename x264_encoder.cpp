@@ -183,7 +183,10 @@ void X264Encoder::init_x264()
 
 void X264Encoder::encoder_thread_func()
 {
-	nice(5);  // Note that x264 further nices some of its threads.
+	if (nice(5) == -1) {  // Note that x264 further nices some of its threads.
+		perror("nice()");
+		// No exit; it's not fatal.
+	}
 	init_x264();
 
 	bool frames_left;
