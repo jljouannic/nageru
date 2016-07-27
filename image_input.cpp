@@ -136,6 +136,11 @@ av_frame_alloc_unique()
 		frame, av_frame_free_unique);
 }
 
+void avcodec_free_context_unique(AVCodecContext *codec_ctx)
+{
+	avcodec_free_context(&codec_ctx);
+}
+
 }  // namespace
 
 shared_ptr<const ImageInput::Image> ImageInput::load_image_raw(const string &pathname)
@@ -173,8 +178,15 @@ shared_ptr<const ImageInput::Image> ImageInput::load_image_raw(const string &pat
 		return nullptr;
 	}
 
-	AVCodecContext *codec_ctx = format_ctx->streams[stream_index]->codec;
-	AVCodec *codec = avcodec_find_decoder(codec_ctx->codec_id);
+	const AVCodecParameters *codecpar = format_ctx->streams[stream_index]->codecpar;
+	AVCodecContext *codec_ctx = avcodec_alloc_context3(nullptr);
+	unique_ptr<AVCodecContext, decltype(avcodec_free_context_unique)*> codec_ctx_free(
+		codec_ctx, avcodec_free_context_unique);
+	if (avcodec_parameters_to_context(codec_ctx, codecpar) < 0) {
+		fprintf(stderr, "%s: Cannot fill codec parameters\n", pathname.c_str());
+		return nullptr;
+	}
+	AVCodec *codec = avcodec_find_decoder(codecpar->codec_id);
 	if (codec == nullptr) {
 		fprintf(stderr, "%s: Cannot find decoder\n", pathname.c_str());
 		return nullptr;
