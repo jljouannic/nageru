@@ -13,19 +13,53 @@ extern "C" {
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <unistd.h>
+#include <fcntl.h>
 
 #include <mutex>
 #include <thread>
 
+#include "flags.h"
+
 using namespace std;
+
+namespace {
+
+string search_for_file(const string &filename)
+{
+	// Look for the file in all theme_dirs until we find one;
+	// that will be the permanent resolution of this file, whether
+	// it is actually valid or not.
+	// We store errors from all the attempts, and show them
+	// once we know we can't find any of them.
+	vector<string> errors;
+	for (const string &dir : global_flags.theme_dirs) {
+		string pathname = dir + "/" + filename;
+		if (access(pathname.c_str(), O_RDONLY) == 0) {
+			return pathname;
+		} else {
+			char buf[512];
+			snprintf(buf, sizeof(buf), "%s: %s", pathname.c_str(), strerror(errno));
+			errors.push_back(buf);
+		}
+	}
+
+	for (const string &error : errors) {
+		fprintf(stderr, "%s\n", error.c_str());
+	}
+	fprintf(stderr, "Couldn't find %s in any directory in --theme-dirs, exiting.\n",
+		filename.c_str());
+	exit(1);
+}
+
+}  // namespace
 
 ImageInput::ImageInput(const string &filename)
 	: movit::FlatInput({movit::COLORSPACE_sRGB, movit::GAMMA_sRGB}, movit::FORMAT_RGBA_POSTMULTIPLIED_ALPHA,
 	                   GL_UNSIGNED_BYTE, 1280, 720),  // FIXME
-	  filename(filename),
-	  current_image(load_image(filename))
+	  pathname(search_for_file(filename)),
+	  current_image(load_image(pathname))
 {
-	if (current_image == nullptr) {
+	if (current_image == nullptr) {  // Could happen even though search_for_file() returned.
 		fprintf(stderr, "Couldn't load image, exiting.\n");
 		exit(1);
 	}
@@ -42,27 +76,27 @@ void ImageInput::set_gl_state(GLuint glsl_program_num, const string& prefix, uns
 	// is mostly there to save startup time, not RAM).
 	{
 		unique_lock<mutex> lock(all_images_lock);
-		if (all_images[filename] != current_image) {
-			current_image = all_images[filename];
+		if (all_images[pathname] != current_image) {
+			current_image = all_images[pathname];
 			set_pixel_data(current_image->pixels.get());
 		}
 	}
 	movit::FlatInput::set_gl_state(glsl_program_num, prefix, sampler_num);
 }
 
-shared_ptr<const ImageInput::Image> ImageInput::load_image(const string &filename)
+shared_ptr<const ImageInput::Image> ImageInput::load_image(const string &pathname)
 {
 	unique_lock<mutex> lock(all_images_lock);  // Held also during loading.
-	if (all_images.count(filename)) {
-		return all_images[filename];
+	if (all_images.count(pathname)) {
+		return all_images[pathname];
 	}
 
-	all_images[filename] = load_image_raw(filename);
-	timespec first_modified = all_images[filename]->last_modified;
-	update_threads[filename] =
-		thread(bind(update_thread_func, filename, first_modified));
+	all_images[pathname] = load_image_raw(pathname);
+	timespec first_modified = all_images[pathname]->last_modified;
+	update_threads[pathname] =
+		thread(bind(update_thread_func, pathname, first_modified));
 
-	return all_images[filename];
+	return all_images[pathname];
 }
 
 // Some helpers to make RAII versions of FFmpeg objects.
@@ -78,11 +112,11 @@ void avformat_close_input_unique(AVFormatContext *format_ctx)
 }
 
 unique_ptr<AVFormatContext, decltype(avformat_close_input_unique)*>
-avformat_open_input_unique(const char *filename,
+avformat_open_input_unique(const char *pathname,
                            AVInputFormat *fmt, AVDictionary **options)
 {
 	AVFormatContext *format_ctx = nullptr;
-	if (avformat_open_input(&format_ctx, filename, fmt, options) != 0) {
+	if (avformat_open_input(&format_ctx, pathname, fmt, options) != 0) {
 		format_ctx = nullptr;
 	}
 	return unique_ptr<AVFormatContext, decltype(avformat_close_input_unique)*>(
@@ -104,26 +138,26 @@ av_frame_alloc_unique()
 
 }  // namespace
 
-shared_ptr<const ImageInput::Image> ImageInput::load_image_raw(const string &filename)
+shared_ptr<const ImageInput::Image> ImageInput::load_image_raw(const string &pathname)
 {
 	// Note: Call before open, not after; otherwise, there's a race.
 	// (There is now, too, but it tips the correct way. We could use fstat()
 	// if we had the file descriptor.)
 	struct stat buf;
-	if (stat(filename.c_str(), &buf) != 0) {
-		fprintf(stderr, "%s: Error stat-ing file\n", filename.c_str());
+	if (stat(pathname.c_str(), &buf) != 0) {
+		fprintf(stderr, "%s: Error stat-ing file\n", pathname.c_str());
 		return nullptr;
 	}
 	timespec last_modified = buf.st_mtim;
 
-	auto format_ctx = avformat_open_input_unique(filename.c_str(), nullptr, nullptr);
+	auto format_ctx = avformat_open_input_unique(pathname.c_str(), nullptr, nullptr);
 	if (format_ctx == nullptr) {
-		fprintf(stderr, "%s: Error opening file\n", filename.c_str());
+		fprintf(stderr, "%s: Error opening file\n", pathname.c_str());
 		return nullptr;
 	}
 
 	if (avformat_find_stream_info(format_ctx.get(), nullptr) < 0) {
-		fprintf(stderr, "%s: Error finding stream info\n", filename.c_str());
+		fprintf(stderr, "%s: Error finding stream info\n", pathname.c_str());
 		return nullptr;
 	}
 
@@ -135,18 +169,18 @@ shared_ptr<const ImageInput::Image> ImageInput::load_image_raw(const string &fil
 		}
 	}
 	if (stream_index == -1) {
-		fprintf(stderr, "%s: No video stream found\n", filename.c_str());
+		fprintf(stderr, "%s: No video stream found\n", pathname.c_str());
 		return nullptr;
 	}
 
 	AVCodecContext *codec_ctx = format_ctx->streams[stream_index]->codec;
 	AVCodec *codec = avcodec_find_decoder(codec_ctx->codec_id);
 	if (codec == nullptr) {
-		fprintf(stderr, "%s: Cannot find decoder\n", filename.c_str());
+		fprintf(stderr, "%s: Cannot find decoder\n", pathname.c_str());
 		return nullptr;
 	}
 	if (avcodec_open2(codec_ctx, codec, nullptr) < 0) {
-		fprintf(stderr, "%s: Cannot open decoder\n", filename.c_str());
+		fprintf(stderr, "%s: Cannot open decoder\n", pathname.c_str());
 		return nullptr;
 	}
 	unique_ptr<AVCodecContext, decltype(avcodec_close)*> codec_ctx_cleanup(
@@ -170,7 +204,7 @@ shared_ptr<const ImageInput::Image> ImageInput::load_image_raw(const string &fil
 		}
 
 		if (avcodec_decode_video2(codec_ctx, frame.get(), &frame_finished, &pkt) < 0) {
-			fprintf(stderr, "%s: Cannot decode frame\n", filename.c_str());
+			fprintf(stderr, "%s: Cannot decode frame\n", pathname.c_str());
 			return nullptr;
 		}
 	} while (!frame_finished);
@@ -181,12 +215,12 @@ shared_ptr<const ImageInput::Image> ImageInput::load_image_raw(const string &fil
 		pkt.data = nullptr;
 		pkt.size = 0;
 		if (avcodec_decode_video2(codec_ctx, frame.get(), &frame_finished, &pkt) < 0) {
-			fprintf(stderr, "%s: Cannot decode frame\n", filename.c_str());
+			fprintf(stderr, "%s: Cannot decode frame\n", pathname.c_str());
 			return nullptr;
 		}
 	}
 	if (!frame_finished) {
-		fprintf(stderr, "%s: Decoder did not output frame.\n", filename.c_str());
+		fprintf(stderr, "%s: Decoder did not output frame.\n", pathname.c_str());
 		return nullptr;
 	}
 
@@ -196,7 +230,7 @@ shared_ptr<const ImageInput::Image> ImageInput::load_image_raw(const string &fil
 		&pic_data[0], av_freep);
 	int linesizes[4];
 	if (av_image_alloc(pic_data, linesizes, frame->width, frame->height, AV_PIX_FMT_RGBA, 1) < 0) {
-		fprintf(stderr, "%s: Could not allocate picture data\n", filename.c_str());
+		fprintf(stderr, "%s: Could not allocate picture data\n", pathname.c_str());
 		return nullptr;
 	}
 	unique_ptr<SwsContext, decltype(sws_freeContext)*> sws_ctx(
@@ -205,7 +239,7 @@ shared_ptr<const ImageInput::Image> ImageInput::load_image_raw(const string &fil
 			AV_PIX_FMT_RGBA, SWS_BICUBIC, nullptr, nullptr, nullptr),
 		sws_freeContext);
 	if (sws_ctx == nullptr) {
-		fprintf(stderr, "%s: Could not create scaler context\n", filename.c_str());
+		fprintf(stderr, "%s: Could not create scaler context\n", pathname.c_str());
 		return nullptr;
 	}
 	sws_scale(sws_ctx.get(), frame->data, frame->linesize, 0, frame->height, pic_data, linesizes);
@@ -220,7 +254,7 @@ shared_ptr<const ImageInput::Image> ImageInput::load_image_raw(const string &fil
 
 // Fire up a thread to update the image every second.
 // We could do inotify, but this is good enough for now.
-void ImageInput::update_thread_func(const std::string &filename, const timespec &first_modified)
+void ImageInput::update_thread_func(const std::string &pathname, const timespec &first_modified)
 {
 	timespec last_modified = first_modified;
 	struct stat buf;
@@ -231,8 +265,8 @@ void ImageInput::update_thread_func(const std::string &filename, const timespec 
 			return;
 		}
 
-		if (stat(filename.c_str(), &buf) != 0) {
-			fprintf(stderr, "%s: Couldn't check for new version, leaving the old in place.\n", filename.c_str());
+		if (stat(pathname.c_str(), &buf) != 0) {
+			fprintf(stderr, "%s: Couldn't check for new version, leaving the old in place.\n", pathname.c_str());
 			continue;
 		}
 		if (buf.st_mtim.tv_sec == last_modified.tv_sec &&
@@ -240,14 +274,14 @@ void ImageInput::update_thread_func(const std::string &filename, const timespec 
 			// Not changed.
 			continue;
 		}
-		shared_ptr<const Image> image = load_image_raw(filename);
+		shared_ptr<const Image> image = load_image_raw(pathname);
 		if (image == nullptr) {
 			fprintf(stderr, "Couldn't load image, leaving the old in place.\n");
 			continue;
 		}
-		fprintf(stderr, "Loaded new version of %s from disk.\n", filename.c_str());
+		fprintf(stderr, "Loaded new version of %s from disk.\n", pathname.c_str());
 		unique_lock<mutex> lock(all_images_lock);
-		all_images[filename] = image;
+		all_images[pathname] = image;
 		last_modified = image->last_modified;
 	}
 }
