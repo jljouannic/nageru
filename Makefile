@@ -10,7 +10,7 @@ ifeq ($(EMBEDDED_BMUSB),yes)
 else
   PKG_MODULES += bmusb
 endif
-LDLIBS=$(shell pkg-config --libs $(PKG_MODULES)) -lEGL -lGL -pthread -lva -lva-drm -lva-x11 -lX11 -lavformat -lavcodec -lavutil -lswscale -lavresample -lzita-resampler -lasound -ldl
+LDLIBS=$(shell pkg-config --libs $(PKG_MODULES)) -pthread -lva -lva-drm -lva-x11 -lX11 -lavformat -lavcodec -lavutil -lswscale -lavresample -lzita-resampler -lasound -ldl
 
 # Qt objects
 OBJS=glwidget.o main.o mainwindow.o vumeter.o lrameter.o vu_common.o correlation_meter.o aboutdialog.o
