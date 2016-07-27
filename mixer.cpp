@@ -168,24 +168,12 @@ Mixer::Mixer(const QSurfaceFormat &format, unsigned num_cards)
 	// Start listening for clients only once VideoEncoder has written its header, if any.
 	httpd.start(9095);
 
-	// First try initializing the fake devices, then PCI devices, then USB,
-	// until we have the desired number of cards.
-	unsigned num_pci_devices = 0, num_usb_devices = 0;
+	// First try initializing the then PCI devices, then USB, then
+	// fill up with fake cards until we have the desired number of cards.
+	unsigned num_pci_devices = 0;
 	unsigned card_index = 0;
 
-	assert(global_flags.num_fake_cards >= 0);  // Enforced in flags.cpp.
-	unsigned num_fake_cards = global_flags.num_fake_cards;
-
-	assert(num_fake_cards <= num_cards);  // Enforced in flags.cpp.
-	for ( ; card_index < num_fake_cards; ++card_index) {
-		configure_card(card_index, new FakeCapture(WIDTH, HEIGHT, FAKE_FPS, OUTPUT_FREQUENCY, card_index), /*is_fake_capture=*/true);
-	}
-
-	if (global_flags.num_fake_cards > 0) {
-		fprintf(stderr, "Initialized %d fake cards.\n", global_flags.num_fake_cards);
-	}
-
-	if (card_index < num_cards) {
+	{
 		IDeckLinkIterator *decklink_iterator = CreateDeckLinkIteratorInstance();
 		if (decklink_iterator != nullptr) {
 			for ( ; card_index < num_cards; ++card_index) {
@@ -194,27 +182,34 @@ Mixer::Mixer(const QSurfaceFormat &format, unsigned num_cards)
 					break;
 				}
 
-				configure_card(card_index, new DeckLinkCapture(decklink, card_index - num_fake_cards), /*is_fake_capture=*/false);
+				configure_card(card_index, new DeckLinkCapture(decklink, card_index), /*is_fake_capture=*/false);
 				++num_pci_devices;
 			}
 			decklink_iterator->Release();
-			fprintf(stderr, "Found %d DeckLink PCI card(s).\n", num_pci_devices);
+			fprintf(stderr, "Found %u DeckLink PCI card(s).\n", num_pci_devices);
 		} else {
 			fprintf(stderr, "DeckLink drivers not found. Probing for USB cards only.\n");
 		}
 	}
-	for ( ; card_index < num_cards; ++card_index) {
-		BMUSBCapture *capture = new BMUSBCapture(card_index - num_pci_devices - num_fake_cards);
+	unsigned num_usb_devices = BMUSBCapture::num_cards();
+	for (unsigned usb_card_index = 0; usb_card_index < num_usb_devices && card_index < num_cards; ++usb_card_index, ++card_index) {
+		BMUSBCapture *capture = new BMUSBCapture(usb_card_index);
 		capture->set_card_disconnected_callback(bind(&Mixer::bm_hotplug_remove, this, card_index));
 		configure_card(card_index, capture, /*is_fake_capture=*/false);
-		++num_usb_devices;
+	}
+	fprintf(stderr, "Found %u USB card(s).\n", num_usb_devices);
+
+	unsigned num_fake_cards = 0;
+	for ( ; card_index < num_cards; ++card_index, ++num_fake_cards) {
+		configure_card(card_index, new FakeCapture(WIDTH, HEIGHT, FAKE_FPS, OUTPUT_FREQUENCY, card_index), /*is_fake_capture=*/true);
 	}
 
-	if (num_usb_devices > 0) {
-		has_bmusb_thread = true;
-		BMUSBCapture::set_card_connected_callback(bind(&Mixer::bm_hotplug_add, this, _1));
-		BMUSBCapture::start_bm_thread();
+	if (num_fake_cards > 0) {
+		fprintf(stderr, "Initialized %u fake cards.\n", num_fake_cards);
 	}
+
+	BMUSBCapture::set_card_connected_callback(bind(&Mixer::bm_hotplug_add, this, _1));
+	BMUSBCapture::start_bm_thread();
 
 	for (card_index = 0; card_index < num_cards; ++card_index) {
 		cards[card_index].queue_length_policy.reset(card_index);
@@ -289,9 +284,7 @@ Mixer::~Mixer()
 {
 	resource_pool->release_glsl_program(cbcr_program_num);
 	glDeleteBuffers(1, &cbcr_vbo);
-	if (has_bmusb_thread) {
-		BMUSBCapture::stop_bm_thread();
-	}
+	BMUSBCapture::stop_bm_thread();
 
 	for (unsigned card_index = 0; card_index < num_cards; ++card_index) {
 		{

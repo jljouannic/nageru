@@ -49,8 +49,7 @@ void usage()
 	fprintf(stderr, "Usage: nageru [OPTION]...\n");
 	fprintf(stderr, "\n");
 	fprintf(stderr, "  -h, --help                      print usage information\n");
-	fprintf(stderr, "  -c, --num-cards                 set number of input cards, including fake cards (default 2)\n");
-	fprintf(stderr, "  -C, --num-fake-cards            set number of fake cards (default 0)\n");
+	fprintf(stderr, "  -c, --num-cards                 set number of input cards (default 2)\n");
 	fprintf(stderr, "  -t, --theme=FILE                choose theme (default theme.lua)\n");
 	fprintf(stderr, "  -I, --theme-dir=DIR             search for theme in this directory (can be given multiple times)\n");
 	fprintf(stderr, "  -v, --va-display=SPEC           VA-API device for H.264 encoding\n");
@@ -97,7 +96,6 @@ void parse_flags(int argc, char * const argv[])
 	static const option long_options[] = {
 		{ "help", no_argument, 0, 'h' },
 		{ "num-cards", required_argument, 0, 'c' },
-		{ "num-fake-cards", required_argument, 0, 'C' },
 		{ "theme", required_argument, 0, 't' },
 		{ "theme-dir", required_argument, 0, 'I' },
 		{ "map-signal", required_argument, 0, 'm' },
@@ -143,9 +141,6 @@ void parse_flags(int argc, char * const argv[])
 		switch (c) {
 		case 'c':
 			global_flags.num_cards = atoi(optarg);
-			break;
-		case 'C':
-			global_flags.num_fake_cards = atoi(optarg);
 			break;
 		case 't':
 			global_flags.theme_filename = optarg;
@@ -279,16 +274,8 @@ void parse_flags(int argc, char * const argv[])
 		fprintf(stderr, "ERROR: --http-uncompressed-video and --http-x264-video are mutually incompatible\n");
 		exit(1);
 	}
-	if (global_flags.num_fake_cards > global_flags.num_cards) {
-		fprintf(stderr, "ERROR: More fake cards then total cards makes no sense\n");
-		exit(1);
-	}
 	if (global_flags.num_cards <= 0) {
 		fprintf(stderr, "ERROR: --num-cards must be at least 1\n");
-		exit(1);
-	}
-	if (global_flags.num_fake_cards < 0) {
-		fprintf(stderr, "ERROR: --num-fake-cards cannot be negative\n");
 		exit(1);
 	}
 	if (global_flags.x264_speedcontrol) {
