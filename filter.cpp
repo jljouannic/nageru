@@ -261,7 +261,7 @@ void StereoFilter::init(FilterType type, int new_order)
 	memset(feedback, 0, sizeof(feedback));
 #else
 	for (unsigned i = 0; i < 2; ++i) {
-		filters[i].init(type, 0, new_order, 0);
+		filters[i].init(type, new_order);
 	}
 #endif
 }
