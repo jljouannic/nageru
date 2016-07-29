@@ -984,8 +984,9 @@ void Mixer::process_audio_one_frame(int64_t frame_pts_int, int num_samples, bool
 {
 	vector<float> samples_card;
 	vector<float> samples_out;
+	samples_out.resize(num_samples * 2);
 
-	// TODO: Allow mixing audio from several sources.
+	// TODO: Allow more flexible input mapping.
 	unsigned selected_audio_card = theme->map_signal(audio_source_channel);
 	assert(selected_audio_card < num_cards);
 
@@ -1001,8 +1002,14 @@ void Mixer::process_audio_one_frame(int64_t frame_pts_int, int num_samples, bool
 				num_samples,
 				rate_adjustment_policy);
 		}
-		if (card_index == selected_audio_card) {
-			samples_out = move(samples_card);
+		if (card_index == 0) {
+			for (int i = 0; i < num_samples * 2; ++i) {
+				samples_out[i] = samples_card[i];
+			}
+		} else {
+			for (int i = 0; i < num_samples * 2; ++i) {
+				samples_out[i] += samples_card[i];
+			}
 		}
 	}
 
