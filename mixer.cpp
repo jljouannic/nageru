@@ -1060,21 +1060,6 @@ void Mixer::process_audio_one_frame(int64_t frame_pts_int, int num_samples)
 
 //	printf("limiter=%+5.1f  compressor=%+5.1f\n", 20.0*log10(limiter_att), 20.0*log10(compressor_att));
 
-	// Upsample 4x to find interpolated peak.
-	peak_resampler.inp_data = samples_out.data();
-	peak_resampler.inp_count = samples_out.size() / 2;
-
-	vector<float> interpolated_samples_out;
-	interpolated_samples_out.resize(samples_out.size());
-	while (peak_resampler.inp_count > 0) {  // About four iterations.
-		peak_resampler.out_data = &interpolated_samples_out[0];
-		peak_resampler.out_count = interpolated_samples_out.size() / 2;
-		peak_resampler.process();
-		size_t out_stereo_samples = interpolated_samples_out.size() / 2 - peak_resampler.out_count;
-		peak = max<float>(peak, find_peak(interpolated_samples_out.data(), out_stereo_samples * 2));
-		peak_resampler.out_data = nullptr;
-	}
-
 	// At this point, we are most likely close to +0 LU, but all of our
 	// measurements have been on raw sample values, not R128 values.
 	// So we have a final makeup gain to get us to +0 LU; the gain
@@ -1113,6 +1098,21 @@ void Mixer::process_audio_one_frame(int64_t frame_pts_int, int num_samples)
 			m += (target_loudness_factor - m) * alpha;
 		}
 		final_makeup_gain = m;
+	}
+
+	// Upsample 4x to find interpolated peak.
+	peak_resampler.inp_data = samples_out.data();
+	peak_resampler.inp_count = samples_out.size() / 2;
+
+	vector<float> interpolated_samples_out;
+	interpolated_samples_out.resize(samples_out.size());
+	while (peak_resampler.inp_count > 0) {  // About four iterations.
+		peak_resampler.out_data = &interpolated_samples_out[0];
+		peak_resampler.out_count = interpolated_samples_out.size() / 2;
+		peak_resampler.process();
+		size_t out_stereo_samples = interpolated_samples_out.size() / 2 - peak_resampler.out_count;
+		peak = max<float>(peak, find_peak(interpolated_samples_out.data(), out_stereo_samples * 2));
+		peak_resampler.out_data = nullptr;
 	}
 
 	// Find R128 levels and L/R correlation.
