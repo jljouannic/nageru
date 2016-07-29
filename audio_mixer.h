@@ -19,6 +19,7 @@
 #include <vector>
 
 #include "bmusb/bmusb.h"
+#include "db.h"
 #include "defs.h"
 #include "filter.h"
 #include "resampling_queue.h"
@@ -125,13 +126,13 @@ public:
 	{
 		std::unique_lock<std::mutex> lock(compressor_mutex);
 		final_makeup_gain_auto = false;
-		final_makeup_gain = pow(10.0f, gain_db / 20.0f);
+		final_makeup_gain = from_db(gain_db);
 	}
 
 	float get_final_makeup_gain_db()
 	{
 		std::unique_lock<std::mutex> lock(compressor_mutex);
-		return 20.0 * log10(final_makeup_gain);
+		return to_db(final_makeup_gain);
 	}
 
 	void set_final_makeup_gain_auto(bool enabled)

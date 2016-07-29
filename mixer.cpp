@@ -33,6 +33,7 @@
 #include "bmusb/bmusb.h"
 #include "bmusb/fake_capture.h"
 #include "context.h"
+#include "db.h"
 #include "decklink_capture.h"
 #include "defs.h"
 #include "disk_space_estimator.h"
@@ -876,7 +877,7 @@ void Mixer::send_audio_level_callback()
 	double loudness_range_low = r128.range_min();
 	double loudness_range_high = r128.range_max();
 
-	audio_level_callback(loudness_s, 20.0 * log10(peak),
+	audio_level_callback(loudness_s, to_db(peak),
 		loudness_i, loudness_range_low, loudness_range_high,
 		audio_mixer.get_gain_staging_db(),
 		audio_mixer.get_final_makeup_gain_db(),

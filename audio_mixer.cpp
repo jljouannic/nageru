@@ -6,6 +6,7 @@
 #include <stdio.h>
 #include <cmath>
 
+#include "db.h"
 #include "flags.h"
 #include "timebase.h"
 
@@ -167,12 +168,12 @@ vector<float> AudioMixer::get_output(double pts, unsigned num_samples, Resamplin
 				float ratio = 20.0f;
 				float attack_time = 0.5f;
 				float release_time = 20.0f;
-				float makeup_gain = pow(10.0f, (ref_level_dbfs - (-40.0f)) / 20.0f);  // +26 dB.
+				float makeup_gain = from_db(ref_level_dbfs - (-40.0f));  // +26 dB.
 				level_compressor.process(samples_out.data(), samples_out.size() / 2, threshold, ratio, attack_time, release_time, makeup_gain);
-				gain_staging_db = 20.0 * log10(level_compressor.get_attenuation() * makeup_gain);
+				gain_staging_db = to_db(level_compressor.get_attenuation() * makeup_gain);
 			} else {
 				// Just apply the gain we already had.
-				float g = pow(10.0f, gain_staging_db / 20.0f);
+				float g = from_db(gain_staging_db);
 				for (size_t i = 0; i < samples_out.size(); ++i) {
 					samples_out[i] *= g;
 				}
@@ -181,16 +182,16 @@ vector<float> AudioMixer::get_output(double pts, unsigned num_samples, Resamplin
 
 	#if 0
 		printf("level=%f (%+5.2f dBFS) attenuation=%f (%+5.2f dB) end_result=%+5.2f dB\n",
-			level_compressor.get_level(), 20.0 * log10(level_compressor.get_level()),
-			level_compressor.get_attenuation(), 20.0 * log10(level_compressor.get_attenuation()),
-			20.0 * log10(level_compressor.get_level() * level_compressor.get_attenuation() * makeup_gain));
+			level_compressor.get_level(), to_db(level_compressor.get_level()),
+			level_compressor.get_attenuation(), to_db(level_compressor.get_attenuation()),
+			to_db(level_compressor.get_level() * level_compressor.get_attenuation() * makeup_gain));
 	#endif
 
 	//	float limiter_att, compressor_att;
 
 		// The real compressor.
 		if (compressor_enabled) {
-			float threshold = pow(10.0f, compressor_threshold_dbfs / 20.0f);
+			float threshold = from_db(compressor_threshold_dbfs);
 			float ratio = 20.0f;
 			float attack_time = 0.005f;
 			float release_time = 0.040f;
@@ -202,7 +203,7 @@ vector<float> AudioMixer::get_output(double pts, unsigned num_samples, Resamplin
 		// Finally a limiter at -4 dB (so, -10 dBFS) to take out the worst peaks only.
 		// Note that since ratio is not infinite, we could go slightly higher than this.
 		if (limiter_enabled) {
-			float threshold = pow(10.0f, limiter_threshold_dbfs / 20.0f);
+			float threshold = from_db(limiter_threshold_dbfs);
 			float ratio = 30.0f;
 			float attack_time = 0.0f;  // Instant.
 			float release_time = 0.020f;
@@ -211,7 +212,7 @@ vector<float> AudioMixer::get_output(double pts, unsigned num_samples, Resamplin
 	//		limiter_att = limiter.get_attenuation();
 		}
 
-	//	printf("limiter=%+5.1f  compressor=%+5.1f\n", 20.0*log10(limiter_att), 20.0*log10(compressor_att));
+	//	printf("limiter=%+5.1f  compressor=%+5.1f\n", to_db(limiter_att), to_db(compressor_att));
 	}
 
 	// At this point, we are most likely close to +0 LU, but all of our
@@ -227,8 +228,8 @@ vector<float> AudioMixer::get_output(double pts, unsigned num_samples, Resamplin
 	// (half-time of 100 seconds).
 	double target_loudness_factor, alpha;
 	double loudness_lu = loudness_lufs - ref_level_lufs;
-	double current_makeup_lu = 20.0f * log10(final_makeup_gain);
-	target_loudness_factor = pow(10.0f, -loudness_lu / 20.0f);
+	double current_makeup_lu = to_db(final_makeup_gain);
+	target_loudness_factor = from_db(-loudness_lu);
 
 	// If we're outside +/- 5 LU uncorrected, we don't count it as
 	// a normal signal (probably silence) and don't change the
