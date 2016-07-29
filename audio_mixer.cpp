@@ -227,7 +227,7 @@ vector<float> AudioMixer::get_output(double pts, unsigned num_samples, Resamplin
 	// something we get out per-sample.
 	//
 	// Note that there's a feedback loop here, so we choose a very slow filter
-	// (half-time of 100 seconds).
+	// (half-time of 30 seconds).
 	double target_loudness_factor, alpha;
 	double loudness_lu = loudness_lufs - ref_level_lufs;
 	double current_makeup_lu = to_db(final_makeup_gain);
@@ -241,7 +241,7 @@ vector<float> AudioMixer::get_output(double pts, unsigned num_samples, Resamplin
 	} else {
 		// Formula adapted from
 		// https://en.wikipedia.org/wiki/Low-pass_filter#Simple_infinite_impulse_response_filter.
-		const double half_time_s = 100.0;
+		const double half_time_s = 30.0;
 		const double fc_mul_2pi_delta_t = 1.0 / (half_time_s * OUTPUT_FREQUENCY);
 		alpha = fc_mul_2pi_delta_t / (fc_mul_2pi_delta_t + 1.0);
 	}
