@@ -3,31 +3,37 @@
 
 // The actual video mixer, running in its own separate background thread.
 
+#include <assert.h>
 #include <epoxy/gl.h>
 #undef Success
-#include <stdbool.h>
-#include <stdint.h>
 
 #include <movit/effect_chain.h>
 #include <movit/flat_input.h>
+#include <stdbool.h>
+#include <stdint.h>
 #include <zita-resampler/resampler.h>
+
 #include <atomic>
 #include <chrono>
 #include <condition_variable>
 #include <cstddef>
 #include <functional>
+#include <map>
 #include <memory>
 #include <mutex>
+#include <queue>
 #include <string>
 #include <thread>
 #include <vector>
 
-#include "bmusb/bmusb.h"
 #include "alsa_output.h"
 #include "audio_mixer.h"
+#include "bmusb/bmusb.h"
+#include "correlation_measurer.h"
+#include "defs.h"
 #include "ebu_r128_proc.h"
-#include "video_encoder.h"
 #include "httpd.h"
+#include "input_state.h"
 #include "pbo_frame_allocator.h"
 #include "ref_counted_frame.h"
 #include "ref_counted_gl_sync.h"
@@ -35,12 +41,11 @@
 #include "theme.h"
 #include "timebase.h"
 #include "stereocompressor.h"
-#include "filter.h"
-#include "input_state.h"
-#include "correlation_measurer.h"
+#include "video_encoder.h"
 
-class QuickSyncEncoder;
+class ALSAOutput;
 class QSurface;
+class QuickSyncEncoder;
 namespace movit {
 class Effect;
 class EffectChain;

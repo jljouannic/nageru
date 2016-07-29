@@ -15,6 +15,7 @@
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <sys/resource.h>
 #include <sys/time.h>
 #include <time.h>
 #include <algorithm>
@@ -28,9 +29,6 @@
 #include <thread>
 #include <utility>
 #include <vector>
-#include <arpa/inet.h>
-#include <sys/time.h>
-#include <sys/resource.h>
 
 #include "bmusb/bmusb.h"
 #include "bmusb/fake_capture.h"
@@ -39,10 +37,10 @@
 #include "defs.h"
 #include "disk_space_estimator.h"
 #include "flags.h"
-#include "video_encoder.h"
 #include "pbo_frame_allocator.h"
 #include "ref_counted_gl_sync.h"
 #include "timebase.h"
+#include "video_encoder.h"
 
 class QOpenGLContext;
 
