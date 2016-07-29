@@ -10,6 +10,7 @@
 struct Flags {
 	int num_cards = 2;
 	std::string va_display;
+	bool fake_cards_audio = false;
 	bool uncompressed_video_to_http = false;
 	bool x264_video_to_http = false;
 	std::vector<std::string> theme_dirs { ".", "/usr/local/share/nageru" };

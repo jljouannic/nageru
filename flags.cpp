@@ -13,7 +13,8 @@ Flags global_flags;
 
 // Long options that have no corresponding short option.
 enum LongOption {
-	OPTION_HTTP_UNCOMPRESSED_VIDEO = 1000,
+	OPTION_FAKE_CARDS_AUDIO = 1000,
+	OPTION_HTTP_UNCOMPRESSED_VIDEO,
 	OPTION_HTTP_X264_VIDEO,
 	OPTION_X264_PRESET,
 	OPTION_X264_TUNE,
@@ -54,6 +55,7 @@ void usage()
 	fprintf(stderr, "  -v, --va-display=SPEC           VA-API device for H.264 encoding\n");
 	fprintf(stderr, "                                    ($DISPLAY spec or /dev/dri/render* path)\n");
 	fprintf(stderr, "  -m, --map-signal=SIGNAL,CARD    set a default card mapping (can be given multiple times)\n");
+	fprintf(stderr, "      --fake-cards-audio          make fake (disconnected) cards output a simple tone\n");
 	fprintf(stderr, "      --http-uncompressed-video   send uncompressed NV12 video to HTTP clients\n");
 	fprintf(stderr, "      --http-x264-video           send x264-compressed video to HTTP clients\n");
 	fprintf(stderr, "      --x264-preset               x264 quality preset (default " X264_DEFAULT_PRESET ")\n");
@@ -99,6 +101,7 @@ void parse_flags(int argc, char * const argv[])
 		{ "theme-dir", required_argument, 0, 'I' },
 		{ "map-signal", required_argument, 0, 'm' },
 		{ "va-display", required_argument, 0, 'v' },
+		{ "fake-cards-audio", no_argument, 0, OPTION_FAKE_CARDS_AUDIO },
 		{ "http-uncompressed-video", no_argument, 0, OPTION_HTTP_UNCOMPRESSED_VIDEO },
 		{ "http-x264-video", no_argument, 0, OPTION_HTTP_X264_VIDEO },
 		{ "x264-preset", required_argument, 0, OPTION_X264_PRESET },
@@ -166,6 +169,9 @@ void parse_flags(int argc, char * const argv[])
 		}
 		case 'v':
 			global_flags.va_display = optarg;
+			break;
+		case OPTION_FAKE_CARDS_AUDIO:
+			global_flags.fake_cards_audio = true;
 			break;
 		case OPTION_HTTP_UNCOMPRESSED_VIDEO:
 			global_flags.uncompressed_video_to_http = true;

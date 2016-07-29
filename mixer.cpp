@@ -201,7 +201,8 @@ Mixer::Mixer(const QSurfaceFormat &format, unsigned num_cards)
 
 	unsigned num_fake_cards = 0;
 	for ( ; card_index < num_cards; ++card_index, ++num_fake_cards) {
-		configure_card(card_index, new FakeCapture(WIDTH, HEIGHT, FAKE_FPS, OUTPUT_FREQUENCY, card_index), /*is_fake_capture=*/true);
+		FakeCapture *capture = new FakeCapture(WIDTH, HEIGHT, FAKE_FPS, OUTPUT_FREQUENCY, card_index, global_flags.fake_cards_audio);
+		configure_card(card_index, capture, /*is_fake_capture=*/true);
 	}
 
 	if (num_fake_cards > 0) {
@@ -817,7 +818,8 @@ void Mixer::handle_hotplugged_cards()
 		CaptureCard *card = &cards[card_index];
 		if (card->capture->get_disconnected()) {
 			fprintf(stderr, "Card %u went away, replacing with a fake card.\n", card_index);
-			configure_card(card_index, new FakeCapture(WIDTH, HEIGHT, FAKE_FPS, OUTPUT_FREQUENCY, card_index), /*is_fake_capture=*/true);
+			FakeCapture *capture = new FakeCapture(WIDTH, HEIGHT, FAKE_FPS, OUTPUT_FREQUENCY, card_index, global_flags.fake_cards_audio);
+			configure_card(card_index, capture, /*is_fake_capture=*/true);
 			card->queue_length_policy.reset(card_index);
 			card->capture->start_bm_capture();
 		}
