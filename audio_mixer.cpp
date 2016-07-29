@@ -231,7 +231,7 @@ vector<float> AudioMixer::get_output(double pts, unsigned num_samples, Resamplin
 	double target_loudness_factor, alpha;
 	double loudness_lu = loudness_lufs - ref_level_lufs;
 	double current_makeup_lu = to_db(final_makeup_gain);
-	target_loudness_factor = from_db(-loudness_lu);
+	target_loudness_factor = final_makeup_gain * from_db(-loudness_lu);
 
 	// If we're outside +/- 5 LU uncorrected, we don't count it as
 	// a normal signal (probably silence) and don't change the
