@@ -62,7 +62,7 @@ void convert_fixed24_to_fp32(float *dst, size_t out_channels, const uint8_t *src
 			uint32_t s2 = *src++;
 			uint32_t s3 = *src++;
 			uint32_t s = s1 | (s1 << 8) | (s2 << 16) | (s3 << 24);
-			dst[i * out_channels + j] = int(s) * (1.0f / 4294967296.0f);
+			dst[i * out_channels + j] = int(s) * (1.0f / 2147483648.0f);
 		}
 		src += 3 * (in_channels - out_channels);
 	}
@@ -75,7 +75,7 @@ void convert_fixed32_to_fp32(float *dst, size_t out_channels, const uint8_t *src
 		for (size_t j = 0; j < out_channels; ++j) {
 			// Note: Assumes little-endian.
 			int32_t s = *(int32_t *)src;
-			dst[i * out_channels + j] = s * (1.0f / 4294967296.0f);
+			dst[i * out_channels + j] = s * (1.0f / 2147483648.0f);
 			src += 4;
 		}
 		src += 4 * (in_channels - out_channels);
