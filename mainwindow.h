@@ -13,6 +13,7 @@ class GLWidget;
 class QResizeEvent;
 
 namespace Ui {
+class AudioMiniView;
 class Display;
 class MainWindow;
 }  // namespace Ui
@@ -49,6 +50,7 @@ public slots:
 	void cutoff_knob_changed(int value);
 	void limiter_threshold_knob_changed(int value);
 	void compressor_threshold_knob_changed(int value);
+	void mini_fader_changed(Ui::AudioMiniView *ui, int channel, int value);
 	void reset_meters_button_clicked();
 	void relayout();
 

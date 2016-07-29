@@ -53,7 +53,7 @@ int main(int argc, char *argv[])
 	global_share_widget = new QGLWidget();
 
 	MainWindow mainWindow;
-	mainWindow.resize(QSize(1500, 810));
+	mainWindow.resize(QSize(1500, 850));
 	mainWindow.show();
 
 	app.installEventFilter(&mainWindow);  // For white balance color picking.

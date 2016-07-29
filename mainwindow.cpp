@@ -25,6 +25,7 @@
 #include "lrameter.h"
 #include "mixer.h"
 #include "post_to_main_thread.h"
+#include "ui_audio_miniview.h"
 #include "ui_display.h"
 #include "ui_mainwindow.h"
 #include "vumeter.h"
@@ -172,6 +173,21 @@ void MainWindow::mixer_created(Mixer *mixer)
 		// Hook up the white balance button (irrelevant if invisible).
 		ui_display->wb_button->setVisible(mixer->get_supports_set_wb(output));
 		connect(ui_display->wb_button, &QPushButton::clicked, bind(&MainWindow::wb_button_clicked, this, i));
+	}
+
+	// Audio miniview: Make some channels!
+	for (unsigned i = 0; i < num_previews; ++i) {
+		Mixer::Output output = Mixer::Output(Mixer::OUTPUT_INPUT0 + i);
+
+		QWidget *channel = new QWidget(this);
+		Ui::AudioMiniView *ui_audio_miniview = new Ui::AudioMiniView;
+		ui_audio_miniview->setupUi(channel);
+		ui_audio_miniview->channel_desc_label->setFullText(
+			QString::fromStdString(mixer->get_channel_name(output)));
+		ui->faders->addWidget(channel);
+
+		connect(ui_audio_miniview->fader, &QAbstractSlider::valueChanged,
+			bind(&MainWindow::mini_fader_changed, this, ui_audio_miniview, i, _1));
 	}
 
 	// TODO: Fetch all of the values these for completeness,
@@ -342,6 +358,15 @@ void MainWindow::compressor_threshold_knob_changed(int value)
 		QString::fromStdString(format_db(threshold_dbfs, DB_WITH_SIGN)));
 }
 
+void MainWindow::mini_fader_changed(Ui::AudioMiniView *ui, int channel, int value)
+{
+	float volume_dbfs = value * 0.1f;
+
+	char buf[256];
+	snprintf(buf, sizeof(buf), "%+.1f dB", volume_dbfs);
+	ui->fader_label->setText(buf);
+}
+
 void MainWindow::reset_meters_button_clicked()
 {
 	global_mixer->reset_meters();
@@ -407,8 +432,8 @@ void MainWindow::relayout()
 	}
 	remaining_height -= me_height + ui->vertical_layout->spacing();
 
-	double audiostrip_height = ui->audiostrip->geometry().height();
-	remaining_height -= audiostrip_height + ui->vertical_layout->spacing();
+	// Space between the M/E displays and the audio strip.
+	remaining_height -= ui->vertical_layout->spacing();
 
 	// The previews will be constrained by the remaining height, and the width.
 	double preview_label_height = previews[0]->title_bar->geometry().height() +
@@ -418,9 +443,8 @@ void MainWindow::relayout()
 	remaining_height -= preview_height + preview_label_height + ui->vertical_layout->spacing();
 
 	ui->vertical_layout->setStretch(0, lrintf(me_height));
-	ui->vertical_layout->setStretch(1, 0);  // Don't stretch the audiostrip.
-	ui->vertical_layout->setStretch(2, max<int>(1, remaining_height));  // Spacer.
-	ui->vertical_layout->setStretch(3, lrintf(preview_height + preview_label_height));
+	ui->vertical_layout->setStretch(1, lrintf(remaining_height));  // Audio strip.
+	ui->vertical_layout->setStretch(2, lrintf(preview_height + preview_label_height));
 
 	// Set the widths for the previews.
 	double preview_width = preview_height * 16.0 / 9.0;

@@ -14,7 +14,7 @@ LDLIBS=$(shell pkg-config --libs $(PKG_MODULES)) -pthread -lva -lva-drm -lva-x11
 
 # Qt objects
 OBJS=glwidget.o main.o mainwindow.o vumeter.o lrameter.o vu_common.o correlation_meter.o aboutdialog.o
-OBJS += glwidget.moc.o mainwindow.moc.o vumeter.moc.o lrameter.moc.o correlation_meter.moc.o aboutdialog.moc.o
+OBJS += glwidget.moc.o mainwindow.moc.o vumeter.moc.o lrameter.moc.o correlation_meter.moc.o aboutdialog.moc.o ellipsis_label.moc.o
 
 # Mixer objects
 OBJS += mixer.o pbo_frame_allocator.o context.o ref_counted_frame.o theme.o resampling_queue.o httpd.o ebu_r128_proc.o flags.o image_input.o stereocompressor.o filter.o alsa_output.o correlation_measurer.o disk_space_estimator.o
@@ -46,7 +46,7 @@ all: nageru
 nageru: $(OBJS)
 	$(CXX) -o $@ $^ $(LDFLAGS) $(LDLIBS)
 
-mainwindow.o: mainwindow.cpp ui_mainwindow.h ui_display.h
+mainwindow.o: mainwindow.cpp ui_mainwindow.h ui_display.h ui_audio_miniview.h
 
 aboutdialog.o: aboutdialog.cpp ui_aboutdialog.h
 
@@ -54,7 +54,7 @@ DEPS=$(OBJS:.o=.d)
 -include $(DEPS)
 
 clean:
-	$(RM) $(OBJS) $(DEPS) nageru ui_aboutdialog.h ui_mainwindow.h ui_display.h ui_about.h aboutdialog.moc.cpp correlation_meter.moc.cpp lrameter.moc.cpp vumeter.moc.cpp glwidget.moc.cpp mainwindow.moc.cpp window.moc.cpp chain-*.frag *.dot
+	$(RM) $(OBJS) $(DEPS) nageru ui_aboutdialog.h ui_mainwindow.h ui_display.h ui_about.h ui_audio_miniview.h aboutdialog.moc.cpp correlation_meter.moc.cpp lrameter.moc.cpp vumeter.moc.cpp glwidget.moc.cpp mainwindow.moc.cpp window.moc.cpp chain-*.frag *.dot
 
 PREFIX=/usr/local
 install:
