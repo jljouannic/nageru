@@ -360,11 +360,13 @@ void MainWindow::compressor_threshold_knob_changed(int value)
 
 void MainWindow::mini_fader_changed(Ui::AudioMiniView *ui, int channel, int value)
 {
-	float volume_dbfs = value * 0.1f;
+	float volume_db = value * 0.1f;
 
 	char buf[256];
-	snprintf(buf, sizeof(buf), "%+.1f dB", volume_dbfs);
+	snprintf(buf, sizeof(buf), "%+.1f dB", volume_db);
 	ui->fader_label->setText(buf);
+
+	global_mixer->get_audio_mixer()->set_fader_volume(channel, volume_db);
 }
 
 void MainWindow::reset_meters_button_clicked()

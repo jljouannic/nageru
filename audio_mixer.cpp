@@ -134,13 +134,15 @@ vector<float> AudioMixer::get_output(double pts, unsigned num_samples, Resamplin
 				num_samples,
 				rate_adjustment_policy);
 		}
+
+		float volume = from_db(cards[card_index].fader_volume_db);
 		if (card_index == 0) {
 			for (unsigned i = 0; i < num_samples * 2; ++i) {
-				samples_out[i] = samples_card[i];
+				samples_out[i] = samples_card[i] * volume;
 			}
 		} else {
 			for (unsigned i = 0; i < num_samples * 2; ++i) {
-				samples_out[i] += samples_card[i];
+				samples_out[i] += samples_card[i] * volume;
 			}
 		}
 	}

@@ -42,6 +42,8 @@ public:
 	// See comments inside get_output().
 	void set_current_loudness(double level_lufs) { loudness_lufs = level_lufs; }
 
+	void set_fader_volume(unsigned card_index, float level_db) { cards[card_index].fader_volume_db = level_db; }
+
 	void set_locut_cutoff(float cutoff_hz)
 	{
 		locut_cutoff_hz = cutoff_hz;
@@ -154,6 +156,7 @@ private:
 		std::mutex audio_mutex;
 		std::unique_ptr<ResamplingQueue> resampling_queue;  // Under audio_mutex.
 		int64_t next_local_pts = 0;  // Beginning of next frame, in TIMEBASE units. Under audio_mutex.
+		std::atomic<float> fader_volume_db{0.0f};
 	};
 	CaptureCard cards[MAX_CARDS];
 
