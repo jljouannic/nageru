@@ -13,8 +13,7 @@ Flags global_flags;
 
 // Long options that have no corresponding short option.
 enum LongOption {
-	OPTION_VA_DISPLAY = 1000,
-	OPTION_HTTP_UNCOMPRESSED_VIDEO,
+	OPTION_HTTP_UNCOMPRESSED_VIDEO = 1000,
 	OPTION_HTTP_X264_VIDEO,
 	OPTION_X264_PRESET,
 	OPTION_X264_TUNE,
@@ -99,7 +98,7 @@ void parse_flags(int argc, char * const argv[])
 		{ "theme", required_argument, 0, 't' },
 		{ "theme-dir", required_argument, 0, 'I' },
 		{ "map-signal", required_argument, 0, 'm' },
-		{ "va-display", required_argument, 0, OPTION_VA_DISPLAY },
+		{ "va-display", required_argument, 0, 'v' },
 		{ "http-uncompressed-video", no_argument, 0, OPTION_HTTP_UNCOMPRESSED_VIDEO },
 		{ "http-x264-video", no_argument, 0, OPTION_HTTP_X264_VIDEO },
 		{ "x264-preset", required_argument, 0, OPTION_X264_PRESET },
@@ -165,7 +164,7 @@ void parse_flags(int argc, char * const argv[])
 			global_flags.default_stream_mapping[signal_num] = card_num;
 			break;
 		}
-		case OPTION_VA_DISPLAY:
+		case 'v':
 			global_flags.va_display = optarg;
 			break;
 		case OPTION_HTTP_UNCOMPRESSED_VIDEO:
