@@ -57,34 +57,6 @@ bool uses_mlock = false;
 
 namespace {
 
-void convert_fixed24_to_fp32(float *dst, size_t out_channels, const uint8_t *src, size_t in_channels, size_t num_samples)
-{
-	assert(in_channels >= out_channels);
-	for (size_t i = 0; i < num_samples; ++i) {
-		for (size_t j = 0; j < out_channels; ++j) {
-			uint32_t s1 = *src++;
-			uint32_t s2 = *src++;
-			uint32_t s3 = *src++;
-			uint32_t s = s1 | (s1 << 8) | (s2 << 16) | (s3 << 24);
-			dst[i * out_channels + j] = int(s) * (1.0f / 2147483648.0f);
-		}
-		src += 3 * (in_channels - out_channels);
-	}
-}
-
-void convert_fixed32_to_fp32(float *dst, size_t out_channels, const uint8_t *src, size_t in_channels, size_t num_samples)
-{
-	assert(in_channels >= out_channels);
-	for (size_t i = 0; i < num_samples; ++i) {
-		for (size_t j = 0; j < out_channels; ++j) {
-			int32_t s = le32toh(*(int32_t *)src);
-			dst[i * out_channels + j] = s * (1.0f / 2147483648.0f);
-			src += 4;
-		}
-		src += 4 * (in_channels - out_channels);
-	}
-}
-
 void insert_new_frame(RefCountedFrame frame, unsigned field_num, bool interlaced, unsigned card_index, InputState *input_state)
 {
 	if (interlaced) {
@@ -134,10 +106,8 @@ Mixer::Mixer(const QSurfaceFormat &format, unsigned num_cards)
 	  num_cards(num_cards),
 	  mixer_surface(create_surface(format)),
 	  h264_encoder_surface(create_surface(format)),
-	  correlation(OUTPUT_FREQUENCY),
-	  level_compressor(OUTPUT_FREQUENCY),
-	  limiter(OUTPUT_FREQUENCY),
-	  compressor(OUTPUT_FREQUENCY)
+	  audio_mixer(num_cards),
+	  correlation(OUTPUT_FREQUENCY)
 {
 	CHECK(init_movit(MOVIT_SHADER_DIR, MOVIT_DEBUG_OFF));
 	check_error();
@@ -266,15 +236,6 @@ Mixer::Mixer(const QSurfaceFormat &format, unsigned num_cards)
 	r128.init(2, OUTPUT_FREQUENCY);
 	r128.integr_start();
 
-	locut.init(FILTER_HPF, 2);
-
-	set_locut_enabled(global_flags.locut_enabled);
-	set_gain_staging_db(global_flags.initial_gain_staging_db);
-	set_gain_staging_auto(global_flags.gain_staging_auto);
-	set_compressor_enabled(global_flags.compressor_enabled);
-	set_limiter_enabled(global_flags.limiter_enabled);
-	set_final_makeup_gain_auto(global_flags.final_makeup_gain_auto);
-
 	// hlen=16 is pretty low quality, but we use quite a bit of CPU otherwise,
 	// and there's a limit to how important the peak meter is.
 	peak_resampler.setup(OUTPUT_FREQUENCY, OUTPUT_FREQUENCY * 4, /*num_channels=*/2, /*hlen=*/16, /*frel=*/1.0);
@@ -321,14 +282,10 @@ void Mixer::configure_card(unsigned card_index, CaptureInterface *capture, bool 
 	if (card->surface == nullptr) {
 		card->surface = create_surface_with_same_format(mixer_surface);
 	}
-	{
-		unique_lock<mutex> lock(cards[card_index].audio_mutex);
-		card->resampling_queue.reset(new ResamplingQueue(card_index, OUTPUT_FREQUENCY, OUTPUT_FREQUENCY, 2));
-	}
+	audio_mixer.reset_card(card_index);
 	while (!card->new_frames.empty()) card->new_frames.pop();
 	card->fractional_samples = 0;
 	card->last_timecode = -1;
-	card->next_local_pts = 0;
 	card->capture->configure_card();
 }
 
@@ -412,70 +369,36 @@ void Mixer::bm_frame(unsigned card_index, uint16_t timecode,
 		return;
 	}
 
-	int64_t local_pts = card->next_local_pts;
 	int dropped_frames = 0;
 	if (card->last_timecode != -1) {
 		dropped_frames = unwrap_timecode(timecode, card->last_timecode) - card->last_timecode - 1;
 	}
 
-	// Convert the audio to stereo fp32 and add it.
-	vector<float> audio;
-	audio.resize(num_samples * 2);
-	switch (audio_format.bits_per_sample) {
-	case 0:
-		assert(num_samples == 0);
-		break;
-	case 24:
-		convert_fixed24_to_fp32(&audio[0], 2, audio_frame.data + audio_offset, audio_format.num_channels, num_samples);
-		break;
-	case 32:
-		convert_fixed32_to_fp32(&audio[0], 2, audio_frame.data + audio_offset, audio_format.num_channels, num_samples);
-		break;
-	default:
-		fprintf(stderr, "Cannot handle audio with %u bits per sample\n", audio_format.bits_per_sample);
-		assert(false);
+	// Number of samples per frame if we need to insert silence.
+	// (Could be nonintegral, but resampling will save us then.)
+	const int silence_samples = OUTPUT_FREQUENCY * video_format.frame_rate_den / video_format.frame_rate_nom;
+
+	if (dropped_frames > MAX_FPS * 2) {
+		fprintf(stderr, "Card %d lost more than two seconds (or time code jumping around; from 0x%04x to 0x%04x), resetting resampler\n",
+			card_index, card->last_timecode, timecode);
+		audio_mixer.reset_card(card_index);
+		dropped_frames = 0;
+	} else if (dropped_frames > 0) {
+		// Insert silence as needed.
+		fprintf(stderr, "Card %d dropped %d frame(s) (before timecode 0x%04x), inserting silence.\n",
+			card_index, dropped_frames, timecode);
+
+		audio_mixer.add_silence(card_index, silence_samples, dropped_frames, frame_length);
 	}
 
-	// Add the audio.
-	{
-		unique_lock<mutex> lock(card->audio_mutex);
-
-		// Number of samples per frame if we need to insert silence.
-		// (Could be nonintegral, but resampling will save us then.)
-		int silence_samples = OUTPUT_FREQUENCY * video_format.frame_rate_den / video_format.frame_rate_nom;
-
-		if (dropped_frames > MAX_FPS * 2) {
-			fprintf(stderr, "Card %d lost more than two seconds (or time code jumping around; from 0x%04x to 0x%04x), resetting resampler\n",
-				card_index, card->last_timecode, timecode);
-			card->resampling_queue.reset(new ResamplingQueue(card_index, OUTPUT_FREQUENCY, OUTPUT_FREQUENCY, 2));
-			dropped_frames = 0;
-		} else if (dropped_frames > 0) {
-			// Insert silence as needed.
-			fprintf(stderr, "Card %d dropped %d frame(s) (before timecode 0x%04x), inserting silence.\n",
-				card_index, dropped_frames, timecode);
-			vector<float> silence(silence_samples * 2, 0.0f);
-			for (int i = 0; i < dropped_frames; ++i) {
-				card->resampling_queue->add_input_samples(local_pts / double(TIMEBASE), silence.data(), silence_samples);
-				// Note that if the format changed in the meantime, we have
-				// no way of detecting that; we just have to assume the frame length
-				// is always the same.
-				local_pts += frame_length;
-			}
-		}
-		if (num_samples == 0) {
-			audio.resize(silence_samples * 2);
-			num_samples = silence_samples;
-		}
-		card->resampling_queue->add_input_samples(local_pts / double(TIMEBASE), audio.data(), num_samples);
-		card->next_local_pts = local_pts + frame_length;
-	}
-
-	card->last_timecode = timecode;
+	audio_mixer.add_audio(card_index, audio_frame.data + audio_offset, num_samples, audio_format, frame_length);
 
 	// Done with the audio, so release it.
 	if (audio_frame.owner) {
 		audio_frame.owner->release_frame(audio_frame);
 	}
+
+	card->last_timecode = timecode;
 
 	size_t expected_length = video_format.width * (video_format.height + video_format.extra_lines_top + video_format.extra_lines_bottom) * 2;
 	if (video_frame.len - video_offset == 0 ||
@@ -949,7 +872,7 @@ void Mixer::send_audio_level_callback()
 		return;
 	}
 
-	unique_lock<mutex> lock(compressor_mutex);
+	unique_lock<mutex> lock(audio_measure_mutex);
 	double loudness_s = r128.loudness_S();
 	double loudness_i = r128.integrated();
 	double loudness_range_low = r128.range_min();
@@ -957,7 +880,8 @@ void Mixer::send_audio_level_callback()
 
 	audio_level_callback(loudness_s, 20.0 * log10(peak),
 		loudness_i, loudness_range_low, loudness_range_high,
-		gain_staging_db, 20.0 * log10(final_makeup_gain),
+		audio_mixer.get_gain_staging_db(),
+		audio_mixer.get_final_makeup_gain_db(),
 		correlation.get_correlation());
 }
 
@@ -976,149 +900,15 @@ void Mixer::audio_thread_func()
 			audio_task_queue.pop();
 		}
 
-		process_audio_one_frame(task.pts_int, task.num_samples, task.adjust_rate);
+		ResamplingQueue::RateAdjustmentPolicy rate_adjustment_policy =
+			task.adjust_rate ? ResamplingQueue::ADJUST_RATE : ResamplingQueue::DO_NOT_ADJUST_RATE;
+		process_audio_one_frame(task.pts_int, task.num_samples, rate_adjustment_policy);
 	}
 }
 
-void Mixer::process_audio_one_frame(int64_t frame_pts_int, int num_samples, bool adjust_rate)
+void Mixer::process_audio_one_frame(int64_t frame_pts_int, int num_samples, ResamplingQueue::RateAdjustmentPolicy rate_adjustment_policy)
 {
-	vector<float> samples_card;
-	vector<float> samples_out;
-	samples_out.resize(num_samples * 2);
-
-	// TODO: Allow more flexible input mapping.
-	unsigned selected_audio_card = theme->map_signal(audio_source_channel);
-	assert(selected_audio_card < num_cards);
-
-	for (unsigned card_index = 0; card_index < num_cards; ++card_index) {
-		samples_card.resize(num_samples * 2);
-		{
-			unique_lock<mutex> lock(cards[card_index].audio_mutex);
-			ResamplingQueue::RateAdjustmentPolicy rate_adjustment_policy =
-				adjust_rate ? ResamplingQueue::ADJUST_RATE : ResamplingQueue::DO_NOT_ADJUST_RATE;
-			cards[card_index].resampling_queue->get_output_samples(
-				double(frame_pts_int) / TIMEBASE,
-				&samples_card[0],
-				num_samples,
-				rate_adjustment_policy);
-		}
-		if (card_index == 0) {
-			for (int i = 0; i < num_samples * 2; ++i) {
-				samples_out[i] = samples_card[i];
-			}
-		} else {
-			for (int i = 0; i < num_samples * 2; ++i) {
-				samples_out[i] += samples_card[i];
-			}
-		}
-	}
-
-	// Cut away everything under 120 Hz (or whatever the cutoff is);
-	// we don't need it for voice, and it will reduce headroom
-	// and confuse the compressor. (In particular, any hums at 50 or 60 Hz
-	// should be dampened.)
-	if (locut_enabled) {
-		locut.render(samples_out.data(), samples_out.size() / 2, locut_cutoff_hz * 2.0 * M_PI / OUTPUT_FREQUENCY, 0.5f);
-	}
-
-	// Apply a level compressor to get the general level right.
-	// Basically, if it's over about -40 dBFS, we squeeze it down to that level
-	// (or more precisely, near it, since we don't use infinite ratio),
-	// then apply a makeup gain to get it to -14 dBFS. -14 dBFS is, of course,
-	// entirely arbitrary, but from practical tests with speech, it seems to
-	// put ut around -23 LUFS, so it's a reasonable starting point for later use.
-	{
-		unique_lock<mutex> lock(compressor_mutex);
-		if (level_compressor_enabled) {
-			float threshold = 0.01f;   // -40 dBFS.
-			float ratio = 20.0f;
-			float attack_time = 0.5f;
-			float release_time = 20.0f;
-			float makeup_gain = pow(10.0f, (ref_level_dbfs - (-40.0f)) / 20.0f);  // +26 dB.
-			level_compressor.process(samples_out.data(), samples_out.size() / 2, threshold, ratio, attack_time, release_time, makeup_gain);
-			gain_staging_db = 20.0 * log10(level_compressor.get_attenuation() * makeup_gain);
-		} else {
-			// Just apply the gain we already had.
-			float g = pow(10.0f, gain_staging_db / 20.0f);
-			for (size_t i = 0; i < samples_out.size(); ++i) {
-				samples_out[i] *= g;
-			}
-		}
-	}
-
-#if 0
-	printf("level=%f (%+5.2f dBFS) attenuation=%f (%+5.2f dB) end_result=%+5.2f dB\n",
-		level_compressor.get_level(), 20.0 * log10(level_compressor.get_level()),
-		level_compressor.get_attenuation(), 20.0 * log10(level_compressor.get_attenuation()),
-		20.0 * log10(level_compressor.get_level() * level_compressor.get_attenuation() * makeup_gain));
-#endif
-
-//	float limiter_att, compressor_att;
-
-	// The real compressor.
-	if (compressor_enabled) {
-		float threshold = pow(10.0f, compressor_threshold_dbfs / 20.0f);
-		float ratio = 20.0f;
-		float attack_time = 0.005f;
-		float release_time = 0.040f;
-		float makeup_gain = 2.0f;  // +6 dB.
-		compressor.process(samples_out.data(), samples_out.size() / 2, threshold, ratio, attack_time, release_time, makeup_gain);
-//		compressor_att = compressor.get_attenuation();
-	}
-
-	// Finally a limiter at -4 dB (so, -10 dBFS) to take out the worst peaks only.
-	// Note that since ratio is not infinite, we could go slightly higher than this.
-	if (limiter_enabled) {
-		float threshold = pow(10.0f, limiter_threshold_dbfs / 20.0f);
-		float ratio = 30.0f;
-		float attack_time = 0.0f;  // Instant.
-		float release_time = 0.020f;
-		float makeup_gain = 1.0f;  // 0 dB.
-		limiter.process(samples_out.data(), samples_out.size() / 2, threshold, ratio, attack_time, release_time, makeup_gain);
-//		limiter_att = limiter.get_attenuation();
-	}
-
-//	printf("limiter=%+5.1f  compressor=%+5.1f\n", 20.0*log10(limiter_att), 20.0*log10(compressor_att));
-
-	// At this point, we are most likely close to +0 LU, but all of our
-	// measurements have been on raw sample values, not R128 values.
-	// So we have a final makeup gain to get us to +0 LU; the gain
-	// adjustments required should be relatively small, and also, the
-	// offset shouldn't change much (only if the type of audio changes
-	// significantly). Thus, we shoot for updating this value basically
-	// “whenever we process buffers”, since the R128 calculation isn't exactly
-	// something we get out per-sample.
-	//
-	// Note that there's a feedback loop here, so we choose a very slow filter
-	// (half-time of 100 seconds).
-	double target_loudness_factor, alpha;
-	{
-		unique_lock<mutex> lock(compressor_mutex);
-		double loudness_lu = r128.loudness_M() - ref_level_lufs;
-		double current_makeup_lu = 20.0f * log10(final_makeup_gain);
-		target_loudness_factor = pow(10.0f, -loudness_lu / 20.0f);
-
-		// If we're outside +/- 5 LU uncorrected, we don't count it as
-		// a normal signal (probably silence) and don't change the
-		// correction factor; just apply what we already have.
-		if (fabs(loudness_lu - current_makeup_lu) >= 5.0 || !final_makeup_gain_auto) {
-			alpha = 0.0;
-		} else {
-			// Formula adapted from
-			// https://en.wikipedia.org/wiki/Low-pass_filter#Simple_infinite_impulse_response_filter.
-			const double half_time_s = 100.0;
-			const double fc_mul_2pi_delta_t = 1.0 / (half_time_s * OUTPUT_FREQUENCY);
-			alpha = fc_mul_2pi_delta_t / (fc_mul_2pi_delta_t + 1.0);
-		}
-
-		double m = final_makeup_gain;
-		for (size_t i = 0; i < samples_out.size(); i += 2) {
-			samples_out[i + 0] *= m;
-			samples_out[i + 1] *= m;
-			m += (target_loudness_factor - m) * alpha;
-		}
-		final_makeup_gain = m;
-	}
+	vector<float> samples_out = audio_mixer.get_output(double(frame_pts_int) / TIMEBASE, num_samples, rate_adjustment_policy);
 
 	// Upsample 4x to find interpolated peak.
 	peak_resampler.inp_data = samples_out.data();
@@ -1126,13 +916,17 @@ void Mixer::process_audio_one_frame(int64_t frame_pts_int, int num_samples, bool
 
 	vector<float> interpolated_samples_out;
 	interpolated_samples_out.resize(samples_out.size());
-	while (peak_resampler.inp_count > 0) {  // About four iterations.
-		peak_resampler.out_data = &interpolated_samples_out[0];
-		peak_resampler.out_count = interpolated_samples_out.size() / 2;
-		peak_resampler.process();
-		size_t out_stereo_samples = interpolated_samples_out.size() / 2 - peak_resampler.out_count;
-		peak = max<float>(peak, find_peak(interpolated_samples_out.data(), out_stereo_samples * 2));
-		peak_resampler.out_data = nullptr;
+	{
+		unique_lock<mutex> lock(audio_measure_mutex);
+
+		while (peak_resampler.inp_count > 0) {  // About four iterations.
+			peak_resampler.out_data = &interpolated_samples_out[0];
+			peak_resampler.out_count = interpolated_samples_out.size() / 2;
+			peak_resampler.process();
+			size_t out_stereo_samples = interpolated_samples_out.size() / 2 - peak_resampler.out_count;
+			peak = max<float>(peak, find_peak(interpolated_samples_out.data(), out_stereo_samples * 2));
+			peak_resampler.out_data = nullptr;
+		}
 	}
 
 	// Find R128 levels and L/R correlation.
@@ -1140,8 +934,9 @@ void Mixer::process_audio_one_frame(int64_t frame_pts_int, int num_samples, bool
 	deinterleave_samples(samples_out, &left, &right);
 	float *ptrs[] = { left.data(), right.data() };
 	{
-		unique_lock<mutex> lock(compressor_mutex);
+		unique_lock<mutex> lock(audio_measure_mutex);
 		r128.process(left.size(), ptrs);
+		audio_mixer.set_current_loudness(r128.loudness_M());
 		correlation.process_samples(samples_out);
 	}
 
@@ -1249,6 +1044,7 @@ void Mixer::channel_clicked(int preview_num)
 
 void Mixer::reset_meters()
 {
+	unique_lock<mutex> lock(audio_measure_mutex);
 	peak_resampler.reset();
 	peak = 0.0f;
 	r128.reset();
