@@ -59,6 +59,16 @@ AudioMixer::AudioMixer(unsigned num_cards)
 	set_compressor_enabled(global_flags.compressor_enabled);
 	set_limiter_enabled(global_flags.limiter_enabled);
 	set_final_makeup_gain_auto(global_flags.final_makeup_gain_auto);
+
+	// Generate a very simple, default input mapping.
+	InputMapping::Input input;
+	input.name = "Main";
+	input.input_source_type = InputSourceType::CAPTURE_CARD;
+	input.input_source_index = 0;
+	input.source_channel[0] = 0;
+	input.source_channel[1] = 1;
+
+	input_mapping.inputs.push_back(input);
 }
 
 void AudioMixer::reset_card(unsigned card_index)
@@ -258,4 +268,34 @@ vector<float> AudioMixer::get_output(double pts, unsigned num_samples, Resamplin
 	}
 
 	return samples_out;
+}
+
+vector<string> AudioMixer::get_names() const
+{
+	vector<string> names;
+	for (unsigned card_index = 0; card_index < num_cards; ++card_index) {
+		const CaptureCard *card = &cards[card_index];
+		unique_lock<mutex> lock(card->audio_mutex);
+		names.push_back(card->name);
+	}
+	return names;
+}
+
+void AudioMixer::set_name(unsigned card_index, const string &name)
+{
+	CaptureCard *card = &cards[card_index];
+	unique_lock<mutex> lock(card->audio_mutex);
+	card->name = name;
+}
+
+void AudioMixer::set_input_mapping(const InputMapping &input_mapping)
+{
+	lock_guard<mutex> lock(mapping_mutex);
+	this->input_mapping = input_mapping;
+}
+
+InputMapping AudioMixer::get_input_mapping() const
+{
+	lock_guard<mutex> lock(mapping_mutex);
+	return input_mapping;
 }

@@ -29,6 +29,19 @@ namespace bmusb {
 struct AudioFormat;
 }  // namespace bmusb
 
+enum class InputSourceType { SILENCE, CAPTURE_CARD };
+
+struct InputMapping {
+	struct Input {
+		std::string name;
+		InputSourceType input_source_type;
+		unsigned input_source_index;
+		int source_channel[2] { -1, -1 };  // Left and right. -1 = none.
+	};
+
+	std::vector<Input> inputs;
+};
+
 class AudioMixer {
 public:
 	AudioMixer(unsigned num_cards);
@@ -43,6 +56,11 @@ public:
 	void set_current_loudness(double level_lufs) { loudness_lufs = level_lufs; }
 
 	void set_fader_volume(unsigned card_index, float level_db) { cards[card_index].fader_volume_db = level_db; }
+	std::vector<std::string> get_names() const;
+	void set_name(unsigned card_index, const std::string &name);
+
+	void set_input_mapping(const InputMapping &input_mapping);
+	InputMapping get_input_mapping() const;
 
 	void set_locut_cutoff(float cutoff_hz)
 	{
@@ -153,10 +171,13 @@ private:
 	unsigned num_cards;
 
 	struct CaptureCard {
-		std::mutex audio_mutex;
-		std::unique_ptr<ResamplingQueue> resampling_queue;  // Under audio_mutex.
-		int64_t next_local_pts = 0;  // Beginning of next frame, in TIMEBASE units. Under audio_mutex.
 		std::atomic<float> fader_volume_db{0.0f};
+
+		// Everything below audio_mutex is protected by it.
+		mutable std::mutex audio_mutex;
+		std::unique_ptr<ResamplingQueue> resampling_queue;
+		int64_t next_local_pts = 0;
+		std::string name;
 	};
 	CaptureCard cards[MAX_CARDS];
 
@@ -184,6 +205,9 @@ private:
 
 	double final_makeup_gain = 1.0;  // Under compressor_mutex. Read/write by the user. Note: Not in dB, we want the numeric precision so that we can change it slowly.
 	bool final_makeup_gain_auto = true;  // Under compressor_mutex.
+
+	mutable std::mutex mapping_mutex;
+	InputMapping input_mapping;  // Under mapping_mutex.
 };
 
 #endif  // !defined(_AUDIO_MIXER_H)

@@ -281,11 +281,12 @@ void Mixer::configure_card(unsigned card_index, CaptureInterface *capture, bool 
 	if (card->surface == nullptr) {
 		card->surface = create_surface_with_same_format(mixer_surface);
 	}
-	audio_mixer.reset_card(card_index);
 	while (!card->new_frames.empty()) card->new_frames.pop();
 	card->fractional_samples = 0;
 	card->last_timecode = -1;
 	card->capture->configure_card();
+	audio_mixer.reset_card(card_index);
+	audio_mixer.set_name(card_index, card->capture->get_description());
 }
 
 

@@ -20,6 +20,9 @@ public:
 	InputMappingDialog();
 
 private:
+	void fill_ui_from_mapping(const InputMapping &mapping, const std::vector<std::string> &card_names);
+	void fill_channel_ui_from_mapping(unsigned row, const InputMapping::Input &input);
+
 	Ui::InputMappingDialog *ui;
 };
 
