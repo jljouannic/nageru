@@ -19,6 +19,10 @@ InputMappingDialog::InputMappingDialog()
 void InputMappingDialog::fill_ui_from_mapping(const InputMapping &mapping, const vector<string> &card_names)
 {
 	ui->table->verticalHeader()->hide();
+	ui->table->horizontalHeader()->setSectionResizeMode(1, QHeaderView::ResizeToContents);
+	ui->table->horizontalHeader()->setSectionResizeMode(2, QHeaderView::ResizeToContents);
+	ui->table->horizontalHeader()->setSectionResizeMode(3, QHeaderView::ResizeToContents);
+	ui->table->horizontalHeader()->setSectionsClickable(false);
 
 	ui->table->setRowCount(mapping.inputs.size());
 	for (unsigned row = 0; row < mapping.inputs.size(); ++row) {
@@ -28,9 +32,9 @@ void InputMappingDialog::fill_ui_from_mapping(const InputMapping &mapping, const
 
 		// Card choices.
 		QComboBox *card_combo = new QComboBox;
-		card_combo->addItem(QString("(none)"));
+		card_combo->addItem(QString("(none)   "));
 		for (const string &name : card_names) {
-			card_combo->addItem(QString::fromStdString(name));
+			card_combo->addItem(QString::fromStdString(name + "   "));
 		}
 		switch (mapping.inputs[row].input_source_type) {
 		case InputSourceType::SILENCE:
@@ -57,7 +61,7 @@ void InputMappingDialog::fill_channel_ui_from_mapping(unsigned row, const InputM
 		if (input.input_source_type == InputSourceType::CAPTURE_CARD) {
 			for (unsigned source = 0; source < 8; ++source) {  // TODO: Ask the card about number of channels, and names.
 				char buf[256];
-				snprintf(buf, sizeof(buf), "Channel %u", source + 1);
+				snprintf(buf, sizeof(buf), "Channel %u   ", source + 1);
 				channel_combo->addItem(QString(buf));
 			}
 		}
