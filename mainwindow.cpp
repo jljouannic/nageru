@@ -22,6 +22,7 @@
 #include "disk_space_estimator.h"
 #include "flags.h"
 #include "glwidget.h"
+#include "input_mapping_dialog.h"
 #include "lrameter.h"
 #include "mixer.h"
 #include "post_to_main_thread.h"
@@ -109,6 +110,7 @@ MainWindow::MainWindow()
 	connect(ui->cut_action, &QAction::triggered, this, &MainWindow::cut_triggered);
 	connect(ui->exit_action, &QAction::triggered, this, &MainWindow::exit_triggered);
 	connect(ui->about_action, &QAction::triggered, this, &MainWindow::about_triggered);
+	connect(ui->input_mapping_action, &QAction::triggered, this, &MainWindow::input_mapping_triggered);
 
 	if (global_flags.x264_video_to_http) {
 		connect(ui->x264_bitrate_action, &QAction::triggered, this, &MainWindow::x264_bitrate_triggered);
@@ -276,6 +278,11 @@ void MainWindow::exit_triggered()
 void MainWindow::about_triggered()
 {
 	AboutDialog().exec();
+}
+
+void MainWindow::input_mapping_triggered()
+{
+	InputMappingDialog().exec();
 }
 
 void MainWindow::gain_staging_knob_changed(int value)

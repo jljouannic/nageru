@@ -13,8 +13,8 @@ endif
 LDLIBS=$(shell pkg-config --libs $(PKG_MODULES)) -pthread -lva -lva-drm -lva-x11 -lX11 -lavformat -lavcodec -lavutil -lswscale -lavresample -lzita-resampler -lasound -ldl
 
 # Qt objects
-OBJS=glwidget.o main.o mainwindow.o vumeter.o lrameter.o vu_common.o correlation_meter.o aboutdialog.o
-OBJS += glwidget.moc.o mainwindow.moc.o vumeter.moc.o lrameter.moc.o correlation_meter.moc.o aboutdialog.moc.o ellipsis_label.moc.o
+OBJS=glwidget.o main.o mainwindow.o vumeter.o lrameter.o vu_common.o correlation_meter.o aboutdialog.o input_mapping_dialog.o
+OBJS += glwidget.moc.o mainwindow.moc.o vumeter.moc.o lrameter.moc.o correlation_meter.moc.o aboutdialog.moc.o ellipsis_label.moc.o input_mapping_dialog.moc.o
 
 # Mixer objects
 OBJS += mixer.o audio_mixer.o pbo_frame_allocator.o context.o ref_counted_frame.o theme.o resampling_queue.o httpd.o ebu_r128_proc.o flags.o image_input.o stereocompressor.o filter.o alsa_output.o correlation_measurer.o disk_space_estimator.o
@@ -49,6 +49,8 @@ nageru: $(OBJS)
 mainwindow.o: mainwindow.cpp ui_mainwindow.h ui_display.h ui_audio_miniview.h
 
 aboutdialog.o: aboutdialog.cpp ui_aboutdialog.h
+
+input_mapping_dialog.o: input_mapping_dialog.cpp ui_input_mapping.h
 
 DEPS=$(OBJS:.o=.d)
 -include $(DEPS)

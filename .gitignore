@@ -4,5 +4,6 @@
 ui_aboutdialog.h
 ui_audio_miniview.h
 ui_display.h
+ui_input_mapping.h
 ui_mainwindow.h
 nageru

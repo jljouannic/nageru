@@ -925,7 +925,14 @@
     </property>
     <addaction name="about_action"/>
    </widget>
+   <widget class="QMenu" name="menu_Audio">
+    <property name="title">
+     <string>&amp;Audio</string>
+    </property>
+    <addaction name="input_mapping_action"/>
+   </widget>
    <addaction name="menuWhat"/>
+   <addaction name="menu_Audio"/>
    <addaction name="menu_Help"/>
   </widget>
   <action name="exit_action">
@@ -946,6 +953,11 @@
   <action name="x264_bitrate_action">
    <property name="text">
     <string>Change &amp;x264 bitrate…</string>
+   </property>
+  </action>
+  <action name="input_mapping_action">
+   <property name="text">
+    <string>&amp;Input mapping…</string>
    </property>
   </action>
  </widget>
