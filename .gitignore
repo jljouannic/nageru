@@ -1,6 +1,7 @@
 *.d
 *.o
 *.moc.cpp
+ui_aboutdialog.h
 ui_display.h
 ui_mainwindow.h
 nageru
