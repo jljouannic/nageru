@@ -41,7 +41,7 @@
    <item>
     <layout class="QHBoxLayout" name="horizontalLayout_2" stretch="0,0,1,0,0,1,0">
      <item>
-      <widget class="QPushButton" name="pushButton">
+      <widget class="QPushButton" name="add_button">
        <property name="sizePolicy">
         <sizepolicy hsizetype="Fixed" vsizetype="Fixed">
          <horstretch>0</horstretch>
@@ -64,7 +64,7 @@
       </widget>
      </item>
      <item>
-      <widget class="QPushButton" name="pushButton_2">
+      <widget class="QPushButton" name="remove_button">
        <property name="sizePolicy">
         <sizepolicy hsizetype="Fixed" vsizetype="Fixed">
          <horstretch>0</horstretch>
@@ -100,7 +100,7 @@
       </spacer>
      </item>
      <item>
-      <widget class="QPushButton" name="pushButton_3">
+      <widget class="QPushButton" name="up_button">
        <property name="maximumSize">
         <size>
          <width>30</width>
@@ -117,7 +117,7 @@
       </widget>
      </item>
      <item>
-      <widget class="QPushButton" name="pushButton_4">
+      <widget class="QPushButton" name="down_button">
        <property name="maximumSize">
         <size>
          <width>30</width>
@@ -147,7 +147,7 @@
       </spacer>
      </item>
      <item>
-      <widget class="QDialogButtonBox" name="buttonBox">
+      <widget class="QDialogButtonBox" name="ok_cancel_buttons">
        <property name="orientation">
         <enum>Qt::Horizontal</enum>
        </property>
@@ -161,38 +161,5 @@
   </layout>
  </widget>
  <resources/>
- <connections>
-  <connection>
-   <sender>buttonBox</sender>
-   <signal>accepted()</signal>
-   <receiver>Dialog</receiver>
-   <slot>accept()</slot>
-   <hints>
-    <hint type="sourcelabel">
-     <x>248</x>
-     <y>254</y>
-    </hint>
-    <hint type="destinationlabel">
-     <x>157</x>
-     <y>274</y>
-    </hint>
-   </hints>
-  </connection>
-  <connection>
-   <sender>buttonBox</sender>
-   <signal>rejected()</signal>
-   <receiver>Dialog</receiver>
-   <slot>reject()</slot>
-   <hints>
-    <hint type="sourcelabel">
-     <x>316</x>
-     <y>260</y>
-    </hint>
-    <hint type="destinationlabel">
-     <x>286</x>
-     <y>274</y>
-    </hint>
-   </hints>
-  </connection>
- </connections>
+ <connections/>
 </ui>

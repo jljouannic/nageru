@@ -20,10 +20,25 @@ public:
 	InputMappingDialog();
 
 private:
-	void fill_ui_from_mapping(const InputMapping &mapping, const std::vector<std::string> &card_names);
-	void fill_channel_ui_from_mapping(unsigned row, const InputMapping::Input &input);
+	void fill_ui_from_mapping(const InputMapping &mapping);
+	void fill_row_from_input(unsigned row, const InputMapping::Input &input);
+	void setup_channel_choices_from_input(unsigned row, const InputMapping::Input &input);
+	void cell_changed(int row, int column);
+	void card_selected(unsigned row, int index);
+	void channel_selected(unsigned row, unsigned channel, int index);
+	void ok_clicked();
+	void cancel_clicked();
+	void add_clicked();
 
 	Ui::InputMappingDialog *ui;
+	InputMapping mapping;  // Under edit. Will be committed on OK.
+
+	// The old mapping. Will be re-committed on cancel, so that we
+	// unhold all the unused devices (otherwise they would be
+	// held forever).
+	InputMapping old_mapping;
+
+	const std::vector<std::string> card_names;
 };
 
 #endif  // !defined(_INPUT_MAPPING_DIALOG_H)
