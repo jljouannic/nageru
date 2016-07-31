@@ -243,17 +243,17 @@ void MainWindow::setup_audio_miniview()
 
 	// Set up brand new ones from the input mapping.
 	InputMapping mapping = global_mixer->get_audio_mixer()->get_input_mapping();
-	for (unsigned i = 0; i < mapping.inputs.size(); ++i) {
+	for (unsigned bus_index = 0; bus_index < mapping.buses.size(); ++bus_index) {
 		QWidget *channel = new QWidget(this);
 		Ui::AudioMiniView *ui_audio_miniview = new Ui::AudioMiniView;
 		ui_audio_miniview->setupUi(channel);
-		ui_audio_miniview->channel_desc_label->setFullText(
-			QString::fromStdString(mapping.inputs[i].name));
+		ui_audio_miniview->bus_desc_label->setFullText(
+			QString::fromStdString(mapping.buses[bus_index].name));
 		// TODO: Set the fader position.
 		ui->faders->addWidget(channel);
 
 		connect(ui_audio_miniview->fader, &QAbstractSlider::valueChanged,
-			bind(&MainWindow::mini_fader_changed, this, ui_audio_miniview, i, _1));
+			bind(&MainWindow::mini_fader_changed, this, ui_audio_miniview, bus_index, _1));
 	}
 }
 

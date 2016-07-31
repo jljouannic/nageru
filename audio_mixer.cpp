@@ -63,7 +63,7 @@ AudioMixer::AudioMixer(unsigned num_cards)
 	set_final_makeup_gain_auto(global_flags.final_makeup_gain_auto);
 
 	// Generate a very simple, default input mapping.
-	InputMapping::Input input;
+	InputMapping::Bus input;
 	input.name = "Main";
 	input.input_source_type = InputSourceType::CAPTURE_CARD;
 	input.input_source_index = 0;
@@ -71,7 +71,7 @@ AudioMixer::AudioMixer(unsigned num_cards)
 	input.source_channel[1] = 1;
 
 	InputMapping new_input_mapping;
-	new_input_mapping.inputs.push_back(input);
+	new_input_mapping.buses.push_back(input);
 	set_input_mapping(new_input_mapping);
 }
 
@@ -98,7 +98,7 @@ void AudioMixer::add_audio(unsigned card_index, const uint8_t *data, unsigned nu
 	CaptureCard *card = &cards[card_index];
 
 	if (card->resampling_queue == nullptr) {
-		// No inputs use this card; throw it away.
+		// No buses use this card; throw it away.
 		return;
 	}
 
@@ -136,7 +136,7 @@ void AudioMixer::add_silence(unsigned card_index, unsigned samples_per_frame, un
 	lock_guard<mutex> lock(audio_mutex);
 
 	if (card->resampling_queue == nullptr) {
-		// No inputs use this card; throw it away.
+		// No buses use this card; throw it away.
 		return;
 	}
 
@@ -191,8 +191,8 @@ vector<float> AudioMixer::get_output(double pts, unsigned num_samples, Resamplin
 	vector<float> samples_out;
 	samples_out.resize(num_samples * 2);
 	samples_bus.resize(num_samples * 2);
-	for (unsigned input_index = 0; input_index < input_mapping.inputs.size(); ++input_index) {
-		const InputMapping::Input &input = input_mapping.inputs[input_index];
+	for (unsigned bus_index = 0; bus_index < input_mapping.buses.size(); ++bus_index) {
+		const InputMapping::Bus &input = input_mapping.buses[bus_index];
 		if (input.input_source_type == InputSourceType::SILENCE) {
 			memset(&samples_bus[0], 0, samples_bus.size() * sizeof(samples_bus[0]));
 		} else {
@@ -211,8 +211,8 @@ vector<float> AudioMixer::get_output(double pts, unsigned num_samples, Resamplin
 			}
 		}
 
-		float volume = from_db(fader_volume_db[input_index]);
-		if (input_index == 0) {
+		float volume = from_db(fader_volume_db[bus_index]);
+		if (bus_index == 0) {
 			for (unsigned i = 0; i < num_samples * 2; ++i) {
 				samples_out[i] = samples_bus[i] * volume;
 			}
@@ -359,11 +359,11 @@ void AudioMixer::set_input_mapping(const InputMapping &new_input_mapping)
 	lock_guard<mutex> lock(audio_mutex);
 
 	map<unsigned, set<unsigned>> interesting_channels;
-	for (const InputMapping::Input &input : new_input_mapping.inputs) {
-		if (input.input_source_type == InputSourceType::CAPTURE_CARD) {
+	for (const InputMapping::Bus &bus : new_input_mapping.buses) {
+		if (bus.input_source_type == InputSourceType::CAPTURE_CARD) {
 			for (unsigned channel = 0; channel < 2; ++channel) {
-				if (input.source_channel[channel] != -1) {
-					interesting_channels[input.input_source_index].insert(input.source_channel[channel]);
+				if (bus.source_channel[channel] != -1) {
+					interesting_channels[bus.input_source_index].insert(bus.source_channel[channel]);
 				}
 			}
 		}

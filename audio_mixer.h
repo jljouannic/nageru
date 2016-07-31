@@ -34,14 +34,14 @@ struct AudioFormat;
 enum class InputSourceType { SILENCE, CAPTURE_CARD };
 
 struct InputMapping {
-	struct Input {  // TODO: rename to Bus?
+	struct Bus {
 		std::string name;
 		InputSourceType input_source_type;
 		unsigned input_source_index;
 		int source_channel[2] { -1, -1 };  // Left and right. -1 = none.
 	};
 
-	std::vector<Input> inputs;
+	std::vector<Bus> buses;
 };
 
 class AudioMixer {
@@ -57,7 +57,7 @@ public:
 	// See comments inside get_output().
 	void set_current_loudness(double level_lufs) { loudness_lufs = level_lufs; }
 
-	void set_fader_volume(unsigned input_index, float level_db) { fader_volume_db[input_index] = level_db; }
+	void set_fader_volume(unsigned bus_index, float level_db) { fader_volume_db[bus_index] = level_db; }
 	std::vector<std::string> get_names() const;
 	void set_name(unsigned card_index, const std::string &name);
 

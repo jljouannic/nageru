@@ -21,8 +21,8 @@ public:
 
 private:
 	void fill_ui_from_mapping(const InputMapping &mapping);
-	void fill_row_from_input(unsigned row, const InputMapping::Input &input);
-	void setup_channel_choices_from_input(unsigned row, const InputMapping::Input &input);
+	void fill_row_from_bus(unsigned row, const InputMapping::Bus &bus);
+	void setup_channel_choices_from_bus(unsigned row, const InputMapping::Bus &bus);
 	void cell_changed(int row, int column);
 	void card_selected(unsigned row, int index);
 	void channel_selected(unsigned row, unsigned channel, int index);
