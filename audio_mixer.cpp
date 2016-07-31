@@ -15,6 +15,8 @@ using namespace std;
 
 namespace {
 
+// TODO: If these prove to be a bottleneck, they can be SSSE3-optimized.
+
 void convert_fixed24_to_fp32(float *dst, size_t out_channels, const uint8_t *src, size_t in_channels, size_t num_samples)
 {
 	assert(in_channels >= out_channels);
@@ -68,34 +70,54 @@ AudioMixer::AudioMixer(unsigned num_cards)
 	input.source_channel[0] = 0;
 	input.source_channel[1] = 1;
 
-	input_mapping.inputs.push_back(input);
+	InputMapping new_input_mapping;
+	new_input_mapping.inputs.push_back(input);
+	set_input_mapping(new_input_mapping);
 }
 
 void AudioMixer::reset_card(unsigned card_index)
 {
-	CaptureCard *card = &cards[card_index];
+	lock_guard<mutex> lock(audio_mutex);
+	reset_card_mutex_held(card_index);
+}
 
-	unique_lock<mutex> lock(card->audio_mutex);
-	card->resampling_queue.reset(new ResamplingQueue(card_index, OUTPUT_FREQUENCY, OUTPUT_FREQUENCY, 2));
+void AudioMixer::reset_card_mutex_held(unsigned card_index)
+{
+	CaptureCard *card = &cards[card_index];
+	if (card->interesting_channels.empty()) {
+		card->resampling_queue.reset();
+	} else {
+		card->resampling_queue.reset(new ResamplingQueue(card_index, OUTPUT_FREQUENCY, OUTPUT_FREQUENCY, card->interesting_channels.size()));
+	}
 	card->next_local_pts = 0;
 }
 
 void AudioMixer::add_audio(unsigned card_index, const uint8_t *data, unsigned num_samples, AudioFormat audio_format, int64_t frame_length)
 {
+	lock_guard<mutex> lock(audio_mutex);
 	CaptureCard *card = &cards[card_index];
 
+	if (card->resampling_queue == nullptr) {
+		// No inputs use this card; throw it away.
+		return;
+	}
+
+	unsigned num_channels = card->interesting_channels.size();
+	assert(num_channels > 0);
+
 	// Convert the audio to stereo fp32.
+	// FIXME: Pick out the right channels; this takes the first ones.
 	vector<float> audio;
-	audio.resize(num_samples * 2);
+	audio.resize(num_samples * num_channels);
 	switch (audio_format.bits_per_sample) {
 	case 0:
 		assert(num_samples == 0);
 		break;
 	case 24:
-		convert_fixed24_to_fp32(&audio[0], 2, data, audio_format.num_channels, num_samples);
+		convert_fixed24_to_fp32(&audio[0], num_channels, data, audio_format.num_channels, num_samples);
 		break;
 	case 32:
-		convert_fixed32_to_fp32(&audio[0], 2, data, audio_format.num_channels, num_samples);
+		convert_fixed32_to_fp32(&audio[0], num_channels, data, audio_format.num_channels, num_samples);
 		break;
 	default:
 		fprintf(stderr, "Cannot handle audio with %u bits per sample\n", audio_format.bits_per_sample);
@@ -103,21 +125,25 @@ void AudioMixer::add_audio(unsigned card_index, const uint8_t *data, unsigned nu
 	}
 
 	// Now add it.
-	{
-		unique_lock<mutex> lock(card->audio_mutex);
-
-		int64_t local_pts = card->next_local_pts;
-		card->resampling_queue->add_input_samples(local_pts / double(TIMEBASE), audio.data(), num_samples);
-		card->next_local_pts = local_pts + frame_length;
-	}
+	int64_t local_pts = card->next_local_pts;
+	card->resampling_queue->add_input_samples(local_pts / double(TIMEBASE), audio.data(), num_samples);
+	card->next_local_pts = local_pts + frame_length;
 }
 
 void AudioMixer::add_silence(unsigned card_index, unsigned samples_per_frame, unsigned num_frames, int64_t frame_length)
 {
 	CaptureCard *card = &cards[card_index];
-	unique_lock<mutex> lock(card->audio_mutex);
+	lock_guard<mutex> lock(audio_mutex);
 
-	vector<float> silence(samples_per_frame * 2, 0.0f);
+	if (card->resampling_queue == nullptr) {
+		// No inputs use this card; throw it away.
+		return;
+	}
+
+	unsigned num_channels = card->interesting_channels.size();
+	assert(num_channels > 0);
+
+	vector<float> silence(samples_per_frame * num_channels, 0.0f);
 	for (unsigned i = 0; i < num_frames; ++i) {
 		card->resampling_queue->add_input_samples(card->next_local_pts / double(TIMEBASE), silence.data(), samples_per_frame);
 		// Note that if the format changed in the meantime, we have
@@ -127,32 +153,72 @@ void AudioMixer::add_silence(unsigned card_index, unsigned samples_per_frame, un
 	}
 }
 
+void AudioMixer::find_sample_src_from_capture_card(const vector<float> *samples_card, unsigned card_index, int source_channel, const float **srcptr, unsigned *stride)
+{
+	static float zero = 0.0f;
+	if (source_channel == -1) {
+		*srcptr = &zero;
+		*stride = 0;
+		return;
+	}
+	// FIXME: map back through the interesting_channels squeeze map instead of using source_channel
+	// directly, which will be wrong (and might even overrun).
+	*srcptr = &samples_card[card_index][source_channel];
+	*stride = cards[card_index].interesting_channels.size();
+}
+
 vector<float> AudioMixer::get_output(double pts, unsigned num_samples, ResamplingQueue::RateAdjustmentPolicy rate_adjustment_policy)
 {
-	vector<float> samples_card;
-	vector<float> samples_out;
-	samples_out.resize(num_samples * 2);
+	vector<float> samples_card[MAX_CARDS];
+	vector<float> samples_bus;
 
-	// TODO: Allow more flexible input mapping.
+	lock_guard<mutex> lock(audio_mutex);
+
+	// Pick out all the interesting channels from all the cards.
 	for (unsigned card_index = 0; card_index < num_cards; ++card_index) {
-		samples_card.resize(num_samples * 2);
-		{
-			unique_lock<mutex> lock(cards[card_index].audio_mutex);
-			cards[card_index].resampling_queue->get_output_samples(
+		CaptureCard *card = &cards[card_index];
+		if (!card->interesting_channels.empty()) {
+			samples_card[card_index].resize(num_samples * card->interesting_channels.size());
+			card->resampling_queue->get_output_samples(
 				pts,
-				&samples_card[0],
+				&samples_card[card_index][0],
 				num_samples,
 				rate_adjustment_policy);
 		}
+	}
 
-		float volume = from_db(cards[card_index].fader_volume_db);
-		if (card_index == 0) {
+	// TODO: Move lo-cut etc. into each bus.
+	vector<float> samples_out;
+	samples_out.resize(num_samples * 2);
+	samples_bus.resize(num_samples * 2);
+	for (unsigned input_index = 0; input_index < input_mapping.inputs.size(); ++input_index) {
+		const InputMapping::Input &input = input_mapping.inputs[input_index];
+		if (input.input_source_type == InputSourceType::SILENCE) {
+			memset(&samples_bus[0], 0, samples_bus.size() * sizeof(samples_bus[0]));
+		} else {
+			// TODO: Move this into its own function. Can be SSSE3-optimized if need be.
+			assert(input.input_source_type == InputSourceType::CAPTURE_CARD);
+			const float *lsrc, *rsrc;
+			unsigned lstride, rstride;
+			float *dptr = &samples_bus[0];
+			find_sample_src_from_capture_card(samples_card, input.input_source_index, input.source_channel[0], &lsrc, &lstride);
+			find_sample_src_from_capture_card(samples_card, input.input_source_index, input.source_channel[1], &rsrc, &rstride);
+			for (unsigned i = 0; i < num_samples; ++i) {
+				*dptr++ = *lsrc;
+				*dptr++ = *rsrc;
+				lsrc += lstride;
+				rsrc += rstride;
+			}
+		}
+
+		float volume = from_db(fader_volume_db[input_index]);
+		if (input_index == 0) {
 			for (unsigned i = 0; i < num_samples * 2; ++i) {
-				samples_out[i] = samples_card[i] * volume;
+				samples_out[i] = samples_bus[i] * volume;
 			}
 		} else {
 			for (unsigned i = 0; i < num_samples * 2; ++i) {
-				samples_out[i] += samples_card[i] * volume;
+				samples_out[i] += samples_bus[i] * volume;
 			}
 		}
 	}
@@ -166,7 +232,7 @@ vector<float> AudioMixer::get_output(double pts, unsigned num_samples, Resamplin
 	}
 
 	{
-		unique_lock<mutex> lock(compressor_mutex);
+		lock_guard<mutex> lock(compressor_mutex);
 
 		// Apply a level compressor to get the general level right.
 		// Basically, if it's over about -40 dBFS, we squeeze it down to that level
@@ -257,7 +323,7 @@ vector<float> AudioMixer::get_output(double pts, unsigned num_samples, Resamplin
 	}
 
 	{
-		unique_lock<mutex> lock(compressor_mutex);
+		lock_guard<mutex> lock(compressor_mutex);
 		double m = final_makeup_gain;
 		for (size_t i = 0; i < samples_out.size(); i += 2) {
 			samples_out[i + 0] *= m;
@@ -272,10 +338,10 @@ vector<float> AudioMixer::get_output(double pts, unsigned num_samples, Resamplin
 
 vector<string> AudioMixer::get_names() const
 {
+	lock_guard<mutex> lock(audio_mutex);
 	vector<string> names;
 	for (unsigned card_index = 0; card_index < num_cards; ++card_index) {
 		const CaptureCard *card = &cards[card_index];
-		unique_lock<mutex> lock(card->audio_mutex);
 		names.push_back(card->name);
 	}
 	return names;
@@ -283,19 +349,40 @@ vector<string> AudioMixer::get_names() const
 
 void AudioMixer::set_name(unsigned card_index, const string &name)
 {
+	lock_guard<mutex> lock(audio_mutex);
 	CaptureCard *card = &cards[card_index];
-	unique_lock<mutex> lock(card->audio_mutex);
 	card->name = name;
 }
 
-void AudioMixer::set_input_mapping(const InputMapping &input_mapping)
+void AudioMixer::set_input_mapping(const InputMapping &new_input_mapping)
 {
-	lock_guard<mutex> lock(mapping_mutex);
-	this->input_mapping = input_mapping;
+	lock_guard<mutex> lock(audio_mutex);
+
+	map<unsigned, set<unsigned>> interesting_channels;
+	for (const InputMapping::Input &input : new_input_mapping.inputs) {
+		if (input.input_source_type == InputSourceType::CAPTURE_CARD) {
+			for (unsigned channel = 0; channel < 2; ++channel) {
+				if (input.source_channel[channel] != -1) {
+					interesting_channels[input.input_source_index].insert(input.source_channel[channel]);
+				}
+			}
+		}
+	}
+
+	// Reset resamplers for all cards that don't have the exact same state as before.
+	for (unsigned card_index = 0; card_index < num_cards; ++card_index) {
+		CaptureCard *card = &cards[card_index];
+		if (card->interesting_channels != interesting_channels[card_index]) {
+			card->interesting_channels = interesting_channels[card_index];
+			reset_card_mutex_held(card_index);
+		}
+	}
+
+	input_mapping = new_input_mapping;
 }
 
 InputMapping AudioMixer::get_input_mapping() const
 {
-	lock_guard<mutex> lock(mapping_mutex);
+	lock_guard<mutex> lock(audio_mutex);
 	return input_mapping;
 }

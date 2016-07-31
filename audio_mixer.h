@@ -14,8 +14,10 @@
 #include <math.h>
 #include <stdint.h>
 #include <atomic>
+#include <map>
 #include <memory>
 #include <mutex>
+#include <set>
 #include <vector>
 
 #include "bmusb/bmusb.h"
@@ -32,7 +34,7 @@ struct AudioFormat;
 enum class InputSourceType { SILENCE, CAPTURE_CARD };
 
 struct InputMapping {
-	struct Input {
+	struct Input {  // TODO: rename to Bus?
 		std::string name;
 		InputSourceType input_source_type;
 		unsigned input_source_index;
@@ -55,7 +57,7 @@ public:
 	// See comments inside get_output().
 	void set_current_loudness(double level_lufs) { loudness_lufs = level_lufs; }
 
-	void set_fader_volume(unsigned card_index, float level_db) { cards[card_index].fader_volume_db = level_db; }
+	void set_fader_volume(unsigned input_index, float level_db) { fader_volume_db[input_index] = level_db; }
 	std::vector<std::string> get_names() const;
 	void set_name(unsigned card_index, const std::string &name);
 
@@ -168,18 +170,21 @@ public:
 	}
 
 private:
+	void find_sample_src_from_capture_card(const std::vector<float> *samples_card, unsigned card_index, int source_channel, const float **srcptr, unsigned *stride);
+	void reset_card_mutex_held(unsigned card_index);
+
 	unsigned num_cards;
 
-	struct CaptureCard {
-		std::atomic<float> fader_volume_db{0.0f};
+	mutable std::mutex audio_mutex;
 
-		// Everything below audio_mutex is protected by it.
-		mutable std::mutex audio_mutex;
+	struct CaptureCard {
 		std::unique_ptr<ResamplingQueue> resampling_queue;
 		int64_t next_local_pts = 0;
 		std::string name;
+		// Which channels we consider interesting (ie., are part of some input_mapping).
+		std::set<unsigned> interesting_channels;
 	};
-	CaptureCard cards[MAX_CARDS];
+	CaptureCard cards[MAX_CARDS];  // Under audio_mutex.
 
 	StereoFilter locut;  // Default cutoff 120 Hz, 24 dB/oct.
 	std::atomic<float> locut_cutoff_hz;
@@ -206,8 +211,8 @@ private:
 	double final_makeup_gain = 1.0;  // Under compressor_mutex. Read/write by the user. Note: Not in dB, we want the numeric precision so that we can change it slowly.
 	bool final_makeup_gain_auto = true;  // Under compressor_mutex.
 
-	mutable std::mutex mapping_mutex;
-	InputMapping input_mapping;  // Under mapping_mutex.
+	InputMapping input_mapping;  // Under audio_mutex.
+	std::atomic<float> fader_volume_db[MAX_BUSES] {{ 0.0f }};
 };
 
 #endif  // !defined(_AUDIO_MIXER_H)
