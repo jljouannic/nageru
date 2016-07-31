@@ -135,7 +135,7 @@ void parse_flags(int argc, char * const argv[])
 	vector<string> theme_dirs;
 	for ( ;; ) {
 		int option_index = 0;
-		int c = getopt_long(argc, argv, "c:C:t:v:m:", long_options, &option_index);
+		int c = getopt_long(argc, argv, "c:t:v:m:", long_options, &option_index);
 
 		if (c == -1) {
 			break;
