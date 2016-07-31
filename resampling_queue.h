@@ -45,6 +45,8 @@
 #include <deque>
 #include <memory>
 
+#include "defs.h"
+
 class ResamplingQueue {
 public:
 	// card_num is for debugging outputs only.
