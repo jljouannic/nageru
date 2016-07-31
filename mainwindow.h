@@ -56,6 +56,7 @@ public slots:
 	void relayout();
 
 private:
+	void setup_audio_miniview();
 	bool eventFilter(QObject *watched, QEvent *event) override;
 	void set_white_balance(int channel_number, int x, int y);
 

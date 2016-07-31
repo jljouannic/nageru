@@ -177,20 +177,7 @@ void MainWindow::mixer_created(Mixer *mixer)
 		connect(ui_display->wb_button, &QPushButton::clicked, bind(&MainWindow::wb_button_clicked, this, i));
 	}
 
-	// Audio miniview: Make some channels!
-	for (unsigned i = 0; i < num_previews; ++i) {
-		Mixer::Output output = Mixer::Output(Mixer::OUTPUT_INPUT0 + i);
-
-		QWidget *channel = new QWidget(this);
-		Ui::AudioMiniView *ui_audio_miniview = new Ui::AudioMiniView;
-		ui_audio_miniview->setupUi(channel);
-		ui_audio_miniview->channel_desc_label->setFullText(
-			QString::fromStdString(mixer->get_channel_name(output)));
-		ui->faders->addWidget(channel);
-
-		connect(ui_audio_miniview->fader, &QAbstractSlider::valueChanged,
-			bind(&MainWindow::mini_fader_changed, this, ui_audio_miniview, i, _1));
-	}
+	setup_audio_miniview();
 
 	// TODO: Fetch all of the values these for completeness,
 	// not just the enable knobs implied by flags.
@@ -246,6 +233,30 @@ void MainWindow::mixer_created(Mixer *mixer)
 	sigaction(SIGUSR1, &act, nullptr);
 }
 
+void MainWindow::setup_audio_miniview()
+{
+	// Remove any existing channels.
+	for (QLayoutItem *item; (item = ui->faders->takeAt(0)) != nullptr; ) {
+		delete item->widget();
+		delete item;
+	}
+
+	// Set up brand new ones from the input mapping.
+	InputMapping mapping = global_mixer->get_audio_mixer()->get_input_mapping();
+	for (unsigned i = 0; i < mapping.inputs.size(); ++i) {
+		QWidget *channel = new QWidget(this);
+		Ui::AudioMiniView *ui_audio_miniview = new Ui::AudioMiniView;
+		ui_audio_miniview->setupUi(channel);
+		ui_audio_miniview->channel_desc_label->setFullText(
+			QString::fromStdString(mapping.inputs[i].name));
+		// TODO: Set the fader position.
+		ui->faders->addWidget(channel);
+
+		connect(ui_audio_miniview->fader, &QAbstractSlider::valueChanged,
+			bind(&MainWindow::mini_fader_changed, this, ui_audio_miniview, i, _1));
+	}
+}
+
 void MainWindow::mixer_shutting_down()
 {
 	ui->me_live->clean_context();
@@ -282,7 +293,9 @@ void MainWindow::about_triggered()
 
 void MainWindow::input_mapping_triggered()
 {
-	InputMappingDialog().exec();
+	if (InputMappingDialog().exec() == QDialog::Accepted) {
+		setup_audio_miniview();
+	}
 }
 
 void MainWindow::gain_staging_knob_changed(int value)
