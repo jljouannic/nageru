@@ -305,6 +305,9 @@ void X264SpeedControl::apply_preset(int new_preset)
 	p.analyse.b_mixed_references = s->mix;
 	p.analyse.i_direct_mv_pred = s->direct;
 	p.analyse.i_me_range = s->merange;
+	if (override_func) {
+		override_func(&p);
+	}
 	x264_encoder_reconfig(x264, &p);
 	preset = new_preset;
 }

@@ -249,12 +249,18 @@ void X264Encoder::encode_frame(X264Encoder::QueuedFrame qf)
 	// See if we have a new bitrate to change to.
 	unsigned new_rate = new_bitrate_kbit.exchange(0);  // Read and clear.
 	if (new_rate != 0) {
-		x264_param_t param;
-		x264_encoder_parameters(x264, &param);
-		param.rc.i_bitrate = new_rate;
-		update_vbv_settings(&param);
-		x264_encoder_reconfig(x264, &param);
-		printf("changing rate to %u\n", new_rate);
+		if (speed_control) {
+			speed_control->set_config_override_function([new_rate](x264_param_t *param) {
+				param->rc.i_bitrate = new_rate;
+				update_vbv_settings(param);
+			});
+		} else {
+			x264_param_t param;
+			x264_encoder_parameters(x264, &param);
+			param.rc.i_bitrate = new_rate;
+			update_vbv_settings(&param);
+			x264_encoder_reconfig(x264, &param);
+		}
 	}
 
 	if (speed_control) {

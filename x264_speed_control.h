@@ -47,6 +47,7 @@
 #include <stdint.h>
 #include <string.h>
 #include <math.h>
+#include <functional>
 
 extern "C" {
 #include "x264.h"
@@ -80,6 +81,17 @@ public:
 	void before_frame(float new_buffer_fill, int new_buffer_size, float f_uspf);
 	void after_frame();
 
+	// x264 seemingly has an issue where x264_encoder_reconfig() is not reflected
+	// immediately in x264_encoder_parameters(). Since speed control keeps calling
+	// those two all the time, any changes you make outside X264SpeedControl
+	// could be overridden. Thus, to make changes to encoder parameters, you should
+	// instead set a function here, which will be called every time parameters
+	// are modified.
+	void set_config_override_function(std::function<void(x264_param_t *)> override_func)
+	{
+		this->override_func = override_func;
+	}
+
 private:
 	void set_buffer_size(int new_buffer_size);
 	int dither_preset(float f);
@@ -112,4 +124,6 @@ private:
 		double avg_preset;
 		int den;
 	} stat;
+
+	std::function<void(x264_param_t *)> override_func = nullptr;
 };
