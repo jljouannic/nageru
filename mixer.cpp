@@ -3,6 +3,7 @@
 #include "mixer.h"
 
 #include <assert.h>
+#include <endian.h>
 #include <epoxy/egl.h>
 #include <movit/effect_chain.h>
 #include <movit/effect_util.h>
@@ -73,8 +74,7 @@ void convert_fixed32_to_fp32(float *dst, size_t out_channels, const uint8_t *src
 	assert(in_channels >= out_channels);
 	for (size_t i = 0; i < num_samples; ++i) {
 		for (size_t j = 0; j < out_channels; ++j) {
-			// Note: Assumes little-endian.
-			int32_t s = *(int32_t *)src;
+			int32_t s = le32toh(*(int32_t *)src);
 			dst[i * out_channels + j] = s * (1.0f / 2147483648.0f);
 			src += 4;
 		}
