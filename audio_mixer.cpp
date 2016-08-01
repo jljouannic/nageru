@@ -4,6 +4,7 @@
 #include <endian.h>
 #include <bmusb/bmusb.h>
 #include <stdio.h>
+#include <endian.h>
 #include <cmath>
 
 #include "db.h"
@@ -15,33 +16,45 @@ using namespace std;
 
 namespace {
 
-// TODO: If these prove to be a bottleneck, they can be SSSE3-optimized.
+// TODO: If these prove to be a bottleneck, they can be SSSE3-optimized
+// (usually including multiple channels at a time).
 
-void convert_fixed24_to_fp32(float *dst, size_t out_channels, const uint8_t *src, size_t in_channels, size_t num_samples)
+void convert_fixed24_to_fp32(float *dst, size_t out_channel, size_t out_num_channels,
+                             const uint8_t *src, size_t in_channel, size_t in_num_channels,
+                             size_t num_samples)
 {
-	assert(in_channels >= out_channels);
+	assert(in_channel < in_num_channels);
+	assert(out_channel < out_num_channels);
+	src += in_channel * 3;
+	dst += out_channel;
+
 	for (size_t i = 0; i < num_samples; ++i) {
-		for (size_t j = 0; j < out_channels; ++j) {
-			uint32_t s1 = *src++;
-			uint32_t s2 = *src++;
-			uint32_t s3 = *src++;
-			uint32_t s = s1 | (s1 << 8) | (s2 << 16) | (s3 << 24);
-			dst[i * out_channels + j] = int(s) * (1.0f / 2147483648.0f);
-		}
-		src += 3 * (in_channels - out_channels);
+		uint32_t s1 = src[0];
+		uint32_t s2 = src[1];
+		uint32_t s3 = src[2];
+		uint32_t s = s1 | (s1 << 8) | (s2 << 16) | (s3 << 24);
+		*dst = int(s) * (1.0f / 2147483648.0f);
+
+		src += 3 * in_num_channels;
+		dst += out_num_channels;
 	}
 }
 
-void convert_fixed32_to_fp32(float *dst, size_t out_channels, const uint8_t *src, size_t in_channels, size_t num_samples)
+void convert_fixed32_to_fp32(float *dst, size_t out_channel, size_t out_num_channels,
+                             const uint8_t *src, size_t in_channel, size_t in_num_channels,
+                             size_t num_samples)
 {
-	assert(in_channels >= out_channels);
+	assert(in_channel < in_num_channels);
+	assert(out_channel < out_num_channels);
+	src += in_channel * 4;
+	dst += out_channel;
+
 	for (size_t i = 0; i < num_samples; ++i) {
-		for (size_t j = 0; j < out_channels; ++j) {
-			int32_t s = le32toh(*(int32_t *)src);
-			dst[i * out_channels + j] = s * (1.0f / 2147483648.0f);
-			src += 4;
-		}
-		src += 4 * (in_channels - out_channels);
+		int32_t s = le32toh(*(int32_t *)src);
+		*dst = s * (1.0f / 2147483648.0f);
+
+		src += 4 * in_num_channels;
+		dst += out_num_channels;
 	}
 }
 
@@ -106,22 +119,24 @@ void AudioMixer::add_audio(unsigned card_index, const uint8_t *data, unsigned nu
 	assert(num_channels > 0);
 
 	// Convert the audio to stereo fp32.
-	// FIXME: Pick out the right channels; this takes the first ones.
 	vector<float> audio;
 	audio.resize(num_samples * num_channels);
-	switch (audio_format.bits_per_sample) {
-	case 0:
-		assert(num_samples == 0);
-		break;
-	case 24:
-		convert_fixed24_to_fp32(&audio[0], num_channels, data, audio_format.num_channels, num_samples);
-		break;
-	case 32:
-		convert_fixed32_to_fp32(&audio[0], num_channels, data, audio_format.num_channels, num_samples);
-		break;
-	default:
-		fprintf(stderr, "Cannot handle audio with %u bits per sample\n", audio_format.bits_per_sample);
-		assert(false);
+	unsigned channel_index = 0;
+	for (auto channel_it = card->interesting_channels.cbegin(); channel_it != card->interesting_channels.end(); ++channel_it, ++channel_index) {
+		switch (audio_format.bits_per_sample) {
+		case 0:
+			assert(num_samples == 0);
+			break;
+		case 24:
+			convert_fixed24_to_fp32(&audio[0], channel_index, num_channels, data, *channel_it, audio_format.num_channels, num_samples);
+			break;
+		case 32:
+			convert_fixed32_to_fp32(&audio[0], channel_index, num_channels, data, *channel_it, audio_format.num_channels, num_samples);
+			break;
+		default:
+			fprintf(stderr, "Cannot handle audio with %u bits per sample\n", audio_format.bits_per_sample);
+			assert(false);
+		}
 	}
 
 	// Now add it.
@@ -161,10 +176,15 @@ void AudioMixer::find_sample_src_from_capture_card(const vector<float> *samples_
 		*stride = 0;
 		return;
 	}
-	// FIXME: map back through the interesting_channels squeeze map instead of using source_channel
-	// directly, which will be wrong (and might even overrun).
-	*srcptr = &samples_card[card_index][source_channel];
-	*stride = cards[card_index].interesting_channels.size();
+	CaptureCard *card = &cards[card_index];
+	unsigned channel_index = 0;
+	for (int channel : card->interesting_channels) {
+		if (channel == source_channel) break;
+		++channel_index;
+	}
+	assert(channel_index < card->interesting_channels.size());
+	*srcptr = &samples_card[card_index][channel_index];
+	*stride = card->interesting_channels.size();
 }
 
 vector<float> AudioMixer::get_output(double pts, unsigned num_samples, ResamplingQueue::RateAdjustmentPolicy rate_adjustment_policy)
