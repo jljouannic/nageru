@@ -187,6 +187,27 @@ void AudioMixer::find_sample_src_from_capture_card(const vector<float> *samples_
 	*stride = card->interesting_channels.size();
 }
 
+// TODO: Can be SSSE3-optimized if need be.
+void AudioMixer::fill_audio_bus(const vector<float> *samples_card, const InputMapping::Bus &bus, unsigned num_samples, float *output)
+{
+	if (bus.input_source_type == InputSourceType::SILENCE) {
+		memset(output, 0, num_samples * sizeof(*output));
+	} else {
+		assert(bus.input_source_type == InputSourceType::CAPTURE_CARD);
+		const float *lsrc, *rsrc;
+		unsigned lstride, rstride;
+		float *dptr = output;
+		find_sample_src_from_capture_card(samples_card, bus.input_source_index, bus.source_channel[0], &lsrc, &lstride);
+		find_sample_src_from_capture_card(samples_card, bus.input_source_index, bus.source_channel[1], &rsrc, &rstride);
+		for (unsigned i = 0; i < num_samples; ++i) {
+			*dptr++ = *lsrc;
+			*dptr++ = *rsrc;
+			lsrc += lstride;
+			rsrc += rstride;
+		}
+	}
+}
+
 vector<float> AudioMixer::get_output(double pts, unsigned num_samples, ResamplingQueue::RateAdjustmentPolicy rate_adjustment_policy)
 {
 	vector<float> samples_card[MAX_CARDS];
@@ -212,24 +233,7 @@ vector<float> AudioMixer::get_output(double pts, unsigned num_samples, Resamplin
 	samples_out.resize(num_samples * 2);
 	samples_bus.resize(num_samples * 2);
 	for (unsigned bus_index = 0; bus_index < input_mapping.buses.size(); ++bus_index) {
-		const InputMapping::Bus &input = input_mapping.buses[bus_index];
-		if (input.input_source_type == InputSourceType::SILENCE) {
-			memset(&samples_bus[0], 0, samples_bus.size() * sizeof(samples_bus[0]));
-		} else {
-			// TODO: Move this into its own function. Can be SSSE3-optimized if need be.
-			assert(input.input_source_type == InputSourceType::CAPTURE_CARD);
-			const float *lsrc, *rsrc;
-			unsigned lstride, rstride;
-			float *dptr = &samples_bus[0];
-			find_sample_src_from_capture_card(samples_card, input.input_source_index, input.source_channel[0], &lsrc, &lstride);
-			find_sample_src_from_capture_card(samples_card, input.input_source_index, input.source_channel[1], &rsrc, &rstride);
-			for (unsigned i = 0; i < num_samples; ++i) {
-				*dptr++ = *lsrc;
-				*dptr++ = *rsrc;
-				lsrc += lstride;
-				rsrc += rstride;
-			}
-		}
+		fill_audio_bus(samples_card, input_mapping.buses[bus_index], num_samples, &samples_bus[0]);
 
 		float volume = from_db(fader_volume_db[bus_index]);
 		if (bus_index == 0) {

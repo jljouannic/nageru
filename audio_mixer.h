@@ -171,6 +171,7 @@ public:
 
 private:
 	void find_sample_src_from_capture_card(const std::vector<float> *samples_card, unsigned card_index, int source_channel, const float **srcptr, unsigned *stride);
+	void fill_audio_bus(const std::vector<float> *samples_card, const InputMapping::Bus &bus, unsigned num_samples, float *output);
 	void reset_card_mutex_held(unsigned card_index);
 
 	unsigned num_cards;
