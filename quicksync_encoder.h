@@ -27,6 +27,7 @@
 #define _H264ENCODE_H
 
 #include <epoxy/gl.h>
+#include <stdbool.h>
 #include <stdint.h>
 #include <atomic>
 #include <memory>
@@ -42,8 +43,9 @@ extern "C" {
 
 class AudioEncoder;
 class Mux;
-class QuickSyncEncoderImpl;
 class QSurface;
+class QuickSyncEncoderImpl;
+class RefCountedFrame;
 class X264Encoder;
 
 namespace movit {

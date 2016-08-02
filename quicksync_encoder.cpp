@@ -1,18 +1,22 @@
 //#include "sysdeps.h"
 #include "quicksync_encoder.h"
 
-#include <movit/resource_pool.h>
+#include <movit/resource_pool.h>  // Must be above the Xlib includes.
 #include <movit/util.h>
+
 #include <EGL/eglplatform.h>
-#include <X11/X.h>
 #include <X11/Xlib.h>
 #include <assert.h>
 #include <epoxy/egl.h>
+#include <fcntl.h>
+#include <libavcodec/avcodec.h>
+#include <libavformat/avio.h>
+#include <libavutil/error.h>
 #include <libdrm/drm_fourcc.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <fcntl.h>
+#include <unistd.h>
 #include <va/va.h>
 #include <va/va_drm.h>
 #include <va/va_drmcommon.h>
@@ -20,11 +24,13 @@
 #include <va/va_x11.h>
 #include <algorithm>
 #include <condition_variable>
+#include <cstddef>
 #include <cstdint>
 #include <map>
 #include <memory>
 #include <mutex>
 #include <queue>
+#include <stack>
 #include <string>
 #include <thread>
 #include <utility>
@@ -32,8 +38,10 @@
 #include "audio_encoder.h"
 #include "context.h"
 #include "defs.h"
+#include "ffmpeg_raii.h"
 #include "flags.h"
 #include "mux.h"
+#include "ref_counted_frame.h"
 #include "timebase.h"
 #include "x264_encoder.h"
 
@@ -1715,10 +1723,6 @@ int QuickSyncEncoderImpl::deinit_va()
 
     return 0;
 }
-
-namespace {
-
-}  // namespace
 
 QuickSyncEncoderImpl::QuickSyncEncoderImpl(const std::string &filename, movit::ResourcePool *resource_pool, QSurface *surface, const string &va_display, int width, int height, AVOutputFormat *oformat, X264Encoder *x264_encoder)
 	: current_storage_frame(0), resource_pool(resource_pool), surface(surface), x264_encoder(x264_encoder), frame_width(width), frame_height(height)
