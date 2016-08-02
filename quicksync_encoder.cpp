@@ -1,4 +1,3 @@
-//#include "sysdeps.h"
 #include "quicksync_encoder.h"
 
 #include <movit/resource_pool.h>  // Must be above the Xlib includes.
@@ -9,10 +8,6 @@
 #include <assert.h>
 #include <epoxy/egl.h>
 #include <fcntl.h>
-#include <libavcodec/avcodec.h>
-#include <libavformat/avio.h>
-#include <libavutil/error.h>
-#include <libdrm/drm_fourcc.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -34,6 +29,15 @@
 #include <string>
 #include <thread>
 #include <utility>
+
+extern "C" {
+
+#include <libavcodec/avcodec.h>
+#include <libavformat/avio.h>
+#include <libavutil/error.h>
+#include <libdrm/drm_fourcc.h>
+
+}  // namespace
 
 #include "audio_encoder.h"
 #include "context.h"
