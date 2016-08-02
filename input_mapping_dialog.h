@@ -29,6 +29,9 @@ private:
 	void ok_clicked();
 	void cancel_clicked();
 	void add_clicked();
+	void remove_clicked();
+	void updown_clicked(int direction);
+	void update_button_state();
 
 	Ui::InputMappingDialog *ui;
 	InputMapping mapping;  // Under edit. Will be committed on OK.
