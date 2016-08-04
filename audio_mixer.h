@@ -32,12 +32,15 @@ struct AudioFormat;
 }  // namespace bmusb
 
 enum class InputSourceType { SILENCE, CAPTURE_CARD };
+struct DeviceSpec {
+	InputSourceType type;
+	unsigned index;
+};
 
 struct InputMapping {
 	struct Bus {
 		std::string name;
-		InputSourceType input_source_type;
-		unsigned input_source_index;
+		DeviceSpec device;
 		int source_channel[2] { -1, -1 };  // Left and right. -1 = none.
 	};
 
@@ -47,11 +50,11 @@ struct InputMapping {
 class AudioMixer {
 public:
 	AudioMixer(unsigned num_cards);
-	void reset_card(unsigned card_index);
+	void reset_device(DeviceSpec device_spec);
 
 	// frame_length is in TIMEBASE units.
-	void add_audio(unsigned card_index, const uint8_t *data, unsigned num_samples, bmusb::AudioFormat audio_format, int64_t frame_length);
-	void add_silence(unsigned card_index, unsigned samples_per_frame, unsigned num_frames, int64_t frame_length);
+	void add_audio(DeviceSpec device_spec, const uint8_t *data, unsigned num_samples, bmusb::AudioFormat audio_format, int64_t frame_length);
+	void add_silence(DeviceSpec device_spec, unsigned samples_per_frame, unsigned num_frames, int64_t frame_length);
 	std::vector<float> get_output(double pts, unsigned num_samples, ResamplingQueue::RateAdjustmentPolicy rate_adjustment_policy);
 
 	// See comments inside get_output().
@@ -59,7 +62,7 @@ public:
 
 	void set_fader_volume(unsigned bus_index, float level_db) { fader_volume_db[bus_index] = level_db; }
 	std::vector<std::string> get_names() const;
-	void set_name(unsigned card_index, const std::string &name);
+	void set_name(DeviceSpec device_spec, const std::string &name);
 
 	void set_input_mapping(const InputMapping &input_mapping);
 	InputMapping get_input_mapping() const;
@@ -170,22 +173,24 @@ public:
 	}
 
 private:
-	void find_sample_src_from_capture_card(const std::vector<float> *samples_card, unsigned card_index, int source_channel, const float **srcptr, unsigned *stride);
-	void fill_audio_bus(const std::vector<float> *samples_card, const InputMapping::Bus &bus, unsigned num_samples, float *output);
-	void reset_card_mutex_held(unsigned card_index);
-
-	unsigned num_cards;
-
-	mutable std::mutex audio_mutex;
-
-	struct CaptureCard {
+	struct AudioDevice {
 		std::unique_ptr<ResamplingQueue> resampling_queue;
 		int64_t next_local_pts = 0;
 		std::string name;
 		// Which channels we consider interesting (ie., are part of some input_mapping).
 		std::set<unsigned> interesting_channels;
 	};
-	CaptureCard cards[MAX_CARDS];  // Under audio_mutex.
+	AudioDevice *find_audio_device(DeviceSpec device_spec);
+
+	void find_sample_src_from_device(const std::vector<float> *samples_card, DeviceSpec device_spec, int source_channel, const float **srcptr, unsigned *stride);
+	void fill_audio_bus(const std::vector<float> *samples_card, const InputMapping::Bus &bus, unsigned num_samples, float *output);
+	void reset_device_mutex_held(DeviceSpec device_spec);
+
+	unsigned num_cards;
+
+	mutable std::mutex audio_mutex;
+
+	AudioDevice cards[MAX_CARDS];  // Under audio_mutex.
 
 	StereoFilter locut;  // Default cutoff 120 Hz, 24 dB/oct.
 	std::atomic<float> locut_cutoff_hz;

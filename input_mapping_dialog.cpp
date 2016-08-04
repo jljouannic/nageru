@@ -55,12 +55,12 @@ void InputMappingDialog::fill_row_from_bus(unsigned row, const InputMapping::Bus
 	for (const string &name : card_names) {
 		card_combo->addItem(QString::fromStdString(name + "   "));
 	}
-	switch (bus.input_source_type) {
+	switch (bus.device.type) {
 	case InputSourceType::SILENCE:
 		card_combo->setCurrentIndex(0);
 		break;
 	case InputSourceType::CAPTURE_CARD:
-		card_combo->setCurrentIndex(mapping.buses[row].input_source_index + 1);
+		card_combo->setCurrentIndex(mapping.buses[row].device.index + 1);
 		break;
 	default:
 		assert(false);
@@ -78,7 +78,7 @@ void InputMappingDialog::setup_channel_choices_from_bus(unsigned row, const Inpu
 	for (unsigned channel = 0; channel < 2; ++channel) {
 		QComboBox *channel_combo = new QComboBox;
 		channel_combo->addItem(QString("(none)"));
-		if (bus.input_source_type == InputSourceType::CAPTURE_CARD) {
+		if (bus.device.type == InputSourceType::CAPTURE_CARD) {
 			for (unsigned source = 0; source < 8; ++source) {  // TODO: Ask the card about number of channels, and names.
 				char buf[256];
 				snprintf(buf, sizeof(buf), "Channel %u   ", source + 1);
@@ -118,10 +118,10 @@ void InputMappingDialog::cell_changed(int row, int column)
 void InputMappingDialog::card_selected(unsigned row, int index)
 {
 	if (index == 0) {
-		mapping.buses[row].input_source_type = InputSourceType::SILENCE;
+		mapping.buses[row].device.type = InputSourceType::SILENCE;
 	} else {
-		mapping.buses[row].input_source_type = InputSourceType::CAPTURE_CARD;
-		mapping.buses[row].input_source_index = index - 1;
+		mapping.buses[row].device.type = InputSourceType::CAPTURE_CARD;
+		mapping.buses[row].device.index = index - 1;
 	}
 	setup_channel_choices_from_bus(row, mapping.buses[row]);
 }
@@ -138,7 +138,7 @@ void InputMappingDialog::add_clicked()
 
 	InputMapping::Bus new_bus;
 	new_bus.name = "New input";
-	new_bus.input_source_type = InputSourceType::SILENCE;
+	new_bus.device.type = InputSourceType::SILENCE;
 	mapping.buses.push_back(new_bus);
 	ui->table->setRowCount(mapping.buses.size());
 

@@ -285,8 +285,10 @@ void Mixer::configure_card(unsigned card_index, CaptureInterface *capture, bool 
 	card->fractional_samples = 0;
 	card->last_timecode = -1;
 	card->capture->configure_card();
-	audio_mixer.reset_card(card_index);
-	audio_mixer.set_name(card_index, card->capture->get_description());
+
+	DeviceSpec device{InputSourceType::CAPTURE_CARD, card_index};
+	audio_mixer.reset_device(device);
+	audio_mixer.set_name(device, card->capture->get_description());
 }
 
 
@@ -332,6 +334,7 @@ void Mixer::bm_frame(unsigned card_index, uint16_t timecode,
                      FrameAllocator::Frame video_frame, size_t video_offset, VideoFormat video_format,
 		     FrameAllocator::Frame audio_frame, size_t audio_offset, AudioFormat audio_format)
 {
+	DeviceSpec device{InputSourceType::CAPTURE_CARD, card_index};
 	CaptureCard *card = &cards[card_index];
 
 	if (is_mode_scanning[card_index]) {
@@ -381,17 +384,17 @@ void Mixer::bm_frame(unsigned card_index, uint16_t timecode,
 	if (dropped_frames > MAX_FPS * 2) {
 		fprintf(stderr, "Card %d lost more than two seconds (or time code jumping around; from 0x%04x to 0x%04x), resetting resampler\n",
 			card_index, card->last_timecode, timecode);
-		audio_mixer.reset_card(card_index);
+		audio_mixer.reset_device(device);
 		dropped_frames = 0;
 	} else if (dropped_frames > 0) {
 		// Insert silence as needed.
 		fprintf(stderr, "Card %d dropped %d frame(s) (before timecode 0x%04x), inserting silence.\n",
 			card_index, dropped_frames, timecode);
 
-		audio_mixer.add_silence(card_index, silence_samples, dropped_frames, frame_length);
+		audio_mixer.add_silence(device, silence_samples, dropped_frames, frame_length);
 	}
 
-	audio_mixer.add_audio(card_index, audio_frame.data + audio_offset, num_samples, audio_format, frame_length);
+	audio_mixer.add_audio(device, audio_frame.data + audio_offset, num_samples, audio_format, frame_length);
 
 	// Done with the audio, so release it.
 	if (audio_frame.owner) {
