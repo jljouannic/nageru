@@ -19,6 +19,24 @@ namespace {
 // TODO: If these prove to be a bottleneck, they can be SSSE3-optimized
 // (usually including multiple channels at a time).
 
+void convert_fixed16_to_fp32(float *dst, size_t out_channel, size_t out_num_channels,
+                             const uint8_t *src, size_t in_channel, size_t in_num_channels,
+                             size_t num_samples)
+{
+	assert(in_channel < in_num_channels);
+	assert(out_channel < out_num_channels);
+	src += in_channel * 2;
+	dst += out_channel;
+
+	for (size_t i = 0; i < num_samples; ++i) {
+		int16_t s = le16toh(*(int16_t *)src);
+		*dst = s * (1.0f / 32768.0f);
+
+		src += 2 * in_num_channels;
+		dst += out_num_channels;
+	}
+}
+
 void convert_fixed24_to_fp32(float *dst, size_t out_channel, size_t out_num_channels,
                              const uint8_t *src, size_t in_channel, size_t in_num_channels,
                              size_t num_samples)
@@ -120,7 +138,7 @@ void AudioMixer::add_audio(DeviceSpec device_spec, const uint8_t *data, unsigned
 	unsigned num_channels = device->interesting_channels.size();
 	assert(num_channels > 0);
 
-	// Convert the audio to stereo fp32.
+	// Convert the audio to fp32.
 	vector<float> audio;
 	audio.resize(num_samples * num_channels);
 	unsigned channel_index = 0;
@@ -128,6 +146,9 @@ void AudioMixer::add_audio(DeviceSpec device_spec, const uint8_t *data, unsigned
 		switch (audio_format.bits_per_sample) {
 		case 0:
 			assert(num_samples == 0);
+			break;
+		case 16:
+			convert_fixed16_to_fp32(&audio[0], channel_index, num_channels, data, *channel_it, audio_format.num_channels, num_samples);
 			break;
 		case 24:
 			convert_fixed24_to_fp32(&audio[0], channel_index, num_channels, data, *channel_it, audio_format.num_channels, num_samples);
