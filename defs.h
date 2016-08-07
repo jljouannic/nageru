@@ -1,7 +1,7 @@
 #ifndef _DEFS_H
 #define _DEFS_H
 
-#define OUTPUT_FREQUENCY 48000
+#define OUTPUT_FREQUENCY 48000  // Currently needs to be exactly 48000, since bmusb outputs in that.
 #define MAX_FPS 60
 #define WIDTH 1280
 #define HEIGHT 720

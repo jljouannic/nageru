@@ -177,6 +177,7 @@ private:
 		std::unique_ptr<ResamplingQueue> resampling_queue;
 		int64_t next_local_pts = 0;
 		std::string name;
+		unsigned capture_frequency = OUTPUT_FREQUENCY;
 		// Which channels we consider interesting (ie., are part of some input_mapping).
 		std::set<unsigned> interesting_channels;
 	};

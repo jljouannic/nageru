@@ -120,7 +120,7 @@ void AudioMixer::reset_device_mutex_held(DeviceSpec device_spec)
 	} else {
 		// TODO: ResamplingQueue should probably take the full device spec.
 		// (It's only used for console output, though.)
-		device->resampling_queue.reset(new ResamplingQueue(device_spec.index, OUTPUT_FREQUENCY, OUTPUT_FREQUENCY, device->interesting_channels.size()));
+		device->resampling_queue.reset(new ResamplingQueue(device_spec.index, device->capture_frequency, OUTPUT_FREQUENCY, device->interesting_channels.size()));
 	}
 	device->next_local_pts = 0;
 }
