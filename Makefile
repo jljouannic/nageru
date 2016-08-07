@@ -17,7 +17,7 @@ OBJS=glwidget.o main.o mainwindow.o vumeter.o lrameter.o vu_common.o correlation
 OBJS += glwidget.moc.o mainwindow.moc.o vumeter.moc.o lrameter.moc.o correlation_meter.moc.o aboutdialog.moc.o ellipsis_label.moc.o input_mapping_dialog.moc.o
 
 # Mixer objects
-OBJS += mixer.o audio_mixer.o pbo_frame_allocator.o context.o ref_counted_frame.o theme.o resampling_queue.o httpd.o ebu_r128_proc.o flags.o image_input.o stereocompressor.o filter.o alsa_output.o correlation_measurer.o disk_space_estimator.o
+OBJS += mixer.o audio_mixer.o pbo_frame_allocator.o context.o ref_counted_frame.o theme.o resampling_queue.o httpd.o ebu_r128_proc.o flags.o image_input.o stereocompressor.o filter.o alsa_input.o alsa_output.o correlation_measurer.o disk_space_estimator.o
 
 # Streaming and encoding objects
 OBJS += quicksync_encoder.o x264_encoder.o x264_speed_control.o video_encoder.o metacube2.o mux.o audio_encoder.o ffmpeg_raii.o
