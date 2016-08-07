@@ -419,13 +419,12 @@ void AudioMixer::set_input_mapping(const InputMapping &new_input_mapping)
 {
 	lock_guard<mutex> lock(audio_mutex);
 
-	// FIXME: This needs to be keyed on DeviceSpec.
-	map<unsigned, set<unsigned>> interesting_channels;
+	map<DeviceSpec, set<unsigned>> interesting_channels;
 	for (const InputMapping::Bus &bus : new_input_mapping.buses) {
 		if (bus.device.type == InputSourceType::CAPTURE_CARD) {
 			for (unsigned channel = 0; channel < 2; ++channel) {
 				if (bus.source_channel[channel] != -1) {
-					interesting_channels[bus.device.index].insert(bus.source_channel[channel]);
+					interesting_channels[bus.device].insert(bus.source_channel[channel]);
 				}
 			}
 		}
@@ -433,9 +432,10 @@ void AudioMixer::set_input_mapping(const InputMapping &new_input_mapping)
 
 	// Reset resamplers for all cards that don't have the exact same state as before.
 	for (unsigned card_index = 0; card_index < num_cards; ++card_index) {
+		DeviceSpec device_spec{InputSourceType::CAPTURE_CARD, card_index};
 		AudioDevice *device = &cards[card_index];
-		if (device->interesting_channels != interesting_channels[card_index]) {
-			device->interesting_channels = interesting_channels[card_index];
+		if (device->interesting_channels != interesting_channels[device_spec]) {
+			device->interesting_channels = interesting_channels[device_spec];
 			reset_device_mutex_held(DeviceSpec{InputSourceType::CAPTURE_CARD, card_index});
 		}
 	}

@@ -35,6 +35,12 @@ enum class InputSourceType { SILENCE, CAPTURE_CARD };
 struct DeviceSpec {
 	InputSourceType type;
 	unsigned index;
+
+	bool operator< (const DeviceSpec &other) const {
+		if (type != other.type)
+			return type < other.type;
+		return index < other.index;
+	}
 };
 
 struct InputMapping {
