@@ -34,6 +34,14 @@ public:
 	void start_capture_thread();
 	void stop_capture_thread();
 
+	// TODO: Worry about hotplug.
+	struct Device {
+		std::string address;  // E.g. “hw:0,0”.
+		std::string name, info;
+		unsigned num_channels;
+	};
+	static std::vector<Device> enumerate_devices();
+
 private:
 	void capture_thread_func();
 	int64_t frames_to_pts(uint64_t n) const;

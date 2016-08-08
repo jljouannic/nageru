@@ -76,7 +76,6 @@ ALSAInput::ALSAInput(const char *device, unsigned sample_rate, unsigned num_chan
 
 	die_on_error("snd_pcm_nonblock()", snd_pcm_nonblock(pcm_handle, 1));
 	die_on_error("snd_pcm_prepare()", snd_pcm_prepare(pcm_handle));
-
 }
 
 ALSAInput::~ALSAInput()
@@ -144,3 +143,66 @@ void ALSAInput::die_on_error(const char *func_name, int err)
 	}
 }
 
+vector<ALSAInput::Device> ALSAInput::enumerate_devices()
+{
+	vector<Device> ret;
+
+	// Enumerate all cards.
+	for (int card_index = -1; snd_card_next(&card_index) == 0 && card_index >= 0; ) {
+		char address[256];
+		snprintf(address, sizeof(address), "hw:%d", card_index);
+
+		snd_ctl_t *ctl;
+		int err = snd_ctl_open(&ctl, address, 0);
+		if (err < 0) {
+			printf("%s: %s\n", address, snd_strerror(err));
+			continue;
+		}
+		snd_ctl_card_info_t *card_info;
+		snd_ctl_card_info_alloca(&card_info);
+		snd_ctl_card_info(ctl, card_info);
+
+		string card_name = snd_ctl_card_info_get_name(card_info);
+
+		// Enumerate all devices on this card.
+		for (int dev_index = -1; snd_ctl_pcm_next_device(ctl, &dev_index) == 0 && dev_index >= 0; ) {
+			snd_pcm_info_t *pcm_info;
+			snd_pcm_info_alloca(&pcm_info);
+			snd_pcm_info_set_device(pcm_info, dev_index);
+			snd_pcm_info_set_subdevice(pcm_info, 0);
+			snd_pcm_info_set_stream(pcm_info, SND_PCM_STREAM_CAPTURE);
+			if (snd_ctl_pcm_info(ctl, pcm_info) < 0) {
+				// Not available for capture.
+				continue;
+			}
+
+			snprintf(address, sizeof(address), "hw:%d,%d", card_index, dev_index);
+
+			// Find all channel maps for this device, and pick out the one
+			// with the most channels.
+			snd_pcm_chmap_query_t **cmaps = snd_pcm_query_chmaps_from_hw(card_index, dev_index, 0, SND_PCM_STREAM_CAPTURE);
+			unsigned num_channels = 0;
+			for (snd_pcm_chmap_query_t **ptr = cmaps; *ptr; ++ptr) {
+				num_channels = max(num_channels, (*ptr)->map.channels);
+			}
+
+			snd_pcm_free_chmaps(cmaps);
+
+			if (num_channels == 0) {
+				printf("%s: No channel maps with channels\n", address);
+				continue;
+			}
+
+			Device dev;
+			dev.address = address;
+			dev.name = card_name;
+			dev.info = snd_pcm_info_get_name(pcm_info);
+			dev.num_channels = num_channels;
+
+			ret.push_back(dev);
+		}
+		snd_ctl_close(ctl);
+	}
+
+	return ret;
+}
