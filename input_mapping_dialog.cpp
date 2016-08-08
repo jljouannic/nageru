@@ -51,22 +51,19 @@ void InputMappingDialog::fill_row_from_bus(unsigned row, const InputMapping::Bus
 
 	// Card choices.
 	QComboBox *card_combo = new QComboBox;
+	unsigned current_index = 0;
 	card_combo->addItem(QString("(none)   "));
-	for (const string &name : card_names) {
-		card_combo->addItem(QString::fromStdString(name + "   "));
-	}
-	switch (bus.device.type) {
-	case InputSourceType::SILENCE:
-		card_combo->setCurrentIndex(0);
-		break;
-	case InputSourceType::CAPTURE_CARD:
-		card_combo->setCurrentIndex(mapping.buses[row].device.index + 1);
-		break;
-	default:
-		assert(false);
+	for (const auto &spec_and_name : card_names) {
+		++current_index;
+		card_combo->addItem(
+			QString::fromStdString(spec_and_name.second + "   "),
+			qulonglong(DeviceSpec_to_key(spec_and_name.first)));
+		if (bus.device == spec_and_name.first) {
+			card_combo->setCurrentIndex(current_index);
+		}
 	}
 	connect(card_combo, static_cast<void(QComboBox::*)(int)>(&QComboBox::currentIndexChanged),
-		bind(&InputMappingDialog::card_selected, this, row, _1));
+		bind(&InputMappingDialog::card_selected, this, card_combo, row, _1));
 	ui->table->setCellWidget(row, 1, card_combo);
 
 	setup_channel_choices_from_bus(row, bus);
@@ -115,14 +112,10 @@ void InputMappingDialog::cell_changed(int row, int column)
 	mapping.buses[row].name = ui->table->item(row, column)->text().toStdString();
 }
 
-void InputMappingDialog::card_selected(unsigned row, int index)
+void InputMappingDialog::card_selected(QComboBox *card_combo, unsigned row, int index)
 {
-	if (index == 0) {
-		mapping.buses[row].device.type = InputSourceType::SILENCE;
-	} else {
-		mapping.buses[row].device.type = InputSourceType::CAPTURE_CARD;
-		mapping.buses[row].device.index = index - 1;
-	}
+	uint64_t key = card_combo->itemData(index).toULongLong();
+	mapping.buses[row].device = key_to_DeviceSpec(key);
 	setup_channel_choices_from_bus(row, mapping.buses[row]);
 }
 

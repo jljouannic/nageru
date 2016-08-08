@@ -396,13 +396,14 @@ vector<float> AudioMixer::get_output(double pts, unsigned num_samples, Resamplin
 	return samples_out;
 }
 
-vector<string> AudioMixer::get_names() const
+map<DeviceSpec, string> AudioMixer::get_names() const
 {
 	lock_guard<mutex> lock(audio_mutex);
-	vector<string> names;
+	map<DeviceSpec, string> names;
 	for (unsigned card_index = 0; card_index < num_cards; ++card_index) {
+		const DeviceSpec spec{ InputSourceType::CAPTURE_CARD, card_index };
 		const AudioDevice *device = &cards[card_index];
-		names.push_back(device->name);
+		names.insert(make_pair(spec, device->name));
 	}
 	return names;
 }

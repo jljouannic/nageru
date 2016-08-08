@@ -12,6 +12,8 @@ namespace Ui {
 class InputMappingDialog;
 }  // namespace Ui
 
+class QComboBox;
+
 class InputMappingDialog : public QDialog
 {
 	Q_OBJECT
@@ -24,7 +26,7 @@ private:
 	void fill_row_from_bus(unsigned row, const InputMapping::Bus &bus);
 	void setup_channel_choices_from_bus(unsigned row, const InputMapping::Bus &bus);
 	void cell_changed(int row, int column);
-	void card_selected(unsigned row, int index);
+	void card_selected(QComboBox *card_combo, unsigned row, int index);
 	void channel_selected(unsigned row, unsigned channel, int index);
 	void ok_clicked();
 	void cancel_clicked();
@@ -41,7 +43,7 @@ private:
 	// held forever).
 	InputMapping old_mapping;
 
-	const std::vector<std::string> card_names;
+	const std::map<DeviceSpec, std::string> card_names;
 };
 
 #endif  // !defined(_INPUT_MAPPING_DIALOG_H)

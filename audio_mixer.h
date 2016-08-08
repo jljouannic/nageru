@@ -36,12 +36,26 @@ struct DeviceSpec {
 	InputSourceType type;
 	unsigned index;
 
+	bool operator== (const DeviceSpec &other) const {
+		return type == other.type && index == other.index;
+	}
+
 	bool operator< (const DeviceSpec &other) const {
 		if (type != other.type)
 			return type < other.type;
 		return index < other.index;
 	}
 };
+
+static inline uint64_t DeviceSpec_to_key(const DeviceSpec &device_spec)
+{
+	return (uint64_t(device_spec.type) << 32) | device_spec.index;
+}
+
+static inline DeviceSpec key_to_DeviceSpec(uint64_t key)
+{
+	return DeviceSpec{ InputSourceType(key >> 32), unsigned(key & 0xffffffff) };
+}
 
 struct InputMapping {
 	struct Bus {
@@ -67,7 +81,7 @@ public:
 	void set_current_loudness(double level_lufs) { loudness_lufs = level_lufs; }
 
 	void set_fader_volume(unsigned bus_index, float level_db) { fader_volume_db[bus_index] = level_db; }
-	std::vector<std::string> get_names() const;
+	std::map<DeviceSpec, std::string> get_names() const;
 	void set_name(DeviceSpec device_spec, const std::string &name);
 
 	void set_input_mapping(const InputMapping &input_mapping);
