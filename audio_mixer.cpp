@@ -252,6 +252,9 @@ vector<float> AudioMixer::get_output(double pts, unsigned num_samples, Resamplin
 	lock_guard<mutex> lock(audio_mutex);
 
 	// Pick out all the interesting channels from all the cards.
+	// TODO: If the card has been hotswapped, the number of channels
+	// might have changed; if so, we need to do some sort of remapping
+	// to silence.
 	for (unsigned card_index = 0; card_index < num_cards; ++card_index) {
 		AudioDevice *device = &cards[card_index];
 		if (!device->interesting_channels.empty()) {
