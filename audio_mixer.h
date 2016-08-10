@@ -46,6 +46,10 @@ struct DeviceSpec {
 		return index < other.index;
 	}
 };
+struct DeviceInfo {
+	std::string name;
+	unsigned num_channels;
+};
 
 static inline uint64_t DeviceSpec_to_key(const DeviceSpec &device_spec)
 {
@@ -81,7 +85,7 @@ public:
 	void set_current_loudness(double level_lufs) { loudness_lufs = level_lufs; }
 
 	void set_fader_volume(unsigned bus_index, float level_db) { fader_volume_db[bus_index] = level_db; }
-	std::map<DeviceSpec, std::string> get_names() const;
+	std::map<DeviceSpec, DeviceInfo> get_devices() const;
 	void set_name(DeviceSpec device_spec, const std::string &name);
 
 	void set_input_mapping(const InputMapping &input_mapping);

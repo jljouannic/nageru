@@ -399,16 +399,19 @@ vector<float> AudioMixer::get_output(double pts, unsigned num_samples, Resamplin
 	return samples_out;
 }
 
-map<DeviceSpec, string> AudioMixer::get_names() const
+map<DeviceSpec, DeviceInfo> AudioMixer::get_devices() const
 {
 	lock_guard<mutex> lock(audio_mutex);
-	map<DeviceSpec, string> names;
+	map<DeviceSpec, DeviceInfo> devices;
 	for (unsigned card_index = 0; card_index < num_cards; ++card_index) {
 		const DeviceSpec spec{ InputSourceType::CAPTURE_CARD, card_index };
 		const AudioDevice *device = &cards[card_index];
-		names.insert(make_pair(spec, device->name));
+		DeviceInfo info;
+		info.name = device->name;
+		info.num_channels = 8;  // FIXME: This is wrong for fake cards.
+		devices.insert(make_pair(spec, info));
 	}
-	return names;
+	return devices;
 }
 
 void AudioMixer::set_name(DeviceSpec device_spec, const string &name)

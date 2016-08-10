@@ -43,7 +43,7 @@ private:
 	// held forever).
 	InputMapping old_mapping;
 
-	const std::map<DeviceSpec, std::string> card_names;
+	const std::map<DeviceSpec, DeviceInfo> devices;
 };
 
 #endif  // !defined(_INPUT_MAPPING_DIALOG_H)

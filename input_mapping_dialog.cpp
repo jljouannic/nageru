@@ -11,7 +11,7 @@ InputMappingDialog::InputMappingDialog()
 	: ui(new Ui::InputMappingDialog),
 	  mapping(global_mixer->get_audio_mixer()->get_input_mapping()),
 	  old_mapping(mapping),
-	  card_names(global_mixer->get_audio_mixer()->get_names())
+	  devices(global_mixer->get_audio_mixer()->get_devices())
 {
 	ui->setupUi(this);
 	ui->table->setSelectionBehavior(QAbstractItemView::SelectRows);
@@ -53,12 +53,12 @@ void InputMappingDialog::fill_row_from_bus(unsigned row, const InputMapping::Bus
 	QComboBox *card_combo = new QComboBox;
 	unsigned current_index = 0;
 	card_combo->addItem(QString("(none)   "));
-	for (const auto &spec_and_name : card_names) {
+	for (const auto &spec_and_info : devices) {
 		++current_index;
 		card_combo->addItem(
-			QString::fromStdString(spec_and_name.second + "   "),
-			qulonglong(DeviceSpec_to_key(spec_and_name.first)));
-		if (bus.device == spec_and_name.first) {
+			QString::fromStdString(spec_and_info.second.name + "   "),
+			qulonglong(DeviceSpec_to_key(spec_and_info.first)));
+		if (bus.device == spec_and_info.first) {
 			card_combo->setCurrentIndex(current_index);
 		}
 	}
@@ -76,7 +76,10 @@ void InputMappingDialog::setup_channel_choices_from_bus(unsigned row, const Inpu
 		QComboBox *channel_combo = new QComboBox;
 		channel_combo->addItem(QString("(none)"));
 		if (bus.device.type == InputSourceType::CAPTURE_CARD) {
-			for (unsigned source = 0; source < 8; ++source) {  // TODO: Ask the card about number of channels, and names.
+			auto device_it = devices.find(bus.device);
+			assert(device_it != devices.end());
+			unsigned num_device_channels = device_it->second.num_channels;
+			for (unsigned source = 0; source < num_device_channels; ++source) {
 				char buf[256];
 				snprintf(buf, sizeof(buf), "Channel %u   ", source + 1);
 				channel_combo->addItem(QString(buf));
