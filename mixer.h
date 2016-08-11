@@ -382,9 +382,9 @@ private:
 
 		int last_timecode = -1;  // Unwrapped.
 	};
-	CaptureCard cards[MAX_CARDS];  // protected by <bmusb_mutex>
+	CaptureCard cards[MAX_VIDEO_CARDS];  // protected by <bmusb_mutex>
 	AudioMixer audio_mixer;
-	void get_one_frame_from_each_card(unsigned master_card_index, CaptureCard::NewFrame new_frames[MAX_CARDS], bool has_new_frame[MAX_CARDS], int num_samples[MAX_CARDS]);
+	void get_one_frame_from_each_card(unsigned master_card_index, CaptureCard::NewFrame new_frames[MAX_VIDEO_CARDS], bool has_new_frame[MAX_VIDEO_CARDS], int num_samples[MAX_VIDEO_CARDS]);
 
 	InputState input_state;
 
@@ -445,10 +445,10 @@ private:
 	std::queue<AudioTask> audio_task_queue;  // Under audio_mutex.
 
 	// For mode scanning.
-	bool is_mode_scanning[MAX_CARDS]{ false };
-	std::vector<uint32_t> mode_scanlist[MAX_CARDS];
-	unsigned mode_scanlist_index[MAX_CARDS]{ 0 };
-	std::chrono::steady_clock::time_point last_mode_scan_change[MAX_CARDS];
+	bool is_mode_scanning[MAX_VIDEO_CARDS]{ false };
+	std::vector<uint32_t> mode_scanlist[MAX_VIDEO_CARDS];
+	unsigned mode_scanlist_index[MAX_VIDEO_CARDS]{ 0 };
+	std::chrono::steady_clock::time_point last_mode_scan_change[MAX_VIDEO_CARDS];
 };
 
 extern Mixer *global_mixer;

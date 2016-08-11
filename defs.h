@@ -6,7 +6,7 @@
 #define WIDTH 1280
 #define HEIGHT 720
 #define FAKE_FPS 25  // Must be an integer.
-#define MAX_CARDS 16
+#define MAX_VIDEO_CARDS 16
 #define MAX_BUSES 256  // Audio buses.
 
 // For deinterlacing. See also comments on InputState.

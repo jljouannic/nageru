@@ -45,14 +45,14 @@ namespace {
 struct InputStateInfo {
 	InputStateInfo(const InputState& input_state);
 
-	unsigned last_width[MAX_CARDS], last_height[MAX_CARDS];
-	bool last_interlaced[MAX_CARDS], last_has_signal[MAX_CARDS], last_is_connected[MAX_CARDS];
-	unsigned last_frame_rate_nom[MAX_CARDS], last_frame_rate_den[MAX_CARDS];
+	unsigned last_width[MAX_VIDEO_CARDS], last_height[MAX_VIDEO_CARDS];
+	bool last_interlaced[MAX_VIDEO_CARDS], last_has_signal[MAX_VIDEO_CARDS], last_is_connected[MAX_VIDEO_CARDS];
+	unsigned last_frame_rate_nom[MAX_VIDEO_CARDS], last_frame_rate_den[MAX_VIDEO_CARDS];
 };
 
 InputStateInfo::InputStateInfo(const InputState &input_state)
 {
-	for (unsigned signal_num = 0; signal_num < MAX_CARDS; ++signal_num) {
+	for (unsigned signal_num = 0; signal_num < MAX_VIDEO_CARDS; ++signal_num) {
 		BufferedFrame frame = input_state.buffered_frames[signal_num][0];
 		if (frame.frame == nullptr) {
 			last_width[signal_num] = last_height[signal_num] = 0;

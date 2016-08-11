@@ -569,9 +569,9 @@ void Mixer::thread_func()
 	int stats_dropped_frames = 0;
 
 	while (!should_quit) {
-		CaptureCard::NewFrame new_frames[MAX_CARDS];
-		bool has_new_frame[MAX_CARDS] = { false };
-		int num_samples[MAX_CARDS] = { 0 };
+		CaptureCard::NewFrame new_frames[MAX_VIDEO_CARDS];
+		bool has_new_frame[MAX_VIDEO_CARDS] = { false };
+		int num_samples[MAX_VIDEO_CARDS] = { 0 };
 
 		unsigned master_card_index = theme->map_signal(master_clock_channel);
 		assert(master_card_index < num_cards);
@@ -681,7 +681,7 @@ void Mixer::thread_func()
 	resource_pool->clean_context();
 }
 
-void Mixer::get_one_frame_from_each_card(unsigned master_card_index, CaptureCard::NewFrame new_frames[MAX_CARDS], bool has_new_frame[MAX_CARDS], int num_samples[MAX_CARDS])
+void Mixer::get_one_frame_from_each_card(unsigned master_card_index, CaptureCard::NewFrame new_frames[MAX_VIDEO_CARDS], bool has_new_frame[MAX_VIDEO_CARDS], int num_samples[MAX_VIDEO_CARDS])
 {
 start:
 	// The first card is the master timer, so wait for it to have a new frame.

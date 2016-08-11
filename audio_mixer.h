@@ -215,7 +215,7 @@ private:
 
 	mutable std::mutex audio_mutex;
 
-	AudioDevice cards[MAX_CARDS];  // Under audio_mutex.
+	AudioDevice video_cards[MAX_VIDEO_CARDS];  // Under audio_mutex.
 
 	StereoFilter locut;  // Default cutoff 120 Hz, 24 dB/oct.
 	std::atomic<float> locut_cutoff_hz;

@@ -195,8 +195,7 @@ AudioMixer::AudioDevice *AudioMixer::find_audio_device(DeviceSpec device)
 {
 	switch (device.type) {
 	case InputSourceType::CAPTURE_CARD:
-		return &cards[device.index];
-		break;
+		return &video_cards[device.index];
 	case InputSourceType::SILENCE:
 	default:
 		assert(false);
@@ -246,7 +245,7 @@ void AudioMixer::fill_audio_bus(const vector<float> *samples_card, const InputMa
 
 vector<float> AudioMixer::get_output(double pts, unsigned num_samples, ResamplingQueue::RateAdjustmentPolicy rate_adjustment_policy)
 {
-	vector<float> samples_card[MAX_CARDS];  // TODO: Needs room for other kinds of capture cards.
+	vector<float> samples_card[MAX_VIDEO_CARDS];  // TODO: Needs room for other kinds of capture cards.
 	vector<float> samples_bus;
 
 	lock_guard<mutex> lock(audio_mutex);
@@ -256,7 +255,7 @@ vector<float> AudioMixer::get_output(double pts, unsigned num_samples, Resamplin
 	// might have changed; if so, we need to do some sort of remapping
 	// to silence.
 	for (unsigned card_index = 0; card_index < num_cards; ++card_index) {
-		AudioDevice *device = &cards[card_index];
+		AudioDevice *device = &video_cards[card_index];
 		if (!device->interesting_channels.empty()) {
 			samples_card[card_index].resize(num_samples * device->interesting_channels.size());
 			device->resampling_queue->get_output_samples(
@@ -405,7 +404,7 @@ map<DeviceSpec, DeviceInfo> AudioMixer::get_devices() const
 	map<DeviceSpec, DeviceInfo> devices;
 	for (unsigned card_index = 0; card_index < num_cards; ++card_index) {
 		const DeviceSpec spec{ InputSourceType::CAPTURE_CARD, card_index };
-		const AudioDevice *device = &cards[card_index];
+		const AudioDevice *device = &video_cards[card_index];
 		DeviceInfo info;
 		info.name = device->name;
 		info.num_channels = 8;  // FIXME: This is wrong for fake cards.
@@ -440,7 +439,7 @@ void AudioMixer::set_input_mapping(const InputMapping &new_input_mapping)
 	// Reset resamplers for all cards that don't have the exact same state as before.
 	for (unsigned card_index = 0; card_index < num_cards; ++card_index) {
 		DeviceSpec device_spec{InputSourceType::CAPTURE_CARD, card_index};
-		AudioDevice *device = &cards[card_index];
+		AudioDevice *device = &video_cards[card_index];
 		if (device->interesting_channels != interesting_channels[device_spec]) {
 			device->interesting_channels = interesting_channels[device_spec];
 			reset_device_mutex_held(DeviceSpec{InputSourceType::CAPTURE_CARD, card_index});

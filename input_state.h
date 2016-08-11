@@ -18,7 +18,7 @@ struct InputState {
 	// interlaced output (for deinterlacing), so if we detect progressive input,
 	// we immediately clear out all history and all entries will point to the same
 	// frame.
-	BufferedFrame buffered_frames[MAX_CARDS][FRAME_HISTORY_LENGTH];
+	BufferedFrame buffered_frames[MAX_VIDEO_CARDS][FRAME_HISTORY_LENGTH];
 };
 
 #endif  // !defined(_INPUT_STATE_H)
