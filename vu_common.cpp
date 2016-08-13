@@ -25,7 +25,7 @@ int lufs_to_pos(float level_lu, int height)
 	return y;
 }
 
-void draw_vu_meter(QPainter &painter, float range_low_lu, float range_high_lu, int width, int height, int margin)
+void draw_vu_meter(QPainter &painter, int width, int height, int margin, bool is_on)
 {
 	painter.fillRect(margin, 0, width - 2 * margin, height, Qt::black);
 
@@ -36,19 +36,15 @@ void draw_vu_meter(QPainter &painter, float range_low_lu, float range_high_lu, i
 	on.setColorAt(1.0f, QColor(0, 255, 0));
 	QColor off(80, 80, 80);
 
-	int min_on_y = lufs_to_pos(range_high_lu, height);
-	int max_on_y = lufs_to_pos(range_low_lu, height);
-
 	// Draw bars colored up until the level, then gray from there.
 	for (int level = -18; level < 9; ++level) {
 		int min_y = lufs_to_pos(level + 1.0f, height) + 1;
 		int max_y = lufs_to_pos(level, height) - 1;
 
-		painter.fillRect(margin, min_y, width - 2 * margin, max_y - min_y, off);
-		int min_draw_y = max(min_y, min_on_y);
-		int max_draw_y = min(max_y, max_on_y);
-		if (min_draw_y < max_draw_y) {
-			painter.fillRect(margin, min_draw_y, width - 2 * margin, max_draw_y - min_draw_y, on);
+		if (is_on) {
+			painter.fillRect(margin, min_y, width - 2 * margin, max_y - min_y, on);
+		} else {
+			painter.fillRect(margin, min_y, width - 2 * margin, max_y - min_y, off);
 		}
 	}
 }

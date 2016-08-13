@@ -21,12 +21,12 @@ void LRAMeter::resizeEvent(QResizeEvent *event)
 	on_pixmap = QPixmap(width(), height());
 	QPainter on_painter(&on_pixmap);
 	on_painter.fillRect(0, 0, width(), height(), parentWidget()->palette().window());
-	draw_vu_meter(on_painter, -HUGE_VAL, HUGE_VAL, width(), height(), margin);
+	draw_vu_meter(on_painter, width(), height(), margin, true);
 
 	off_pixmap = QPixmap(width(), height());
 	QPainter off_painter(&off_pixmap);
 	off_painter.fillRect(0, 0, width(), height(), parentWidget()->palette().window());
-	draw_vu_meter(off_painter, -HUGE_VAL, -HUGE_VAL, width(), height(), margin);
+	draw_vu_meter(off_painter, width(), height(), margin, false);
 }
 
 void LRAMeter::paintEvent(QPaintEvent *event)

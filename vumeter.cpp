@@ -14,11 +14,11 @@ void VUMeter::resizeEvent(QResizeEvent *event)
 {
 	on_pixmap = QPixmap(width(), height());
 	QPainter on_painter(&on_pixmap);
-	draw_vu_meter(on_painter, -HUGE_VAL, HUGE_VAL, width(), height(), 0);
+	draw_vu_meter(on_painter, width(), height(), 0, true);
 
 	off_pixmap = QPixmap(width(), height());
 	QPainter off_painter(&off_pixmap);
-	draw_vu_meter(off_painter, -HUGE_VAL, -HUGE_VAL, width(), height(), 0);
+	draw_vu_meter(off_painter, width(), height(), 0, false);
 }
 
 void VUMeter::paintEvent(QPaintEvent *event)
