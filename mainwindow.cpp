@@ -217,7 +217,7 @@ void MainWindow::mixer_created(Mixer *mixer)
 		global_mixer->get_audio_mixer()->set_compressor_enabled(state == Qt::Checked);
 	});
 	connect(ui->reset_meters_button, &QPushButton::clicked, this, &MainWindow::reset_meters_button_clicked);
-	mixer->set_audio_level_callback(bind(&MainWindow::audio_level_callback, this, _1, _2, _3, _4, _5, _6, _7, _8));
+	mixer->get_audio_mixer()->set_audio_level_callback(bind(&MainWindow::audio_level_callback, this, _1, _2, _3, _4, _5, _6, _7, _8));
 
 	struct sigaction act;
 	memset(&act, 0, sizeof(act));
@@ -391,7 +391,7 @@ void MainWindow::mini_fader_changed(Ui::AudioMiniView *ui, int channel, int valu
 
 void MainWindow::reset_meters_button_clicked()
 {
-	global_mixer->reset_meters();
+	global_mixer->get_audio_mixer()->reset_meters();
 	ui->peak_display->setText(QString::fromStdString(format_db(-HUGE_VAL, DB_WITH_SIGN | DB_BARE)));
 	ui->peak_display->setStyleSheet("");
 }

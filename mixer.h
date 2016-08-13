@@ -11,7 +11,6 @@
 #include <movit/flat_input.h>
 #include <stdbool.h>
 #include <stdint.h>
-#include <zita-resampler/resampler.h>
 
 #include <atomic>
 #include <chrono>
@@ -29,9 +28,7 @@
 #include "alsa_output.h"
 #include "audio_mixer.h"
 #include "bmusb/bmusb.h"
-#include "correlation_measurer.h"
 #include "defs.h"
-#include "ebu_r128_proc.h"
 #include "httpd.h"
 #include "input_state.h"
 #include "pbo_frame_allocator.h"
@@ -172,15 +169,6 @@ public:
 		output_channel[output].set_color_updated_callback(callback);
 	}
 
-	typedef std::function<void(float level_lufs, float peak_db,
-	                           float global_level_lufs, float range_low_lufs, float range_high_lufs,
-	                           float gain_staging_db, float final_makeup_gain_db,
-	                           float correlation)> audio_level_callback_t;
-	void set_audio_level_callback(audio_level_callback_t callback)
-	{
-		audio_level_callback = callback;
-	}
-
 	std::vector<std::string> get_transition_names()
 	{
 		return theme->get_transition_names(pts());
@@ -254,8 +242,6 @@ public:
 		should_cut = true;
 	}
 
-	void reset_meters();
-
 	unsigned get_num_cards() const { return num_cards; }
 
 	std::string get_card_description(unsigned card_index) const {
@@ -326,9 +312,7 @@ private:
 	void handle_hotplugged_cards();
 	void schedule_audio_resampling_tasks(unsigned dropped_frames, int num_samples_per_frame, int length_per_frame);
 	void render_one_frame(int64_t duration);
-	void send_audio_level_callback();
 	void audio_thread_func();
-	void process_audio_one_frame(int64_t frame_pts_int, int num_samples, ResamplingQueue::RateAdjustmentPolicy rate_adjustment_policy);
 	void subsample_chroma(GLuint src_tex, GLuint dst_dst);
 	void release_display_frame(DisplayFrame *frame);
 	double pts() { return double(pts_int) / TIMEBASE; }
@@ -425,13 +409,6 @@ private:
 	std::thread audio_thread;
 	std::atomic<bool> should_quit{false};
 	std::atomic<bool> should_cut{false};
-
-	audio_level_callback_t audio_level_callback = nullptr;
-	mutable std::mutex audio_measure_mutex;
-	Ebu_r128_proc r128;  // Under audio_measure_mutex.
-	CorrelationMeasurer correlation;  // Under audio_measure_mutex.
-	Resampler peak_resampler;  // Under audio_measure_mutex.
-	std::atomic<float> peak{0.0f};
 
 	std::unique_ptr<ALSAOutput> alsa;
 

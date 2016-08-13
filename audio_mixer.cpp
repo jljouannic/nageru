@@ -77,13 +77,38 @@ void convert_fixed32_to_fp32(float *dst, size_t out_channel, size_t out_num_chan
 	}
 }
 
+float find_peak(const float *samples, size_t num_samples)
+{
+	float m = fabs(samples[0]);
+	for (size_t i = 1; i < num_samples; ++i) {
+		m = max(m, fabs(samples[i]));
+	}
+	return m;
+}
+
+void deinterleave_samples(const vector<float> &in, vector<float> *out_l, vector<float> *out_r)
+{
+	size_t num_samples = in.size() / 2;
+	out_l->resize(num_samples);
+	out_r->resize(num_samples);
+
+	const float *inptr = in.data();
+	float *lptr = &(*out_l)[0];
+	float *rptr = &(*out_r)[0];
+	for (size_t i = 0; i < num_samples; ++i) {
+		*lptr++ = *inptr++;
+		*rptr++ = *inptr++;
+	}
+}
+
 }  // namespace
 
 AudioMixer::AudioMixer(unsigned num_cards)
 	: num_cards(num_cards),
 	  level_compressor(OUTPUT_FREQUENCY),
 	  limiter(OUTPUT_FREQUENCY),
-	  compressor(OUTPUT_FREQUENCY)
+	  compressor(OUTPUT_FREQUENCY),
+	  correlation(OUTPUT_FREQUENCY)
 {
 	locut.init(FILTER_HPF, 2);
 
@@ -108,6 +133,13 @@ AudioMixer::AudioMixer(unsigned num_cards)
 
 	// Look for ALSA cards.
 	available_alsa_cards = ALSAInput::enumerate_devices();
+
+	r128.init(2, OUTPUT_FREQUENCY);
+	r128.integr_start();
+
+	// hlen=16 is pretty low quality, but we use quite a bit of CPU otherwise,
+	// and there's a limit to how important the peak meter is.
+	peak_resampler.setup(OUTPUT_FREQUENCY, OUTPUT_FREQUENCY * 4, /*num_channels=*/2, /*hlen=*/16, /*frel=*/1.0);
 }
 
 AudioMixer::~AudioMixer()
@@ -418,7 +450,7 @@ vector<float> AudioMixer::get_output(double pts, unsigned num_samples, Resamplin
 	// Note that there's a feedback loop here, so we choose a very slow filter
 	// (half-time of 30 seconds).
 	double target_loudness_factor, alpha;
-	double loudness_lu = loudness_lufs - ref_level_lufs;
+	double loudness_lu = r128.loudness_M() - ref_level_lufs;
 	double current_makeup_lu = to_db(final_makeup_gain);
 	target_loudness_factor = final_makeup_gain * from_db(-loudness_lu);
 
@@ -446,7 +478,72 @@ vector<float> AudioMixer::get_output(double pts, unsigned num_samples, Resamplin
 		final_makeup_gain = m;
 	}
 
+	update_meters(samples_out);
+
 	return samples_out;
+}
+
+void AudioMixer::update_meters(const vector<float> &samples)
+{
+	// Upsample 4x to find interpolated peak.
+	peak_resampler.inp_data = const_cast<float *>(samples.data());
+	peak_resampler.inp_count = samples.size() / 2;
+
+	vector<float> interpolated_samples;
+	interpolated_samples.resize(samples.size());
+	{
+		unique_lock<mutex> lock(audio_measure_mutex);
+
+		while (peak_resampler.inp_count > 0) {  // About four iterations.
+			peak_resampler.out_data = &interpolated_samples[0];
+			peak_resampler.out_count = interpolated_samples.size() / 2;
+			peak_resampler.process();
+			size_t out_stereo_samples = interpolated_samples.size() / 2 - peak_resampler.out_count;
+			peak = max<float>(peak, find_peak(interpolated_samples.data(), out_stereo_samples * 2));
+			peak_resampler.out_data = nullptr;
+		}
+	}
+
+	// Find R128 levels and L/R correlation.
+	vector<float> left, right;
+	deinterleave_samples(samples, &left, &right);
+	float *ptrs[] = { left.data(), right.data() };
+	{
+		unique_lock<mutex> lock(audio_measure_mutex);
+		r128.process(left.size(), ptrs);
+		correlation.process_samples(samples);
+	}
+
+	send_audio_level_callback();
+}
+
+void AudioMixer::reset_meters()
+{
+	unique_lock<mutex> lock(audio_measure_mutex);
+	peak_resampler.reset();
+	peak = 0.0f;
+	r128.reset();
+	r128.integr_start();
+	correlation.reset();
+}
+
+void AudioMixer::send_audio_level_callback()
+{
+	if (audio_level_callback == nullptr) {
+		return;
+	}
+
+	unique_lock<mutex> lock(audio_measure_mutex);
+	double loudness_s = r128.loudness_S();
+	double loudness_i = r128.integrated();
+	double loudness_range_low = r128.range_min();
+	double loudness_range_high = r128.range_max();
+
+	audio_level_callback(loudness_s, to_db(peak),
+		loudness_i, loudness_range_low, loudness_range_high,
+		gain_staging_db,
+		to_db(final_makeup_gain),
+		correlation.get_correlation());
 }
 
 map<DeviceSpec, DeviceInfo> AudioMixer::get_devices() const
