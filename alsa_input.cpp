@@ -125,7 +125,11 @@ void ALSAInput::capture_thread_func()
 
 		const int64_t prev_pts = frames_to_pts(num_frames_output);
 		const int64_t pts = frames_to_pts(num_frames_output + frames);
-		audio_callback(buffer.get(), frames, audio_format, pts - prev_pts);
+		bool success;
+		do {
+			if (should_quit) return;
+			success = audio_callback(buffer.get(), frames, audio_format, pts - prev_pts);
+		} while (!success);
 		num_frames_output += frames;
 	}
 }

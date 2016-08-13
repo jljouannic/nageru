@@ -123,7 +123,7 @@ AudioMixer::~AudioMixer()
 
 void AudioMixer::reset_resampler(DeviceSpec device_spec)
 {
-	lock_guard<mutex> lock(audio_mutex);
+	lock_guard<timed_mutex> lock(audio_mutex);
 	reset_resampler_mutex_held(device_spec);
 }
 
@@ -159,14 +159,17 @@ void AudioMixer::reset_alsa_mutex_held(DeviceSpec device_spec)
 	}
 }
 
-void AudioMixer::add_audio(DeviceSpec device_spec, const uint8_t *data, unsigned num_samples, AudioFormat audio_format, int64_t frame_length)
+bool AudioMixer::add_audio(DeviceSpec device_spec, const uint8_t *data, unsigned num_samples, AudioFormat audio_format, int64_t frame_length)
 {
 	AudioDevice *device = find_audio_device(device_spec);
 
-	lock_guard<mutex> lock(audio_mutex);
+	unique_lock<timed_mutex> lock(audio_mutex, defer_lock);
+	if (!lock.try_lock_for(chrono::milliseconds(10))) {
+		return false;
+	}
 	if (device->resampling_queue == nullptr) {
 		// No buses use this device; throw it away.
-		return;
+		return true;
 	}
 
 	unsigned num_channels = device->interesting_channels.size();
@@ -200,16 +203,20 @@ void AudioMixer::add_audio(DeviceSpec device_spec, const uint8_t *data, unsigned
 	int64_t local_pts = device->next_local_pts;
 	device->resampling_queue->add_input_samples(local_pts / double(TIMEBASE), audio.data(), num_samples);
 	device->next_local_pts = local_pts + frame_length;
+	return true;
 }
 
-void AudioMixer::add_silence(DeviceSpec device_spec, unsigned samples_per_frame, unsigned num_frames, int64_t frame_length)
+bool AudioMixer::add_silence(DeviceSpec device_spec, unsigned samples_per_frame, unsigned num_frames, int64_t frame_length)
 {
 	AudioDevice *device = find_audio_device(device_spec);
 
-	lock_guard<mutex> lock(audio_mutex);
+	unique_lock<timed_mutex> lock(audio_mutex, defer_lock);
+	if (!lock.try_lock_for(chrono::milliseconds(10))) {
+		return false;
+	}
 	if (device->resampling_queue == nullptr) {
 		// No buses use this device; throw it away.
-		return;
+		return true;
 	}
 
 	unsigned num_channels = device->interesting_channels.size();
@@ -223,6 +230,7 @@ void AudioMixer::add_silence(DeviceSpec device_spec, unsigned samples_per_frame,
 		// is always the same.
 		device->next_local_pts += frame_length;
 	}
+	return true;
 }
 
 AudioMixer::AudioDevice *AudioMixer::find_audio_device(DeviceSpec device)
@@ -290,7 +298,7 @@ vector<float> AudioMixer::get_output(double pts, unsigned num_samples, Resamplin
 	map<DeviceSpec, vector<float>> samples_card;
 	vector<float> samples_bus;
 
-	lock_guard<mutex> lock(audio_mutex);
+	lock_guard<timed_mutex> lock(audio_mutex);
 
 	// Pick out all the interesting channels from all the cards.
 	// TODO: If the card has been hotswapped, the number of channels
@@ -443,7 +451,7 @@ vector<float> AudioMixer::get_output(double pts, unsigned num_samples, Resamplin
 
 map<DeviceSpec, DeviceInfo> AudioMixer::get_devices() const
 {
-	lock_guard<mutex> lock(audio_mutex);
+	lock_guard<timed_mutex> lock(audio_mutex);
 	return get_devices_mutex_held();
 }
 
@@ -473,13 +481,13 @@ void AudioMixer::set_name(DeviceSpec device_spec, const string &name)
 {
 	AudioDevice *device = find_audio_device(device_spec);
 
-	lock_guard<mutex> lock(audio_mutex);
+	lock_guard<timed_mutex> lock(audio_mutex);
 	device->name = name;
 }
 
 void AudioMixer::set_input_mapping(const InputMapping &new_input_mapping)
 {
-	lock_guard<mutex> lock(audio_mutex);
+	lock_guard<timed_mutex> lock(audio_mutex);
 
 	map<DeviceSpec, set<unsigned>> interesting_channels;
 	for (const InputMapping::Bus &bus : new_input_mapping.buses) {
@@ -511,6 +519,6 @@ void AudioMixer::set_input_mapping(const InputMapping &new_input_mapping)
 
 InputMapping AudioMixer::get_input_mapping() const
 {
-	lock_guard<mutex> lock(audio_mutex);
+	lock_guard<timed_mutex> lock(audio_mutex);
 	return input_mapping;
 }

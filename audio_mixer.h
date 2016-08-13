@@ -78,9 +78,14 @@ public:
 	~AudioMixer();
 	void reset_resampler(DeviceSpec device_spec);
 
-	// frame_length is in TIMEBASE units.
-	void add_audio(DeviceSpec device_spec, const uint8_t *data, unsigned num_samples, bmusb::AudioFormat audio_format, int64_t frame_length);
-	void add_silence(DeviceSpec device_spec, unsigned samples_per_frame, unsigned num_frames, int64_t frame_length);
+	// Add audio (or silence) to the given device's queue. Can return false if
+	// the lock wasn't successfully taken; if so, you should simply try again.
+	// (This is to avoid a deadlock where a card hangs on the mutex in add_audio()
+	// while we are trying to shut it down from another thread that also holds
+	// the mutex.) frame_length is in TIMEBASE units.
+	bool add_audio(DeviceSpec device_spec, const uint8_t *data, unsigned num_samples, bmusb::AudioFormat audio_format, int64_t frame_length);
+	bool add_silence(DeviceSpec device_spec, unsigned samples_per_frame, unsigned num_frames, int64_t frame_length);
+
 	std::vector<float> get_output(double pts, unsigned num_samples, ResamplingQueue::RateAdjustmentPolicy rate_adjustment_policy);
 
 	// See comments inside get_output().
@@ -219,7 +224,7 @@ private:
 
 	unsigned num_cards;
 
-	mutable std::mutex audio_mutex;
+	mutable std::timed_mutex audio_mutex;
 
 	AudioDevice video_cards[MAX_VIDEO_CARDS];  // Under audio_mutex.
 

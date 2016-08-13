@@ -391,7 +391,10 @@ void Mixer::bm_frame(unsigned card_index, uint16_t timecode,
 		fprintf(stderr, "Card %d dropped %d frame(s) (before timecode 0x%04x), inserting silence.\n",
 			card_index, dropped_frames, timecode);
 
-		audio_mixer.add_silence(device, silence_samples, dropped_frames, frame_length);
+		bool success;
+		do {
+			success = audio_mixer.add_silence(device, silence_samples, dropped_frames, frame_length);
+		} while (!success);
 	}
 
 	audio_mixer.add_audio(device, audio_frame.data + audio_offset, num_samples, audio_format, frame_length);
