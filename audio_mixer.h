@@ -207,9 +207,10 @@ private:
 	};
 	AudioDevice *find_audio_device(DeviceSpec device_spec);
 
-	void find_sample_src_from_device(const std::vector<float> *samples_card, DeviceSpec device_spec, int source_channel, const float **srcptr, unsigned *stride);
-	void fill_audio_bus(const std::vector<float> *samples_card, const InputMapping::Bus &bus, unsigned num_samples, float *output);
+	void find_sample_src_from_device(const std::map<DeviceSpec, std::vector<float>> &samples_card, DeviceSpec device_spec, int source_channel, const float **srcptr, unsigned *stride);
+	void fill_audio_bus(const std::map<DeviceSpec, std::vector<float>> &samples_card, const InputMapping::Bus &bus, unsigned num_samples, float *output);
 	void reset_device_mutex_held(DeviceSpec device_spec);
+	std::map<DeviceSpec, DeviceInfo> get_devices_mutex_held() const;
 
 	unsigned num_cards;
 
