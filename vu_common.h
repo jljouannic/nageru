@@ -3,7 +3,7 @@
 
 #include <QPainter>
 
-int lufs_to_pos(float level_lu, int height);
+double lufs_to_pos(float level_lu, int height);
 
 void draw_vu_meter(QPainter &painter, int width, int height, int margin, bool is_on);
 

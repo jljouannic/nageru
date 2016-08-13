@@ -46,8 +46,8 @@ void LRAMeter::paintEvent(QPaintEvent *event)
 	float level_lu = level_lufs + 23.0f;
 	float range_low_lu = range_low_lufs + 23.0f;
 	float range_high_lu = range_high_lufs + 23.0f;
-	int range_low_pos = lufs_to_pos(range_low_lu, height());
-	int range_high_pos = lufs_to_pos(range_high_lu, height());
+	int range_low_pos = lrint(lufs_to_pos(range_low_lu, height()));
+	int range_high_pos = lrint(lufs_to_pos(range_high_lu, height()));
 
 	QRect top_off_rect(0, 0, width(), range_high_pos);
 	QRect on_rect(0, range_high_pos, width(), range_low_pos - range_high_pos);
@@ -59,8 +59,8 @@ void LRAMeter::paintEvent(QPaintEvent *event)
 
 	// Draw the target area (+/-1 LU is allowed EBU range).
 	// It turns green when we're within.
-	int min_y = lufs_to_pos(1.0f, height());
-	int max_y = lufs_to_pos(-1.0f, height());
+	int min_y = lrint(lufs_to_pos(1.0f, height()));
+	int max_y = lrint(lufs_to_pos(-1.0f, height()));
 
 	// FIXME: This outlining isn't so pretty.
 	{
@@ -82,7 +82,7 @@ void LRAMeter::paintEvent(QPaintEvent *event)
 	}
 
 	// Draw the integrated loudness meter, in the same color as the target area.
-	int y = lufs_to_pos(level_lu, height());
+	int y = lrint(lufs_to_pos(level_lu, height()));
 	{
 		QPen pen(Qt::black);
 		pen.setWidth(5);
