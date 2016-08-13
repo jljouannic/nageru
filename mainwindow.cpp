@@ -217,7 +217,7 @@ void MainWindow::mixer_created(Mixer *mixer)
 		global_mixer->get_audio_mixer()->set_compressor_enabled(state == Qt::Checked);
 	});
 	connect(ui->reset_meters_button, &QPushButton::clicked, this, &MainWindow::reset_meters_button_clicked);
-	mixer->get_audio_mixer()->set_audio_level_callback(bind(&MainWindow::audio_level_callback, this, _1, _2, _3, _4, _5, _6, _7, _8));
+	mixer->get_audio_mixer()->set_audio_level_callback(bind(&MainWindow::audio_level_callback, this, _1, _2, _3, _4, _5, _6, _7, _8, _9));
 
 	struct sigaction act;
 	memset(&act, 0, sizeof(act));
@@ -240,15 +240,18 @@ void MainWindow::setup_audio_miniview()
 		delete item->widget();
 		delete item;
 	}
+	audio_miniviews.clear();
 
 	// Set up brand new ones from the input mapping.
 	InputMapping mapping = global_mixer->get_audio_mixer()->get_input_mapping();
+	audio_miniviews.resize(mapping.buses.size());
 	for (unsigned bus_index = 0; bus_index < mapping.buses.size(); ++bus_index) {
 		QWidget *channel = new QWidget(this);
 		Ui::AudioMiniView *ui_audio_miniview = new Ui::AudioMiniView;
 		ui_audio_miniview->setupUi(channel);
 		ui_audio_miniview->bus_desc_label->setFullText(
 			QString::fromStdString(mapping.buses[bus_index].name));
+		audio_miniviews[bus_index] = ui_audio_miniview;
 		// TODO: Set the fader position.
 		ui->faders->addWidget(channel);
 
@@ -396,7 +399,8 @@ void MainWindow::reset_meters_button_clicked()
 	ui->peak_display->setStyleSheet("");
 }
 
-void MainWindow::audio_level_callback(float level_lufs, float peak_db, float global_level_lufs,
+void MainWindow::audio_level_callback(float level_lufs, float peak_db, vector<float> bus_level_lufs,
+                                      float global_level_lufs,
                                       float range_low_lufs, float range_high_lufs,
                                       float gain_staging_db, float final_makeup_gain_db,
                                       float correlation)
@@ -413,6 +417,12 @@ void MainWindow::audio_level_callback(float level_lufs, float peak_db, float glo
 
 	post_to_main_thread([=]() {
 		ui->vu_meter->set_level(level_lufs);
+		for (unsigned bus_index = 0; bus_index < bus_level_lufs.size(); ++bus_index) {
+			if (bus_index < audio_miniviews.size()) {
+				audio_miniviews[bus_index]->vu_meter_meter->set_level(
+					bus_level_lufs[bus_index]);
+			}
+		}
 		ui->lra_meter->set_levels(global_level_lufs, range_low_lufs, range_high_lufs);
 		ui->correlation_meter->set_correlation(correlation);
 

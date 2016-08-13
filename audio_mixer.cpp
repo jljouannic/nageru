@@ -350,11 +350,15 @@ vector<float> AudioMixer::get_output(double pts, unsigned num_samples, Resamplin
 	}
 
 	// TODO: Move lo-cut etc. into each bus.
-	vector<float> samples_out;
+	vector<float> samples_out, left, right;
 	samples_out.resize(num_samples * 2);
 	samples_bus.resize(num_samples * 2);
 	for (unsigned bus_index = 0; bus_index < input_mapping.buses.size(); ++bus_index) {
 		fill_audio_bus(samples_card, input_mapping.buses[bus_index], num_samples, &samples_bus[0]);
+
+		// TODO: We should measure post-fader.
+		deinterleave_samples(samples_bus, &left, &right);
+		measure_bus_levels(bus_index, left, right);
 
 		float volume = from_db(fader_volume_db[bus_index]);
 		if (bus_index == 0) {
@@ -483,6 +487,15 @@ vector<float> AudioMixer::get_output(double pts, unsigned num_samples, Resamplin
 	return samples_out;
 }
 
+void AudioMixer::measure_bus_levels(unsigned bus_index, const vector<float> &left, const vector<float> &right)
+{
+	const float *ptrs[] = { left.data(), right.data() };
+	{
+		lock_guard<mutex> lock(audio_measure_mutex);
+		bus_r128[bus_index]->process(left.size(), const_cast<float **>(ptrs));
+	}
+}
+
 void AudioMixer::update_meters(const vector<float> &samples)
 {
 	// Upsample 4x to find interpolated peak.
@@ -492,7 +505,7 @@ void AudioMixer::update_meters(const vector<float> &samples)
 	vector<float> interpolated_samples;
 	interpolated_samples.resize(samples.size());
 	{
-		unique_lock<mutex> lock(audio_measure_mutex);
+		lock_guard<mutex> lock(audio_measure_mutex);
 
 		while (peak_resampler.inp_count > 0) {  // About four iterations.
 			peak_resampler.out_data = &interpolated_samples[0];
@@ -509,7 +522,7 @@ void AudioMixer::update_meters(const vector<float> &samples)
 	deinterleave_samples(samples, &left, &right);
 	float *ptrs[] = { left.data(), right.data() };
 	{
-		unique_lock<mutex> lock(audio_measure_mutex);
+		lock_guard<mutex> lock(audio_measure_mutex);
 		r128.process(left.size(), ptrs);
 		correlation.process_samples(samples);
 	}
@@ -519,7 +532,7 @@ void AudioMixer::update_meters(const vector<float> &samples)
 
 void AudioMixer::reset_meters()
 {
-	unique_lock<mutex> lock(audio_measure_mutex);
+	lock_guard<mutex> lock(audio_measure_mutex);
 	peak_resampler.reset();
 	peak = 0.0f;
 	r128.reset();
@@ -533,13 +546,19 @@ void AudioMixer::send_audio_level_callback()
 		return;
 	}
 
-	unique_lock<mutex> lock(audio_measure_mutex);
+	lock_guard<mutex> lock(audio_measure_mutex);
 	double loudness_s = r128.loudness_S();
 	double loudness_i = r128.integrated();
 	double loudness_range_low = r128.range_min();
 	double loudness_range_high = r128.range_max();
 
-	audio_level_callback(loudness_s, to_db(peak),
+	vector<float> bus_loudness;
+	bus_loudness.resize(input_mapping.buses.size());
+	for (unsigned bus_index = 0; bus_index < bus_r128.size(); ++bus_index) {
+		bus_loudness[bus_index] = bus_r128[bus_index]->loudness_S();
+	}
+
+	audio_level_callback(loudness_s, to_db(peak), bus_loudness,
 		loudness_i, loudness_range_low, loudness_range_high,
 		gain_staging_db,
 		to_db(final_makeup_gain),
@@ -608,6 +627,17 @@ void AudioMixer::set_input_mapping(const InputMapping &new_input_mapping)
 				reset_alsa_mutex_held(device_spec);
 			}
 			reset_resampler_mutex_held(device_spec);
+		}
+	}
+
+	{
+		lock_guard<mutex> lock(audio_measure_mutex);
+		bus_r128.resize(new_input_mapping.buses.size());
+		for (unsigned bus_index = 0; bus_index < bus_r128.size(); ++bus_index) {
+			if (bus_r128[bus_index] == nullptr) {
+				bus_r128[bus_index].reset(new Ebu_r128_proc);
+			}
+			bus_r128[bus_index]->init(2, OUTPUT_FREQUENCY);
 		}
 	}
 

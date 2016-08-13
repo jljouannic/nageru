@@ -202,6 +202,7 @@ public:
 	}
 
 	typedef std::function<void(float level_lufs, float peak_db,
+	                           std::vector<float> bus_level_lufs,
 	                           float global_level_lufs, float range_low_lufs, float range_high_lufs,
 	                           float gain_staging_db, float final_makeup_gain_db,
 	                           float correlation)> audio_level_callback_t;
@@ -229,6 +230,7 @@ private:
 	void reset_alsa_mutex_held(DeviceSpec device_spec);
 	std::map<DeviceSpec, DeviceInfo> get_devices_mutex_held() const;
 	void update_meters(const std::vector<float> &samples);
+	void measure_bus_levels(unsigned bus_index, const std::vector<float> &left, const std::vector<float> &right);
 	void send_audio_level_callback();
 
 	unsigned num_cards;
@@ -273,6 +275,12 @@ private:
 	CorrelationMeasurer correlation;  // Under audio_measure_mutex.
 	Resampler peak_resampler;  // Under audio_measure_mutex.
 	std::atomic<float> peak{0.0f};
+
+	// Under audio_measure_mutex. Note that Ebu_r128_proc has a broken
+	// copy constructor (it uses the default, but holds arrays),
+	// so we can't just use raw Ebu_r128_proc elements, but need to use
+	// unique_ptrs.
+	std::vector<std::unique_ptr<Ebu_r128_proc>> bus_r128;
 };
 
 #endif  // !defined(_AUDIO_MIXER_H)
