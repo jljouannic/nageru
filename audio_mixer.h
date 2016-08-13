@@ -20,6 +20,7 @@
 #include <set>
 #include <vector>
 
+#include "alsa_input.h"
 #include "bmusb/bmusb.h"
 #include "db.h"
 #include "defs.h"
@@ -31,7 +32,7 @@ namespace bmusb {
 struct AudioFormat;
 }  // namespace bmusb
 
-enum class InputSourceType { SILENCE, CAPTURE_CARD };
+enum class InputSourceType { SILENCE, CAPTURE_CARD, ALSA_INPUT };
 struct DeviceSpec {
 	InputSourceType type;
 	unsigned index;
@@ -74,6 +75,7 @@ struct InputMapping {
 class AudioMixer {
 public:
 	AudioMixer(unsigned num_cards);
+	~AudioMixer();
 	void reset_resampler(DeviceSpec device_spec);
 
 	// frame_length is in TIMEBASE units.
@@ -204,12 +206,15 @@ private:
 		unsigned capture_frequency = OUTPUT_FREQUENCY;
 		// Which channels we consider interesting (ie., are part of some input_mapping).
 		std::set<unsigned> interesting_channels;
+		// Only used for ALSA cards, obviously.
+		std::unique_ptr<ALSAInput> alsa_device;
 	};
 	AudioDevice *find_audio_device(DeviceSpec device_spec);
 
 	void find_sample_src_from_device(const std::map<DeviceSpec, std::vector<float>> &samples_card, DeviceSpec device_spec, int source_channel, const float **srcptr, unsigned *stride);
 	void fill_audio_bus(const std::map<DeviceSpec, std::vector<float>> &samples_card, const InputMapping::Bus &bus, unsigned num_samples, float *output);
 	void reset_resampler_mutex_held(DeviceSpec device_spec);
+	void reset_alsa_mutex_held(DeviceSpec device_spec);
 	std::map<DeviceSpec, DeviceInfo> get_devices_mutex_held() const;
 
 	unsigned num_cards;
@@ -217,6 +222,10 @@ private:
 	mutable std::mutex audio_mutex;
 
 	AudioDevice video_cards[MAX_VIDEO_CARDS];  // Under audio_mutex.
+
+	// TODO: Figure out a better way to unify these two, as they are sharing indexing.
+	AudioDevice alsa_inputs[MAX_ALSA_CARDS];  // Under audio_mutex.
+	std::vector<ALSAInput::Device> available_alsa_cards;
 
 	StereoFilter locut;  // Default cutoff 120 Hz, 24 dB/oct.
 	std::atomic<float> locut_cutoff_hz;

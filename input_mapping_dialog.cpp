@@ -75,7 +75,8 @@ void InputMappingDialog::setup_channel_choices_from_bus(unsigned row, const Inpu
 	for (unsigned channel = 0; channel < 2; ++channel) {
 		QComboBox *channel_combo = new QComboBox;
 		channel_combo->addItem(QString("(none)"));
-		if (bus.device.type == InputSourceType::CAPTURE_CARD) {
+		if (bus.device.type == InputSourceType::CAPTURE_CARD ||
+		    bus.device.type == InputSourceType::ALSA_INPUT) {
 			auto device_it = devices.find(bus.device);
 			assert(device_it != devices.end());
 			unsigned num_device_channels = device_it->second.num_channels;
