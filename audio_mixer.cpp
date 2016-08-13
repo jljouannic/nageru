@@ -106,15 +106,16 @@ AudioMixer::AudioMixer(unsigned num_cards)
 	set_input_mapping(new_input_mapping);
 }
 
-void AudioMixer::reset_device(DeviceSpec device_spec)
+void AudioMixer::reset_resampler(DeviceSpec device_spec)
 {
 	lock_guard<mutex> lock(audio_mutex);
-	reset_device_mutex_held(device_spec);
+	reset_resampler_mutex_held(device_spec);
 }
 
-void AudioMixer::reset_device_mutex_held(DeviceSpec device_spec)
+void AudioMixer::reset_resampler_mutex_held(DeviceSpec device_spec)
 {
 	AudioDevice *device = find_audio_device(device_spec);
+
 	if (device->interesting_channels.empty()) {
 		device->resampling_queue.reset();
 	} else {
@@ -450,7 +451,7 @@ void AudioMixer::set_input_mapping(const InputMapping &new_input_mapping)
 		AudioDevice *device = find_audio_device(device_spec);
 		if (device->interesting_channels != interesting_channels[device_spec]) {
 			device->interesting_channels = interesting_channels[device_spec];
-			reset_device_mutex_held(device_spec);
+			reset_resampler_mutex_held(device_spec);
 		}
 	}
 

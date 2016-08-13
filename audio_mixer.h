@@ -74,7 +74,7 @@ struct InputMapping {
 class AudioMixer {
 public:
 	AudioMixer(unsigned num_cards);
-	void reset_device(DeviceSpec device_spec);
+	void reset_resampler(DeviceSpec device_spec);
 
 	// frame_length is in TIMEBASE units.
 	void add_audio(DeviceSpec device_spec, const uint8_t *data, unsigned num_samples, bmusb::AudioFormat audio_format, int64_t frame_length);
@@ -209,7 +209,7 @@ private:
 
 	void find_sample_src_from_device(const std::map<DeviceSpec, std::vector<float>> &samples_card, DeviceSpec device_spec, int source_channel, const float **srcptr, unsigned *stride);
 	void fill_audio_bus(const std::map<DeviceSpec, std::vector<float>> &samples_card, const InputMapping::Bus &bus, unsigned num_samples, float *output);
-	void reset_device_mutex_held(DeviceSpec device_spec);
+	void reset_resampler_mutex_held(DeviceSpec device_spec);
 	std::map<DeviceSpec, DeviceInfo> get_devices_mutex_held() const;
 
 	unsigned num_cards;

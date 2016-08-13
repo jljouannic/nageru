@@ -287,7 +287,7 @@ void Mixer::configure_card(unsigned card_index, CaptureInterface *capture, bool 
 	card->capture->configure_card();
 
 	DeviceSpec device{InputSourceType::CAPTURE_CARD, card_index};
-	audio_mixer.reset_device(device);
+	audio_mixer.reset_resampler(device);
 	audio_mixer.set_name(device, card->capture->get_description());
 }
 
@@ -384,7 +384,7 @@ void Mixer::bm_frame(unsigned card_index, uint16_t timecode,
 	if (dropped_frames > MAX_FPS * 2) {
 		fprintf(stderr, "Card %d lost more than two seconds (or time code jumping around; from 0x%04x to 0x%04x), resetting resampler\n",
 			card_index, card->last_timecode, timecode);
-		audio_mixer.reset_device(device);
+		audio_mixer.reset_resampler(device);
 		dropped_frames = 0;
 	} else if (dropped_frames > 0) {
 		// Insert silence as needed.
