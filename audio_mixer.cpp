@@ -185,7 +185,8 @@ void AudioMixer::reset_alsa_mutex_held(DeviceSpec device_spec)
 	if (device->interesting_channels.empty()) {
 		device->alsa_device.reset();
 	} else {
-		device->alsa_device.reset(new ALSAInput(available_alsa_cards[card_index].address.c_str(), OUTPUT_FREQUENCY, 2, bind(&AudioMixer::add_audio, this, device_spec, _1, _2, _3, _4)));
+		const ALSAInput::Device &alsa_dev = available_alsa_cards[card_index];
+		device->alsa_device.reset(new ALSAInput(alsa_dev.address.c_str(), OUTPUT_FREQUENCY, alsa_dev.num_channels, bind(&AudioMixer::add_audio, this, device_spec, _1, _2, _3, _4)));
 		device->capture_frequency = device->alsa_device->get_sample_rate();
 		device->alsa_device->start_capture_thread();
 	}
