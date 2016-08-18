@@ -255,7 +255,7 @@ void MainWindow::setup_audio_miniview()
 		// TODO: Set the fader position.
 		ui->faders->addWidget(channel);
 
-		connect(ui_audio_miniview->fader, &QAbstractSlider::valueChanged,
+		connect(ui_audio_miniview->fader, &NonLinearFader::dbValueChanged,
 			bind(&MainWindow::mini_fader_changed, this, ui_audio_miniview, bus_index, _1));
 	}
 }
@@ -381,13 +381,15 @@ void MainWindow::compressor_threshold_knob_changed(int value)
 		QString::fromStdString(format_db(threshold_dbfs, DB_WITH_SIGN)));
 }
 
-void MainWindow::mini_fader_changed(Ui::AudioMiniView *ui, int channel, int value)
+void MainWindow::mini_fader_changed(Ui::AudioMiniView *ui, int channel, double volume_db)
 {
-	float volume_db = value * 0.1f;
-
 	char buf[256];
-	snprintf(buf, sizeof(buf), "%+.1f dB", volume_db);
-	ui->fader_label->setText(buf);
+	if (isfinite(volume_db)) {
+		snprintf(buf, sizeof(buf), "%+.1f dB", volume_db);
+		ui->fader_label->setText(buf);
+	} else {
+		ui->fader_label->setText("-∞ dB");
+	}
 
 	global_mixer->get_audio_mixer()->set_fader_volume(channel, volume_db);
 }

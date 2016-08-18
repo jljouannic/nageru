@@ -259,7 +259,7 @@
                  <number>0</number>
                 </property>
                 <item>
-                 <widget class="QSlider" name="fader">
+                 <widget class="NonLinearFader" name="fader">
                   <property name="minimum">
                    <number>-390</number>
                   </property>
@@ -273,7 +273,7 @@
                    <enum>Qt::Vertical</enum>
                   </property>
                   <property name="tickPosition">
-                   <enum>QSlider::TicksBothSides</enum>
+                   <enum>QSlider::NoTicks</enum>
                   </property>
                   <property name="tickInterval">
                    <number>30</number>
@@ -338,6 +338,11 @@
    <class>EllipsisLabel</class>
    <extends>QLabel</extends>
    <header>ellipsis_label.h</header>
+  </customwidget>
+  <customwidget>
+   <class>NonLinearFader</class>
+   <extends>QSlider</extends>
+   <header>nonlinear_fader.h</header>
   </customwidget>
  </customwidgets>
  <resources/>
