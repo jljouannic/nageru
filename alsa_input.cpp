@@ -6,21 +6,14 @@ using namespace std;
 ALSAInput::ALSAInput(const char *device, unsigned sample_rate, unsigned num_channels, audio_callback_t audio_callback)
 	: device(device), sample_rate(sample_rate), num_channels(num_channels), audio_callback(audio_callback)
 {
-	die_on_error(device, snd_pcm_open(&pcm_handle,device, SND_PCM_STREAM_CAPTURE, 0));
+	die_on_error(device, snd_pcm_open(&pcm_handle, device, SND_PCM_STREAM_CAPTURE, 0));
 
 	// Set format.
 	snd_pcm_hw_params_t *hw_params;
 	snd_pcm_hw_params_alloca(&hw_params);
-	die_on_error("snd_pcm_hw_params_any()", snd_pcm_hw_params_any(pcm_handle, hw_params));
-	die_on_error("snd_pcm_hw_params_set_access()", snd_pcm_hw_params_set_access(pcm_handle, hw_params, SND_PCM_ACCESS_RW_INTERLEAVED));
-	snd_pcm_format_mask_t *format_mask;
-	snd_pcm_format_mask_alloca(&format_mask);
-	snd_pcm_format_mask_set(format_mask, SND_PCM_FORMAT_S16_LE);
-	snd_pcm_format_mask_set(format_mask, SND_PCM_FORMAT_S24_LE);
-	snd_pcm_format_mask_set(format_mask, SND_PCM_FORMAT_S32_LE);
-	die_on_error("snd_pcm_hw_params_set_format()", snd_pcm_hw_params_set_format_mask(pcm_handle, hw_params, format_mask));
-	die_on_error("snd_pcm_hw_params_set_rate_near()", snd_pcm_hw_params_set_rate_near(pcm_handle, hw_params, &sample_rate, 0));
-	die_on_error("snd_pcm_hw_params_set_channels()", snd_pcm_hw_params_set_channels(pcm_handle, hw_params, num_channels));
+	if (!set_base_params(device, pcm_handle, hw_params, &sample_rate)) {
+		exit(1);
+	}
 
 	die_on_error("snd_pcm_hw_params_set_channels()", snd_pcm_hw_params_set_channels(pcm_handle, hw_params, num_channels));
 
@@ -147,6 +140,37 @@ void ALSAInput::die_on_error(const char *func_name, int err)
 	}
 }
 
+bool ALSAInput::set_base_params(const char *device_name, snd_pcm_t *pcm_handle, snd_pcm_hw_params_t *hw_params, unsigned *sample_rate)
+{
+	int err;
+	err = snd_pcm_hw_params_any(pcm_handle, hw_params);
+	if (err < 0) {
+		fprintf(stderr, "[%s] snd_pcm_hw_params_any(): %s\n", device_name, snd_strerror(err));
+		return false;
+	}
+	err = snd_pcm_hw_params_set_access(pcm_handle, hw_params, SND_PCM_ACCESS_RW_INTERLEAVED);
+	if (err < 0) {
+		fprintf(stderr, "[%s] snd_pcm_hw_params_set_access(): %s\n", device_name, snd_strerror(err));
+		return false;
+	}
+	snd_pcm_format_mask_t *format_mask;
+	snd_pcm_format_mask_alloca(&format_mask);
+	snd_pcm_format_mask_set(format_mask, SND_PCM_FORMAT_S16_LE);
+	snd_pcm_format_mask_set(format_mask, SND_PCM_FORMAT_S24_LE);
+	snd_pcm_format_mask_set(format_mask, SND_PCM_FORMAT_S32_LE);
+	err = snd_pcm_hw_params_set_format_mask(pcm_handle, hw_params, format_mask);
+	if (err < 0) {
+		fprintf(stderr, "[%s] snd_pcm_hw_params_set_format_mask(): %s\n", device_name, snd_strerror(err));
+		return false;
+	}
+	err = snd_pcm_hw_params_set_rate_near(pcm_handle, hw_params, sample_rate, 0);
+	if (err < 0) {
+		fprintf(stderr, "[%s] snd_pcm_hw_params_set_rate_near(): %s\n", device_name, snd_strerror(err));
+		return false;
+	}
+	return true;
+}
+
 vector<ALSAInput::Device> ALSAInput::enumerate_devices()
 {
 	vector<Device> ret;
@@ -182,15 +206,43 @@ vector<ALSAInput::Device> ALSAInput::enumerate_devices()
 
 			snprintf(address, sizeof(address), "hw:%d,%d", card_index, dev_index);
 
+			unsigned num_channels = 0;
+
 			// Find all channel maps for this device, and pick out the one
 			// with the most channels.
 			snd_pcm_chmap_query_t **cmaps = snd_pcm_query_chmaps_from_hw(card_index, dev_index, 0, SND_PCM_STREAM_CAPTURE);
-			unsigned num_channels = 0;
-			for (snd_pcm_chmap_query_t **ptr = cmaps; *ptr; ++ptr) {
-				num_channels = max(num_channels, (*ptr)->map.channels);
+			if (cmaps != nullptr) {
+				for (snd_pcm_chmap_query_t **ptr = cmaps; *ptr; ++ptr) {
+					num_channels = max(num_channels, (*ptr)->map.channels);
+				}
+				snd_pcm_free_chmaps(cmaps);
 			}
-
-			snd_pcm_free_chmaps(cmaps);
+			if (num_channels == 0) {
+				// Device had no channel maps. We need to open it to query.
+				snd_pcm_t *pcm_handle;
+				int err = snd_pcm_open(&pcm_handle, address, SND_PCM_STREAM_CAPTURE, 0);
+				if (err < 0) {
+					// TODO: When we go to hotplug support, we should support some
+					// retry here, as the device could legitimately be busy.
+					printf("%s: %s\n", address, snd_strerror(err));
+					continue;
+				}
+				snd_pcm_hw_params_t *hw_params;
+				snd_pcm_hw_params_alloca(&hw_params);
+				unsigned sample_rate;
+				if (!set_base_params(address, pcm_handle, hw_params, &sample_rate)) {
+					snd_pcm_close(pcm_handle);
+					continue;
+				}
+				err = snd_pcm_hw_params_get_channels_max(hw_params, &num_channels);
+				if (err < 0) {
+					fprintf(stderr, "[%s] snd_pcm_hw_params_get_channels_max(): %s\n",
+						address, snd_strerror(err));
+					snd_pcm_close(pcm_handle);
+					continue;
+				}
+				snd_pcm_close(pcm_handle);
+			}
 
 			if (num_channels == 0) {
 				printf("%s: No channel maps with channels\n", address);

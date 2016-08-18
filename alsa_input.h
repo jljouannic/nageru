@@ -46,6 +46,7 @@ private:
 	void capture_thread_func();
 	int64_t frames_to_pts(uint64_t n) const;
 	void die_on_error(const char *func_name, int err);
+	static bool set_base_params(const char *device, snd_pcm_t *pcm_handle, snd_pcm_hw_params_t *hw_params, unsigned *sample_rate);
 
 	std::string device;
 	unsigned sample_rate, num_channels, num_periods;
