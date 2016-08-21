@@ -133,6 +133,12 @@ MainWindow::MainWindow()
 	connect(ui->me_live, &GLWidget::transition_names_updated, this, &MainWindow::set_transition_names);
 	qRegisterMetaType<Mixer::Output>("Mixer::Output");
 
+	// Hook up the prev/next buttons on the audio views.
+	connect(ui->compact_prev_page, &QAbstractButton::clicked, bind(&QStackedWidget::setCurrentIndex, ui->audio_views, 1));
+	connect(ui->compact_next_page, &QAbstractButton::clicked, bind(&QStackedWidget::setCurrentIndex, ui->audio_views, 1));
+	connect(ui->full_prev_page, &QAbstractButton::clicked, bind(&QStackedWidget::setCurrentIndex, ui->audio_views, 0));
+	connect(ui->full_next_page, &QAbstractButton::clicked, bind(&QStackedWidget::setCurrentIndex, ui->audio_views, 0));
+
 	last_audio_level_callback = steady_clock::now() - seconds(1);
 }
 
@@ -469,6 +475,11 @@ void MainWindow::relayout()
 	// Space between the M/E displays and the audio strip.
 	remaining_height -= ui->vertical_layout->spacing();
 
+	// The label above the audio strip.
+	double compact_label_height = ui->compact_label->geometry().height() +
+		ui->compact_audio_layout->spacing();
+	remaining_height -= compact_label_height;
+
 	// The previews will be constrained by the remaining height, and the width.
 	double preview_label_height = previews[0]->title_bar->geometry().height() +
 		previews[0]->main_vertical_layout->spacing();
@@ -477,8 +488,14 @@ void MainWindow::relayout()
 	remaining_height -= preview_height + preview_label_height + ui->vertical_layout->spacing();
 
 	ui->vertical_layout->setStretch(0, lrintf(me_height));
-	ui->vertical_layout->setStretch(1, lrintf(remaining_height));  // Audio strip.
-	ui->vertical_layout->setStretch(2, lrintf(preview_height + preview_label_height));
+	ui->vertical_layout->setStretch(1,
+		lrintf(compact_label_height) +
+		lrintf(remaining_height) +
+		lrintf(preview_height + preview_label_height));  // Audio strip and previews together.
+
+	ui->compact_audio_layout->setStretch(0, lrintf(compact_label_height));
+	ui->compact_audio_layout->setStretch(1, lrintf(remaining_height));  // Audio strip.
+	ui->compact_audio_layout->setStretch(2, lrintf(preview_height + preview_label_height));
 
 	// Set the widths for the previews.
 	double preview_width = preview_height * 16.0 / 9.0;
