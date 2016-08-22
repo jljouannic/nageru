@@ -231,7 +231,15 @@ void MainWindow::mixer_created(Mixer *mixer)
 
 	// TODO: Fetch all of the values these for completeness,
 	// not just the enable knobs implied by flags.
-	ui->locut_enabled->setChecked(global_mixer->get_audio_mixer()->get_locut_enabled());
+#if 0
+	// TODO: Reenable for simple audio.
+	ui->locut_enabled->setChecked(global_mixer->get_audio_mixer()->get_locut_enabled(0));
+	connect(ui->locut_enabled, &QCheckBox::stateChanged, [this](int state){
+		global_mixer->get_audio_mixer()->set_locut_enabled(0, state == Qt::Checked);
+	});
+#else
+	ui->locut_enabled->setVisible(false);
+#endif
 	ui->gainstaging_knob->setValue(global_mixer->get_audio_mixer()->get_gain_staging_db());
 	ui->gainstaging_auto_checkbox->setChecked(global_mixer->get_audio_mixer()->get_gain_staging_auto());
 	ui->compressor_enabled->setChecked(global_mixer->get_audio_mixer()->get_compressor_enabled());
@@ -247,9 +255,6 @@ void MainWindow::mixer_created(Mixer *mixer)
 
 	connect(ui->locut_cutoff_knob, &QDial::valueChanged, this, &MainWindow::cutoff_knob_changed);
 	cutoff_knob_changed(ui->locut_cutoff_knob->value());
-	connect(ui->locut_enabled, &QCheckBox::stateChanged, [this](int state){
-		global_mixer->get_audio_mixer()->set_locut_enabled(state == Qt::Checked);
-	});
 
 	connect(ui->gainstaging_knob, &QAbstractSlider::valueChanged, this, &MainWindow::gain_staging_knob_changed);
 	connect(ui->gainstaging_auto_checkbox, &QCheckBox::stateChanged, [this](int state){
@@ -333,6 +338,11 @@ void MainWindow::setup_audio_expanded_view()
 		audio_expanded_views[bus_index] = ui_audio_expanded_view;
 		// TODO: Set the fader position.
 		ui->buses->addWidget(channel);
+
+		ui_audio_expanded_view->locut_enabled->setChecked(global_mixer->get_audio_mixer()->get_locut_enabled(bus_index));
+		connect(ui->locut_enabled, &QCheckBox::stateChanged, [this, bus_index](int state){
+			global_mixer->get_audio_mixer()->set_locut_enabled(bus_index, state == Qt::Checked);
+		});
 
 		slave_fader(audio_miniviews[bus_index]->fader, ui_audio_expanded_view->fader);
 	}

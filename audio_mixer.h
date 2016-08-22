@@ -101,14 +101,14 @@ public:
 		locut_cutoff_hz = cutoff_hz;
 	}
 
-	void set_locut_enabled(bool enabled)
+	void set_locut_enabled(unsigned bus, bool enabled)
 	{
-		locut_enabled = enabled;
+		locut_enabled[bus] = enabled;
 	}
 
-	bool get_locut_enabled() const
+	bool get_locut_enabled(unsigned bus)
 	{
-		return locut_enabled;
+		return locut_enabled[bus];
 	}
 
 	float get_limiter_threshold_dbfs() const
@@ -243,9 +243,9 @@ private:
 	AudioDevice alsa_inputs[MAX_ALSA_CARDS];  // Under audio_mutex.
 	std::vector<ALSAInput::Device> available_alsa_cards;
 
-	StereoFilter locut;  // Default cutoff 120 Hz, 24 dB/oct.
 	std::atomic<float> locut_cutoff_hz;
-	std::atomic<bool> locut_enabled{true};
+	StereoFilter locut[MAX_BUSES];  // Default cutoff 120 Hz, 24 dB/oct.
+	std::atomic<bool> locut_enabled[MAX_BUSES];
 
 	// First compressor; takes us up to about -12 dBFS.
 	mutable std::mutex compressor_mutex;

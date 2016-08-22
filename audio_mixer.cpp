@@ -110,9 +110,10 @@ AudioMixer::AudioMixer(unsigned num_cards)
 	  compressor(OUTPUT_FREQUENCY),
 	  correlation(OUTPUT_FREQUENCY)
 {
-	locut.init(FILTER_HPF, 2);
-
-	set_locut_enabled(global_flags.locut_enabled);
+	for (unsigned bus_index = 0; bus_index < MAX_BUSES; ++bus_index) {
+		locut[bus_index].init(FILTER_HPF, 2);
+		locut_enabled[bus_index] = global_flags.locut_enabled;
+	}
 	set_gain_staging_db(global_flags.initial_gain_staging_db);
 	set_gain_staging_auto(global_flags.gain_staging_auto);
 	set_compressor_enabled(global_flags.compressor_enabled);
@@ -357,6 +358,14 @@ vector<float> AudioMixer::get_output(double pts, unsigned num_samples, Resamplin
 	for (unsigned bus_index = 0; bus_index < input_mapping.buses.size(); ++bus_index) {
 		fill_audio_bus(samples_card, input_mapping.buses[bus_index], num_samples, &samples_bus[0]);
 
+		// Cut away everything under 120 Hz (or whatever the cutoff is);
+		// we don't need it for voice, and it will reduce headroom
+		// and confuse the compressor. (In particular, any hums at 50 or 60 Hz
+		// should be dampened.)
+		if (locut_enabled[bus_index]) {
+			locut[bus_index].render(samples_bus.data(), samples_bus.size() / 2, locut_cutoff_hz * 2.0 * M_PI / OUTPUT_FREQUENCY, 0.5f);
+		}
+
 		// TODO: We should measure post-fader.
 		deinterleave_samples(samples_bus, &left, &right);
 		measure_bus_levels(bus_index, left, right);
@@ -371,14 +380,6 @@ vector<float> AudioMixer::get_output(double pts, unsigned num_samples, Resamplin
 				samples_out[i] += samples_bus[i] * volume;
 			}
 		}
-	}
-
-	// Cut away everything under 120 Hz (or whatever the cutoff is);
-	// we don't need it for voice, and it will reduce headroom
-	// and confuse the compressor. (In particular, any hums at 50 or 60 Hz
-	// should be dampened.)
-	if (locut_enabled) {
-		locut.render(samples_out.data(), samples_out.size() / 2, locut_cutoff_hz * 2.0 * M_PI / OUTPUT_FREQUENCY, 0.5f);
 	}
 
 	{
