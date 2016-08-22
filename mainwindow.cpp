@@ -54,6 +54,30 @@ void quit_signal(int ignored)
 	global_mainwindow->close();
 }
 
+void slave_knob(QDial *master, QDial *slave)
+{
+	QWidget::connect(master, &QDial::valueChanged, [slave](int value){
+		slave->blockSignals(true);
+		slave->setValue(value);
+		slave->blockSignals(false);
+	});
+	QWidget::connect(slave, &QDial::valueChanged, [master](int value){
+		master->setValue(value);
+	});
+}
+
+void slave_checkbox(QCheckBox *master, QCheckBox *slave)
+{
+	QWidget::connect(master, &QCheckBox::stateChanged, [slave](int state){
+		slave->blockSignals(true);
+		slave->setCheckState(Qt::CheckState(state));
+		slave->blockSignals(false);
+	});
+	QWidget::connect(slave, &QCheckBox::stateChanged, [master](int state){
+		master->setCheckState(Qt::CheckState(state));
+	});
+}
+
 constexpr unsigned DB_NO_FLAGS = 0x0;
 constexpr unsigned DB_WITH_SIGN = 0x1;
 constexpr unsigned DB_BARE = 0x2;
@@ -185,6 +209,12 @@ void MainWindow::mixer_created(Mixer *mixer)
 
 	setup_audio_miniview();
 
+	slave_knob(ui->locut_cutoff_knob, ui->locut_cutoff_knob_2);
+	slave_knob(ui->limiter_threshold_knob, ui->limiter_threshold_knob_2);
+	slave_knob(ui->makeup_gain_knob, ui->makeup_gain_knob_2);
+	slave_checkbox(ui->makeup_gain_auto_checkbox, ui->makeup_gain_auto_checkbox_2);
+	slave_checkbox(ui->limiter_enabled, ui->limiter_enabled_2);
+
 	// TODO: Fetch all of the values these for completeness,
 	// not just the enable knobs implied by flags.
 	ui->locut_enabled->setChecked(global_mixer->get_audio_mixer()->get_locut_enabled());
@@ -194,8 +224,10 @@ void MainWindow::mixer_created(Mixer *mixer)
 	ui->limiter_enabled->setChecked(global_mixer->get_audio_mixer()->get_limiter_enabled());
 	ui->makeup_gain_auto_checkbox->setChecked(global_mixer->get_audio_mixer()->get_final_makeup_gain_auto());
 
-	ui->limiter_threshold_db_display->setText(
+	QString limiter_threshold_label(
 		QString::fromStdString(format_db(mixer->get_audio_mixer()->get_limiter_threshold_dbfs(), DB_WITH_SIGN)));
+	ui->limiter_threshold_db_display->setText(limiter_threshold_label);
+	ui->limiter_threshold_db_display_2->setText(limiter_threshold_label);
 	ui->compressor_threshold_db_display->setText(
 		QString::fromStdString(format_db(mixer->get_audio_mixer()->get_compressor_threshold_dbfs(), DB_WITH_SIGN)));
 
@@ -336,6 +368,7 @@ void MainWindow::cutoff_knob_changed(int value)
 	char buf[256];
 	snprintf(buf, sizeof(buf), "%ld Hz", lrintf(cutoff_hz));
 	ui->locut_cutoff_display->setText(buf);
+	ui->locut_cutoff_display_2->setText(buf);
 }
 
 void MainWindow::report_disk_space(off_t free_bytes, double estimated_seconds_left)
@@ -376,6 +409,8 @@ void MainWindow::limiter_threshold_knob_changed(int value)
 	float threshold_dbfs = value * 0.1f;
 	global_mixer->get_audio_mixer()->set_limiter_threshold_dbfs(threshold_dbfs);
 	ui->limiter_threshold_db_display->setText(
+		QString::fromStdString(format_db(threshold_dbfs, DB_WITH_SIGN)));
+	ui->limiter_threshold_db_display_2->setText(
 		QString::fromStdString(format_db(threshold_dbfs, DB_WITH_SIGN)));
 }
 
@@ -451,6 +486,8 @@ void MainWindow::audio_level_callback(float level_lufs, float peak_db, vector<fl
 		ui->makeup_gain_knob->setValue(lrintf(final_makeup_gain_db * 10.0f));
 		ui->makeup_gain_knob->blockSignals(false);
 		ui->makeup_gain_db_display->setText(
+			QString::fromStdString(format_db(final_makeup_gain_db, DB_WITH_SIGN)));
+		ui->makeup_gain_db_display_2->setText(
 			QString::fromStdString(format_db(final_makeup_gain_db, DB_WITH_SIGN)));
 	});
 }
