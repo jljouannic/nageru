@@ -13,6 +13,7 @@ class GLWidget;
 class QResizeEvent;
 
 namespace Ui {
+class AudioExpandedView;
 class AudioMiniView;
 class Display;
 class MainWindow;
@@ -57,6 +58,7 @@ public slots:
 
 private:
 	void setup_audio_miniview();
+	void setup_audio_expanded_view();
 	bool eventFilter(QObject *watched, QEvent *event) override;
 	void set_white_balance(int channel_number, int x, int y);
 
@@ -72,6 +74,7 @@ private:
 	QPushButton *transition_btn1, *transition_btn2, *transition_btn3;
 	std::vector<Ui::Display *> previews;
 	std::vector<Ui::AudioMiniView *> audio_miniviews;
+	std::vector<Ui::AudioExpandedView *> audio_expanded_views;
 	int current_wb_pick_display = -1;
 };
 

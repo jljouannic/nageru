@@ -27,6 +27,7 @@
 #include "mixer.h"
 #include "post_to_main_thread.h"
 #include "ui_audio_miniview.h"
+#include "ui_audio_expanded_view.h"
 #include "ui_display.h"
 #include "ui_mainwindow.h"
 #include "vumeter.h"
@@ -208,6 +209,7 @@ void MainWindow::mixer_created(Mixer *mixer)
 	}
 
 	setup_audio_miniview();
+	setup_audio_expanded_view();
 
 	slave_knob(ui->locut_cutoff_knob, ui->locut_cutoff_knob_2);
 	slave_knob(ui->limiter_threshold_knob, ui->limiter_threshold_knob_2);
@@ -298,6 +300,33 @@ void MainWindow::setup_audio_miniview()
 	}
 }
 
+void MainWindow::setup_audio_expanded_view()
+{
+	// Remove any existing channels.
+	for (QLayoutItem *item; (item = ui->buses->takeAt(0)) != nullptr; ) {
+		delete item->widget();
+		delete item;
+	}
+	audio_expanded_views.clear();
+
+	// Set up brand new ones from the input mapping.
+	InputMapping mapping = global_mixer->get_audio_mixer()->get_input_mapping();
+	audio_expanded_views.resize(mapping.buses.size());
+	for (unsigned bus_index = 0; bus_index < mapping.buses.size(); ++bus_index) {
+		QWidget *channel = new QWidget(this);
+		Ui::AudioExpandedView *ui_audio_expanded_view = new Ui::AudioExpandedView;
+		ui_audio_expanded_view->setupUi(channel);
+		ui_audio_expanded_view->bus_desc_label->setFullText(
+			QString::fromStdString(mapping.buses[bus_index].name));
+		audio_expanded_views[bus_index] = ui_audio_expanded_view;
+		// TODO: Set the fader position.
+		ui->buses->addWidget(channel);
+
+		//connect(ui_audio_expanded_view->fader, &NonLinearFader::dbValueChanged,
+		//	bind(&MainWindow::mini_fader_changed, this, ui_audio_expanded_view, bus_index, _1));
+	}
+}
+
 void MainWindow::mixer_shutting_down()
 {
 	ui->me_live->clean_context();
@@ -336,6 +365,7 @@ void MainWindow::input_mapping_triggered()
 {
 	if (InputMappingDialog().exec() == QDialog::Accepted) {
 		setup_audio_miniview();
+		setup_audio_expanded_view();
 	}
 }
 
