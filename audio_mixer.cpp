@@ -105,18 +105,19 @@ void deinterleave_samples(const vector<float> &in, vector<float> *out_l, vector<
 
 AudioMixer::AudioMixer(unsigned num_cards)
 	: num_cards(num_cards),
-	  level_compressor(OUTPUT_FREQUENCY),
 	  limiter(OUTPUT_FREQUENCY),
-	  compressor(OUTPUT_FREQUENCY),
 	  correlation(OUTPUT_FREQUENCY)
 {
 	for (unsigned bus_index = 0; bus_index < MAX_BUSES; ++bus_index) {
 		locut[bus_index].init(FILTER_HPF, 2);
 		locut_enabled[bus_index] = global_flags.locut_enabled;
+		gain_staging_db[bus_index] = global_flags.initial_gain_staging_db;
+		compressor[bus_index].reset(new StereoCompressor(OUTPUT_FREQUENCY));
+		compressor_threshold_dbfs[bus_index] = ref_level_dbfs - 12.0f;  // -12 dB.
+		compressor_enabled[bus_index] = global_flags.compressor_enabled;
+		level_compressor[bus_index].reset(new StereoCompressor(OUTPUT_FREQUENCY));
+		level_compressor_enabled[bus_index] = global_flags.gain_staging_auto;
 	}
-	set_gain_staging_db(global_flags.initial_gain_staging_db);
-	set_gain_staging_auto(global_flags.gain_staging_auto);
-	set_compressor_enabled(global_flags.compressor_enabled);
 	set_limiter_enabled(global_flags.limiter_enabled);
 	set_final_makeup_gain_auto(global_flags.final_makeup_gain_auto);
 
@@ -351,7 +352,6 @@ vector<float> AudioMixer::get_output(double pts, unsigned num_samples, Resamplin
 		}
 	}
 
-	// TODO: Move lo-cut etc. into each bus.
 	vector<float> samples_out, left, right;
 	samples_out.resize(num_samples * 2);
 	samples_bus.resize(num_samples * 2);
@@ -364,6 +364,50 @@ vector<float> AudioMixer::get_output(double pts, unsigned num_samples, Resamplin
 		// should be dampened.)
 		if (locut_enabled[bus_index]) {
 			locut[bus_index].render(samples_bus.data(), samples_bus.size() / 2, locut_cutoff_hz * 2.0 * M_PI / OUTPUT_FREQUENCY, 0.5f);
+		}
+
+		{
+			lock_guard<mutex> lock(compressor_mutex);
+
+			// Apply a level compressor to get the general level right.
+			// Basically, if it's over about -40 dBFS, we squeeze it down to that level
+			// (or more precisely, near it, since we don't use infinite ratio),
+			// then apply a makeup gain to get it to -14 dBFS. -14 dBFS is, of course,
+			// entirely arbitrary, but from practical tests with speech, it seems to
+			// put ut around -23 LUFS, so it's a reasonable starting point for later use.
+			if (level_compressor_enabled[bus_index]) {
+				float threshold = 0.01f;   // -40 dBFS.
+				float ratio = 20.0f;
+				float attack_time = 0.5f;
+				float release_time = 20.0f;
+				float makeup_gain = from_db(ref_level_dbfs - (-40.0f));  // +26 dB.
+				level_compressor[bus_index]->process(samples_bus.data(), samples_bus.size() / 2, threshold, ratio, attack_time, release_time, makeup_gain);
+				gain_staging_db[bus_index] = to_db(level_compressor[bus_index]->get_attenuation() * makeup_gain);
+			} else {
+				// Just apply the gain we already had.
+				float g = from_db(gain_staging_db[bus_index]);
+				for (size_t i = 0; i < samples_bus.size(); ++i) {
+					samples_bus[i] *= g;
+				}
+			}
+
+#if 0
+			printf("level=%f (%+5.2f dBFS) attenuation=%f (%+5.2f dB) end_result=%+5.2f dB\n",
+				level_compressor.get_level(), to_db(level_compressor.get_level()),
+				level_compressor.get_attenuation(), to_db(level_compressor.get_attenuation()),
+				to_db(level_compressor.get_level() * level_compressor.get_attenuation() * makeup_gain));
+#endif
+
+			// The real compressor.
+			if (compressor_enabled[bus_index]) {
+				float threshold = from_db(compressor_threshold_dbfs[bus_index]);
+				float ratio = 20.0f;
+				float attack_time = 0.005f;
+				float release_time = 0.040f;
+				float makeup_gain = 2.0f;  // +6 dB.
+				compressor[bus_index]->process(samples_bus.data(), samples_bus.size() / 2, threshold, ratio, attack_time, release_time, makeup_gain);
+		//		compressor_att = compressor.get_attenuation();
+			}
 		}
 
 		// TODO: We should measure post-fader.
@@ -385,50 +429,6 @@ vector<float> AudioMixer::get_output(double pts, unsigned num_samples, Resamplin
 	{
 		lock_guard<mutex> lock(compressor_mutex);
 
-		// Apply a level compressor to get the general level right.
-		// Basically, if it's over about -40 dBFS, we squeeze it down to that level
-		// (or more precisely, near it, since we don't use infinite ratio),
-		// then apply a makeup gain to get it to -14 dBFS. -14 dBFS is, of course,
-		// entirely arbitrary, but from practical tests with speech, it seems to
-		// put ut around -23 LUFS, so it's a reasonable starting point for later use.
-		{
-			if (level_compressor_enabled) {
-				float threshold = 0.01f;   // -40 dBFS.
-				float ratio = 20.0f;
-				float attack_time = 0.5f;
-				float release_time = 20.0f;
-				float makeup_gain = from_db(ref_level_dbfs - (-40.0f));  // +26 dB.
-				level_compressor.process(samples_out.data(), samples_out.size() / 2, threshold, ratio, attack_time, release_time, makeup_gain);
-				gain_staging_db = to_db(level_compressor.get_attenuation() * makeup_gain);
-			} else {
-				// Just apply the gain we already had.
-				float g = from_db(gain_staging_db);
-				for (size_t i = 0; i < samples_out.size(); ++i) {
-					samples_out[i] *= g;
-				}
-			}
-		}
-
-	#if 0
-		printf("level=%f (%+5.2f dBFS) attenuation=%f (%+5.2f dB) end_result=%+5.2f dB\n",
-			level_compressor.get_level(), to_db(level_compressor.get_level()),
-			level_compressor.get_attenuation(), to_db(level_compressor.get_attenuation()),
-			to_db(level_compressor.get_level() * level_compressor.get_attenuation() * makeup_gain));
-	#endif
-
-	//	float limiter_att, compressor_att;
-
-		// The real compressor.
-		if (compressor_enabled) {
-			float threshold = from_db(compressor_threshold_dbfs);
-			float ratio = 20.0f;
-			float attack_time = 0.005f;
-			float release_time = 0.040f;
-			float makeup_gain = 2.0f;  // +6 dB.
-			compressor.process(samples_out.data(), samples_out.size() / 2, threshold, ratio, attack_time, release_time, makeup_gain);
-	//		compressor_att = compressor.get_attenuation();
-		}
-
 		// Finally a limiter at -4 dB (so, -10 dBFS) to take out the worst peaks only.
 		// Note that since ratio is not infinite, we could go slightly higher than this.
 		if (limiter_enabled) {
@@ -444,7 +444,8 @@ vector<float> AudioMixer::get_output(double pts, unsigned num_samples, Resamplin
 	//	printf("limiter=%+5.1f  compressor=%+5.1f\n", to_db(limiter_att), to_db(compressor_att));
 	}
 
-	// At this point, we are most likely close to +0 LU, but all of our
+	// At this point, we are most likely close to +0 LU (at least if the
+	// faders sum to 0 dB and the compressors are on), but all of our
 	// measurements have been on raw sample values, not R128 values.
 	// So we have a final makeup gain to get us to +0 LU; the gain
 	// adjustments required should be relatively small, and also, the
@@ -562,7 +563,7 @@ void AudioMixer::send_audio_level_callback()
 
 	audio_level_callback(loudness_s, to_db(peak), bus_loudness,
 		loudness_i, loudness_range_low, loudness_range_high,
-		gain_staging_db,
+		vector<float>(gain_staging_db, gain_staging_db + MAX_BUSES),
 		to_db(final_makeup_gain),
 		correlation.get_correlation());
 }

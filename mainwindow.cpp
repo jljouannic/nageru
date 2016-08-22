@@ -237,12 +237,31 @@ void MainWindow::mixer_created(Mixer *mixer)
 	connect(ui->locut_enabled, &QCheckBox::stateChanged, [this](int state){
 		global_mixer->get_audio_mixer()->set_locut_enabled(0, state == Qt::Checked);
 	});
-#else
-	ui->locut_enabled->setVisible(false);
-#endif
 	ui->gainstaging_knob->setValue(global_mixer->get_audio_mixer()->get_gain_staging_db());
 	ui->gainstaging_auto_checkbox->setChecked(global_mixer->get_audio_mixer()->get_gain_staging_auto());
 	ui->compressor_enabled->setChecked(global_mixer->get_audio_mixer()->get_compressor_enabled());
+	connect(ui->gainstaging_knob, &QAbstractSlider::valueChanged, this, &MainWindow::gain_staging_knob_changed);
+	connect(ui->gainstaging_auto_checkbox, &QCheckBox::stateChanged, [this](int state){
+		global_mixer->get_audio_mixer()->set_gain_staging_auto(state == Qt::Checked);
+	});
+	ui->compressor_threshold_db_display->setText(
+		QString::fromStdString(format_db(mixer->get_audio_mixer()->get_compressor_threshold_dbfs(), DB_WITH_SIGN)));
+	ui->compressor_threshold_db_display->setText(buf);
+	connect(ui->compressor_threshold_knob, &QDial::valueChanged, this, &MainWindow::compressor_threshold_knob_changed);
+	connect(ui->compressor_enabled, &QCheckBox::stateChanged, [this](int state){
+		global_mixer->get_audio_mixer()->set_compressor_enabled(state == Qt::Checked);
+	});
+#else
+	ui->locut_enabled->setVisible(false);
+	ui->gainstaging_label->setVisible(false);
+	ui->gainstaging_knob->setVisible(false);
+	ui->gainstaging_db_display->setVisible(false);
+	ui->gainstaging_auto_checkbox->setVisible(false);
+	ui->compressor_threshold_label->setVisible(false);
+	ui->compressor_threshold_knob->setVisible(false);
+	ui->compressor_threshold_db_display->setVisible(false);
+	ui->compressor_enabled->setVisible(false);
+#endif
 	ui->limiter_enabled->setChecked(global_mixer->get_audio_mixer()->get_limiter_enabled());
 	ui->makeup_gain_auto_checkbox->setChecked(global_mixer->get_audio_mixer()->get_final_makeup_gain_auto());
 
@@ -250,28 +269,18 @@ void MainWindow::mixer_created(Mixer *mixer)
 		QString::fromStdString(format_db(mixer->get_audio_mixer()->get_limiter_threshold_dbfs(), DB_WITH_SIGN)));
 	ui->limiter_threshold_db_display->setText(limiter_threshold_label);
 	ui->limiter_threshold_db_display_2->setText(limiter_threshold_label);
-	ui->compressor_threshold_db_display->setText(
-		QString::fromStdString(format_db(mixer->get_audio_mixer()->get_compressor_threshold_dbfs(), DB_WITH_SIGN)));
 
 	connect(ui->locut_cutoff_knob, &QDial::valueChanged, this, &MainWindow::cutoff_knob_changed);
 	cutoff_knob_changed(ui->locut_cutoff_knob->value());
 
-	connect(ui->gainstaging_knob, &QAbstractSlider::valueChanged, this, &MainWindow::gain_staging_knob_changed);
-	connect(ui->gainstaging_auto_checkbox, &QCheckBox::stateChanged, [this](int state){
-		global_mixer->get_audio_mixer()->set_gain_staging_auto(state == Qt::Checked);
-	});
 	connect(ui->makeup_gain_knob, &QAbstractSlider::valueChanged, this, &MainWindow::final_makeup_gain_knob_changed);
 	connect(ui->makeup_gain_auto_checkbox, &QCheckBox::stateChanged, [this](int state){
 		global_mixer->get_audio_mixer()->set_final_makeup_gain_auto(state == Qt::Checked);
 	});
 
 	connect(ui->limiter_threshold_knob, &QDial::valueChanged, this, &MainWindow::limiter_threshold_knob_changed);
-	connect(ui->compressor_threshold_knob, &QDial::valueChanged, this, &MainWindow::compressor_threshold_knob_changed);
 	connect(ui->limiter_enabled, &QCheckBox::stateChanged, [this](int state){
 		global_mixer->get_audio_mixer()->set_limiter_enabled(state == Qt::Checked);
-	});
-	connect(ui->compressor_enabled, &QCheckBox::stateChanged, [this](int state){
-		global_mixer->get_audio_mixer()->set_compressor_enabled(state == Qt::Checked);
 	});
 	connect(ui->reset_meters_button, &QPushButton::clicked, this, &MainWindow::reset_meters_button_clicked);
 	mixer->get_audio_mixer()->set_audio_level_callback(bind(&MainWindow::audio_level_callback, this, _1, _2, _3, _4, _5, _6, _7, _8, _9));
@@ -340,8 +349,22 @@ void MainWindow::setup_audio_expanded_view()
 		ui->buses->addWidget(channel);
 
 		ui_audio_expanded_view->locut_enabled->setChecked(global_mixer->get_audio_mixer()->get_locut_enabled(bus_index));
-		connect(ui->locut_enabled, &QCheckBox::stateChanged, [this, bus_index](int state){
+		connect(ui_audio_expanded_view->locut_enabled, &QCheckBox::stateChanged, [this, bus_index](int state){
 			global_mixer->get_audio_mixer()->set_locut_enabled(bus_index, state == Qt::Checked);
+		});
+
+		ui_audio_expanded_view->gainstaging_knob->setValue(global_mixer->get_audio_mixer()->get_gain_staging_db(bus_index));
+		ui_audio_expanded_view->gainstaging_auto_checkbox->setChecked(global_mixer->get_audio_mixer()->get_gain_staging_auto(bus_index));
+		ui_audio_expanded_view->compressor_enabled->setChecked(global_mixer->get_audio_mixer()->get_compressor_enabled(bus_index));
+
+		connect(ui_audio_expanded_view->gainstaging_knob, &QAbstractSlider::valueChanged, bind(&MainWindow::gain_staging_knob_changed, this, bus_index, _1));
+		connect(ui_audio_expanded_view->gainstaging_auto_checkbox, &QCheckBox::stateChanged, [this, bus_index](int state){
+			global_mixer->get_audio_mixer()->set_gain_staging_auto(bus_index, state == Qt::Checked);
+		});
+
+		connect(ui_audio_expanded_view->compressor_threshold_knob, &QDial::valueChanged, bind(&MainWindow::compressor_threshold_knob_changed, this, bus_index, _1));
+		connect(ui_audio_expanded_view->compressor_enabled, &QCheckBox::stateChanged, [this, bus_index](int state){
+			global_mixer->get_audio_mixer()->set_compressor_enabled(bus_index, state == Qt::Checked);
 		});
 
 		slave_fader(audio_miniviews[bus_index]->fader, ui_audio_expanded_view->fader);
@@ -390,12 +413,17 @@ void MainWindow::input_mapping_triggered()
 	}
 }
 
-void MainWindow::gain_staging_knob_changed(int value)
+void MainWindow::gain_staging_knob_changed(unsigned bus_index, int value)
 {
-	ui->gainstaging_auto_checkbox->setCheckState(Qt::Unchecked);
+	if (bus_index == 0) {
+		ui->gainstaging_auto_checkbox->setCheckState(Qt::Unchecked);
+	}
+	if (bus_index < audio_expanded_views.size()) {
+		audio_expanded_views[bus_index]->gainstaging_auto_checkbox->setCheckState(Qt::Unchecked);
+	}
 
 	float gain_db = value * 0.1f;
-	global_mixer->get_audio_mixer()->set_gain_staging_db(gain_db);
+	global_mixer->get_audio_mixer()->set_gain_staging_db(bus_index, gain_db);
 
 	// The label will be updated by the audio level callback.
 }
@@ -465,12 +493,18 @@ void MainWindow::limiter_threshold_knob_changed(int value)
 		QString::fromStdString(format_db(threshold_dbfs, DB_WITH_SIGN)));
 }
 
-void MainWindow::compressor_threshold_knob_changed(int value)
+void MainWindow::compressor_threshold_knob_changed(unsigned bus_index, int value)
 {
 	float threshold_dbfs = value * 0.1f;
-	global_mixer->get_audio_mixer()->set_compressor_threshold_dbfs(threshold_dbfs);
-	ui->compressor_threshold_db_display->setText(
-		QString::fromStdString(format_db(threshold_dbfs, DB_WITH_SIGN)));
+	global_mixer->get_audio_mixer()->set_compressor_threshold_dbfs(bus_index, threshold_dbfs);
+
+	QString label(QString::fromStdString(format_db(threshold_dbfs, DB_WITH_SIGN)));
+	if (bus_index == 0) {
+		ui->compressor_threshold_db_display->setText(label);
+	}
+	if (bus_index < audio_expanded_views.size()) {
+		audio_expanded_views[bus_index]->compressor_threshold_db_display->setText(label);
+	}
 }
 
 void MainWindow::mini_fader_changed(int bus, double volume_db)
@@ -492,7 +526,7 @@ void MainWindow::reset_meters_button_clicked()
 void MainWindow::audio_level_callback(float level_lufs, float peak_db, vector<float> bus_level_lufs,
                                       float global_level_lufs,
                                       float range_low_lufs, float range_high_lufs,
-                                      float gain_staging_db, float final_makeup_gain_db,
+                                      vector<float> gain_staging_db, float final_makeup_gain_db,
                                       float correlation)
 {
 	steady_clock::time_point now = steady_clock::now();
@@ -511,6 +545,15 @@ void MainWindow::audio_level_callback(float level_lufs, float peak_db, vector<fl
 			if (bus_index < audio_miniviews.size()) {
 				audio_miniviews[bus_index]->vu_meter_meter->set_level(
 					bus_level_lufs[bus_index]);
+
+				Ui::AudioExpandedView *view = audio_expanded_views[bus_index];
+				view->vu_meter_meter->set_level(bus_level_lufs[bus_index]);
+				view->gainstaging_knob->blockSignals(true);
+				view->gainstaging_knob->setValue(lrintf(gain_staging_db[bus_index] * 10.0f));
+				view->gainstaging_knob->blockSignals(false);
+				view->gainstaging_db_display->setText(
+					QString("Gain: ") +
+					QString::fromStdString(format_db(gain_staging_db[bus_index], DB_WITH_SIGN)));
 			}
 		}
 		ui->lra_meter->set_levels(global_level_lufs, range_low_lufs, range_high_lufs);
@@ -523,11 +566,12 @@ void MainWindow::audio_level_callback(float level_lufs, float peak_db, vector<fl
 			ui->peak_display->setStyleSheet("");
 		}
 
+		// NOTE: Will be invisible when using multitrack audio.
 		ui->gainstaging_knob->blockSignals(true);
-		ui->gainstaging_knob->setValue(lrintf(gain_staging_db * 10.0f));
+		ui->gainstaging_knob->setValue(lrintf(gain_staging_db[0] * 10.0f));
 		ui->gainstaging_knob->blockSignals(false);
 		ui->gainstaging_db_display->setText(
-			QString::fromStdString(format_db(gain_staging_db, DB_WITH_SIGN)));
+			QString::fromStdString(format_db(gain_staging_db[0], DB_WITH_SIGN)));
 
 		ui->makeup_gain_knob->blockSignals(true);
 		ui->makeup_gain_knob->setValue(lrintf(final_makeup_gain_db * 10.0f));

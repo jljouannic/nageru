@@ -47,11 +47,11 @@ public slots:
 	void set_transition_names(std::vector<std::string> transition_names);
 	void update_channel_name(Mixer::Output output, const std::string &name);
 	void update_channel_color(Mixer::Output output, const std::string &color);
-	void gain_staging_knob_changed(int value);
+	void gain_staging_knob_changed(unsigned bus_index, int value);
 	void final_makeup_gain_knob_changed(int value);
 	void cutoff_knob_changed(int value);
 	void limiter_threshold_knob_changed(int value);
-	void compressor_threshold_knob_changed(int value);
+	void compressor_threshold_knob_changed(unsigned bus_index, int value);
 	void mini_fader_changed(int bus, double db_volume);
 	void reset_meters_button_clicked();
 	void relayout();
@@ -66,7 +66,7 @@ private:
 	void report_disk_space(off_t free_bytes, double estimated_seconds_left);
 
 	// Called from the mixer.
-	void audio_level_callback(float level_lufs, float peak_db, std::vector<float> bus_level_lufs, float global_level_lufs, float range_low_lufs, float range_high_lufs, float gain_staging_db, float final_makeup_gain_db, float correlation);
+	void audio_level_callback(float level_lufs, float peak_db, std::vector<float> bus_level_lufs, float global_level_lufs, float range_low_lufs, float range_high_lufs, std::vector<float> gain_staging_db, float final_makeup_gain_db, float correlation);
 	std::chrono::steady_clock::time_point last_audio_level_callback;
 
 	Ui::MainWindow *ui;

@@ -116,9 +116,9 @@ public:
 		return limiter_threshold_dbfs;
 	}
 
-	float get_compressor_threshold_dbfs() const
+	float get_compressor_threshold_dbfs(unsigned bus_index) const
 	{
-		return compressor_threshold_dbfs;
+		return compressor_threshold_dbfs[bus_index];
 	}
 
 	void set_limiter_threshold_dbfs(float threshold_dbfs)
@@ -126,9 +126,9 @@ public:
 		limiter_threshold_dbfs = threshold_dbfs;
 	}
 
-	void set_compressor_threshold_dbfs(float threshold_dbfs)
+	void set_compressor_threshold_dbfs(unsigned bus_index, float threshold_dbfs)
 	{
-		compressor_threshold_dbfs = threshold_dbfs;
+		compressor_threshold_dbfs[bus_index] = threshold_dbfs;
 	}
 
 	void set_limiter_enabled(bool enabled)
@@ -141,39 +141,39 @@ public:
 		return limiter_enabled;
 	}
 
-	void set_compressor_enabled(bool enabled)
+	void set_compressor_enabled(unsigned bus_index, bool enabled)
 	{
-		compressor_enabled = enabled;
+		compressor_enabled[bus_index] = enabled;
 	}
 
-	bool get_compressor_enabled() const
+	bool get_compressor_enabled(unsigned bus_index) const
 	{
-		return compressor_enabled;
+		return compressor_enabled[bus_index];
 	}
 
-	void set_gain_staging_db(float gain_db)
+	void set_gain_staging_db(unsigned bus_index, float gain_db)
 	{
 		std::unique_lock<std::mutex> lock(compressor_mutex);
-		level_compressor_enabled = false;
-		gain_staging_db = gain_db;
+		level_compressor_enabled[bus_index] = false;
+		gain_staging_db[bus_index] = gain_db;
 	}
 
-	float get_gain_staging_db() const
+	float get_gain_staging_db(unsigned bus_index) const
 	{
 		std::unique_lock<std::mutex> lock(compressor_mutex);
-		return gain_staging_db;
+		return gain_staging_db[bus_index];
 	}
 
-	void set_gain_staging_auto(bool enabled)
+	void set_gain_staging_auto(unsigned bus_index, bool enabled)
 	{
 		std::unique_lock<std::mutex> lock(compressor_mutex);
-		level_compressor_enabled = enabled;
+		level_compressor_enabled[bus_index] = enabled;
 	}
 
-	bool get_gain_staging_auto() const
+	bool get_gain_staging_auto(unsigned bus_index) const
 	{
 		std::unique_lock<std::mutex> lock(compressor_mutex);
-		return level_compressor_enabled;
+		return level_compressor_enabled[bus_index];
 	}
 
 	void set_final_makeup_gain_db(float gain_db)
@@ -204,7 +204,7 @@ public:
 	typedef std::function<void(float level_lufs, float peak_db,
 	                           std::vector<float> bus_level_lufs,
 	                           float global_level_lufs, float range_low_lufs, float range_high_lufs,
-	                           float gain_staging_db, float final_makeup_gain_db,
+	                           std::vector<float> gain_staging_db, float final_makeup_gain_db,
 	                           float correlation)> audio_level_callback_t;
 	void set_audio_level_callback(audio_level_callback_t callback)
 	{
@@ -249,9 +249,9 @@ private:
 
 	// First compressor; takes us up to about -12 dBFS.
 	mutable std::mutex compressor_mutex;
-	StereoCompressor level_compressor;  // Under compressor_mutex. Used to set/override gain_staging_db if <level_compressor_enabled>.
-	float gain_staging_db = 0.0f;  // Under compressor_mutex.
-	bool level_compressor_enabled = true;  // Under compressor_mutex.
+	std::unique_ptr<StereoCompressor> level_compressor[MAX_BUSES];  // Under compressor_mutex. Used to set/override gain_staging_db if <level_compressor_enabled>.
+	float gain_staging_db[MAX_BUSES];  // Under compressor_mutex.
+	bool level_compressor_enabled[MAX_BUSES];  // Under compressor_mutex.
 
 	static constexpr float ref_level_dbfs = -14.0f;  // Chosen so that we end up around 0 LU in practice.
 	static constexpr float ref_level_lufs = -23.0f;  // 0 LU, more or less by definition.
@@ -259,9 +259,9 @@ private:
 	StereoCompressor limiter;
 	std::atomic<float> limiter_threshold_dbfs{ref_level_dbfs + 4.0f};   // 4 dB.
 	std::atomic<bool> limiter_enabled{true};
-	StereoCompressor compressor;
-	std::atomic<float> compressor_threshold_dbfs{ref_level_dbfs - 12.0f};  // -12 dB.
-	std::atomic<bool> compressor_enabled{true};
+	std::unique_ptr<StereoCompressor> compressor[MAX_BUSES];
+	std::atomic<float> compressor_threshold_dbfs[MAX_BUSES];
+	std::atomic<bool> compressor_enabled[MAX_BUSES];
 
 	double final_makeup_gain = 1.0;  // Under compressor_mutex. Read/write by the user. Note: Not in dB, we want the numeric precision so that we can change it slowly.
 	bool final_makeup_gain_auto = true;  // Under compressor_mutex.
