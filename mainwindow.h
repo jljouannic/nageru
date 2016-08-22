@@ -52,7 +52,7 @@ public slots:
 	void cutoff_knob_changed(int value);
 	void limiter_threshold_knob_changed(int value);
 	void compressor_threshold_knob_changed(int value);
-	void mini_fader_changed(Ui::AudioMiniView *ui, int channel, double db_volume);
+	void mini_fader_changed(int bus, double db_volume);
 	void reset_meters_button_clicked();
 	void relayout();
 

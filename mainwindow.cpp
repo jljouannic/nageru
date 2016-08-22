@@ -79,6 +79,18 @@ void slave_checkbox(QCheckBox *master, QCheckBox *slave)
 	});
 }
 
+void slave_fader(NonLinearFader *master, NonLinearFader *slave)
+{
+	QWidget::connect(master, &NonLinearFader::dbValueChanged, [slave](double value) {
+		slave->blockSignals(true);
+		slave->setDbValue(value);
+		slave->blockSignals(false);
+	});
+	QWidget::connect(slave, &NonLinearFader::dbValueChanged, [master](double value){
+		master->setDbValue(value);
+	});
+}
+
 constexpr unsigned DB_NO_FLAGS = 0x0;
 constexpr unsigned DB_WITH_SIGN = 0x1;
 constexpr unsigned DB_BARE = 0x2;
@@ -296,7 +308,7 @@ void MainWindow::setup_audio_miniview()
 		ui->faders->addWidget(channel);
 
 		connect(ui_audio_miniview->fader, &NonLinearFader::dbValueChanged,
-			bind(&MainWindow::mini_fader_changed, this, ui_audio_miniview, bus_index, _1));
+			bind(&MainWindow::mini_fader_changed, this, bus_index, _1));
 	}
 }
 
@@ -322,8 +334,7 @@ void MainWindow::setup_audio_expanded_view()
 		// TODO: Set the fader position.
 		ui->buses->addWidget(channel);
 
-		//connect(ui_audio_expanded_view->fader, &NonLinearFader::dbValueChanged,
-		//	bind(&MainWindow::mini_fader_changed, this, ui_audio_expanded_view, bus_index, _1));
+		slave_fader(audio_miniviews[bus_index]->fader, ui_audio_expanded_view->fader);
 	}
 }
 
@@ -452,17 +463,13 @@ void MainWindow::compressor_threshold_knob_changed(int value)
 		QString::fromStdString(format_db(threshold_dbfs, DB_WITH_SIGN)));
 }
 
-void MainWindow::mini_fader_changed(Ui::AudioMiniView *ui, int channel, double volume_db)
+void MainWindow::mini_fader_changed(int bus, double volume_db)
 {
-	char buf[256];
-	if (isfinite(volume_db)) {
-		snprintf(buf, sizeof(buf), "%+.1f dB", volume_db);
-		ui->fader_label->setText(buf);
-	} else {
-		ui->fader_label->setText("-∞ dB");
-	}
+	QString label(QString::fromStdString(format_db(volume_db, DB_WITH_SIGN)));
+	audio_miniviews[bus]->fader_label->setText(label);
+	audio_expanded_views[bus]->fader_label->setText(label);
 
-	global_mixer->get_audio_mixer()->set_fader_volume(channel, volume_db);
+	global_mixer->get_audio_mixer()->set_fader_volume(bus, volume_db);
 }
 
 void MainWindow::reset_meters_button_clicked()
