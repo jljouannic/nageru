@@ -201,10 +201,15 @@ public:
 		return final_makeup_gain_auto;
 	}
 
+	struct BusLevel {
+		float loudness_lufs;
+		float gain_staging_db;
+	};
+
 	typedef std::function<void(float level_lufs, float peak_db,
-	                           std::vector<float> bus_level_lufs,
+	                           std::vector<BusLevel> bus_levels,
 	                           float global_level_lufs, float range_low_lufs, float range_high_lufs,
-	                           std::vector<float> gain_staging_db, float final_makeup_gain_db,
+	                           float final_makeup_gain_db,
 	                           float correlation)> audio_level_callback_t;
 	void set_audio_level_callback(audio_level_callback_t callback)
 	{

@@ -66,7 +66,7 @@ private:
 	void report_disk_space(off_t free_bytes, double estimated_seconds_left);
 
 	// Called from the mixer.
-	void audio_level_callback(float level_lufs, float peak_db, std::vector<float> bus_level_lufs, float global_level_lufs, float range_low_lufs, float range_high_lufs, std::vector<float> gain_staging_db, float final_makeup_gain_db, float correlation);
+	void audio_level_callback(float level_lufs, float peak_db, std::vector<AudioMixer::BusLevel> bus_levels, float global_level_lufs, float range_low_lufs, float range_high_lufs, float final_makeup_gain_db, float correlation);
 	std::chrono::steady_clock::time_point last_audio_level_callback;
 
 	Ui::MainWindow *ui;

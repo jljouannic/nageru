@@ -283,7 +283,7 @@ void MainWindow::mixer_created(Mixer *mixer)
 		global_mixer->get_audio_mixer()->set_limiter_enabled(state == Qt::Checked);
 	});
 	connect(ui->reset_meters_button, &QPushButton::clicked, this, &MainWindow::reset_meters_button_clicked);
-	mixer->get_audio_mixer()->set_audio_level_callback(bind(&MainWindow::audio_level_callback, this, _1, _2, _3, _4, _5, _6, _7, _8, _9));
+	mixer->get_audio_mixer()->set_audio_level_callback(bind(&MainWindow::audio_level_callback, this, _1, _2, _3, _4, _5, _6, _7, _8));
 
 	struct sigaction act;
 	memset(&act, 0, sizeof(act));
@@ -528,10 +528,10 @@ void MainWindow::reset_meters_button_clicked()
 	ui->peak_display->setStyleSheet("");
 }
 
-void MainWindow::audio_level_callback(float level_lufs, float peak_db, vector<float> bus_level_lufs,
+void MainWindow::audio_level_callback(float level_lufs, float peak_db, vector<AudioMixer::BusLevel> bus_levels,
                                       float global_level_lufs,
                                       float range_low_lufs, float range_high_lufs,
-                                      vector<float> gain_staging_db, float final_makeup_gain_db,
+                                      float final_makeup_gain_db,
                                       float correlation)
 {
 	steady_clock::time_point now = steady_clock::now();
@@ -546,19 +546,19 @@ void MainWindow::audio_level_callback(float level_lufs, float peak_db, vector<fl
 
 	post_to_main_thread([=]() {
 		ui->vu_meter->set_level(level_lufs);
-		for (unsigned bus_index = 0; bus_index < bus_level_lufs.size(); ++bus_index) {
+		for (unsigned bus_index = 0; bus_index < bus_levels.size(); ++bus_index) {
 			if (bus_index < audio_miniviews.size()) {
-				audio_miniviews[bus_index]->vu_meter_meter->set_level(
-					bus_level_lufs[bus_index]);
+				const AudioMixer::BusLevel &level = bus_levels[bus_index];
+				audio_miniviews[bus_index]->vu_meter_meter->set_level(level.loudness_lufs);
 
 				Ui::AudioExpandedView *view = audio_expanded_views[bus_index];
-				view->vu_meter_meter->set_level(bus_level_lufs[bus_index]);
+				view->vu_meter_meter->set_level(level.loudness_lufs);
 				view->gainstaging_knob->blockSignals(true);
-				view->gainstaging_knob->setValue(lrintf(gain_staging_db[bus_index] * 10.0f));
+				view->gainstaging_knob->setValue(lrintf(level.gain_staging_db * 10.0f));
 				view->gainstaging_knob->blockSignals(false);
 				view->gainstaging_db_display->setText(
 					QString("Gain: ") +
-					QString::fromStdString(format_db(gain_staging_db[bus_index], DB_WITH_SIGN)));
+					QString::fromStdString(format_db(level.gain_staging_db, DB_WITH_SIGN)));
 			}
 		}
 		ui->lra_meter->set_levels(global_level_lufs, range_low_lufs, range_high_lufs);
@@ -573,10 +573,10 @@ void MainWindow::audio_level_callback(float level_lufs, float peak_db, vector<fl
 
 		// NOTE: Will be invisible when using multitrack audio.
 		ui->gainstaging_knob->blockSignals(true);
-		ui->gainstaging_knob->setValue(lrintf(gain_staging_db[0] * 10.0f));
+		ui->gainstaging_knob->setValue(lrintf(bus_levels[0].gain_staging_db * 10.0f));
 		ui->gainstaging_knob->blockSignals(false);
 		ui->gainstaging_db_display->setText(
-			QString::fromStdString(format_db(gain_staging_db[0], DB_WITH_SIGN)));
+			QString::fromStdString(format_db(bus_levels[0].gain_staging_db, DB_WITH_SIGN)));
 
 		ui->makeup_gain_knob->blockSignals(true);
 		ui->makeup_gain_knob->setValue(lrintf(final_makeup_gain_db * 10.0f));

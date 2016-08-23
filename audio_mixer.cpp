@@ -555,15 +555,15 @@ void AudioMixer::send_audio_level_callback()
 	double loudness_range_low = r128.range_min();
 	double loudness_range_high = r128.range_max();
 
-	vector<float> bus_loudness;
-	bus_loudness.resize(input_mapping.buses.size());
+	vector<BusLevel> bus_levels;
+	bus_levels.resize(input_mapping.buses.size());
 	for (unsigned bus_index = 0; bus_index < bus_r128.size(); ++bus_index) {
-		bus_loudness[bus_index] = bus_r128[bus_index]->loudness_S();
+		bus_levels[bus_index].loudness_lufs = bus_r128[bus_index]->loudness_S();
+		bus_levels[bus_index].gain_staging_db = gain_staging_db[bus_index];
 	}
 
-	audio_level_callback(loudness_s, to_db(peak), bus_loudness,
+	audio_level_callback(loudness_s, to_db(peak), bus_levels,
 		loudness_i, loudness_range_low, loudness_range_high,
-		vector<float>(gain_staging_db, gain_staging_db + MAX_BUSES),
 		to_db(final_makeup_gain),
 		correlation.get_correlation());
 }
