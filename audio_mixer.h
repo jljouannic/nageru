@@ -204,6 +204,7 @@ public:
 	struct BusLevel {
 		float loudness_lufs;
 		float gain_staging_db;
+		float compressor_attenuation_db;  // A positive number; 0.0 for no attenuation.
 	};
 
 	typedef std::function<void(float level_lufs, float peak_db,

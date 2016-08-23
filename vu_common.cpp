@@ -32,7 +32,7 @@ double lufs_to_pos(float level_lu, int height, float min_level, float max_level)
 	return y;
 }
 
-void draw_vu_meter(QPainter &painter, int width, int height, int margin, bool is_on, float min_level, float max_level)
+void draw_vu_meter(QPainter &painter, int width, int height, int margin, bool is_on, float min_level, float max_level, bool flip)
 {
 	painter.fillRect(margin, 0, width - 2 * margin, height, Qt::black);
 
@@ -69,6 +69,7 @@ void draw_vu_meter(QPainter &painter, int width, int height, int margin, bool is
 		int r = lrintf(255 * pow(on_r * coverage, 1.0 / 2.2));
 		int g = lrintf(255 * pow(on_g * coverage, 1.0 / 2.2));
 		int b = lrintf(255 * pow(on_b * coverage, 1.0 / 2.2));
-		painter.fillRect(margin, y, width - 2 * margin, 1, QColor(r, g, b));
+		int draw_y = flip ? (height - y - 1) : y;
+		painter.fillRect(margin, draw_y, width - 2 * margin, 1, QColor(r, g, b));
 	}
 }

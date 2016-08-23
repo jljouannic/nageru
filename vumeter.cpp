@@ -27,20 +27,29 @@ void VUMeter::paintEvent(QPaintEvent *event)
 
 	float level_lu = level_lufs - ref_level_lufs;
 	int on_pos = lrint(lufs_to_pos(level_lu, height()));
-	QRect off_rect(0, 0, width(), on_pos);
-	QRect on_rect(0, on_pos, width(), height() - on_pos);
 
-	painter.drawPixmap(off_rect, off_pixmap, off_rect);
-	painter.drawPixmap(on_rect, on_pixmap, on_rect);
+	if (flip) {
+		QRect on_rect(0, 0, width(), height() - on_pos);
+		QRect off_rect(0, height() - on_pos, width(), height());
+
+		painter.drawPixmap(on_rect, on_pixmap, on_rect);
+		painter.drawPixmap(off_rect, off_pixmap, off_rect);
+	} else {
+		QRect off_rect(0, 0, width(), on_pos);
+		QRect on_rect(0, on_pos, width(), height() - on_pos);
+
+		painter.drawPixmap(off_rect, off_pixmap, off_rect);
+		painter.drawPixmap(on_rect, on_pixmap, on_rect);
+	}
 }
 
 void VUMeter::recalculate_pixmaps()
 {
 	on_pixmap = QPixmap(width(), height());
 	QPainter on_painter(&on_pixmap);
-	draw_vu_meter(on_painter, width(), height(), 0, true, min_level, max_level);
+	draw_vu_meter(on_painter, width(), height(), 0, true, min_level, max_level, flip);
 
 	off_pixmap = QPixmap(width(), height());
 	QPainter off_painter(&off_pixmap);
-	draw_vu_meter(off_painter, width(), height(), 0, false, min_level, max_level);
+	draw_vu_meter(off_painter, width(), height(), 0, false, min_level, max_level, flip);
 }

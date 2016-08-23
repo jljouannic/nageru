@@ -368,6 +368,13 @@ void MainWindow::setup_audio_expanded_view()
 		});
 
 		slave_fader(audio_miniviews[bus_index]->fader, ui_audio_expanded_view->fader);
+
+		// Set up the compression attenuation meter.
+		VUMeter *reduction_meter = ui_audio_expanded_view->reduction_meter;
+		reduction_meter->set_min_level(0.0f);
+		reduction_meter->set_max_level(10.0f);
+		reduction_meter->set_ref_level(0.0f);
+		reduction_meter->set_flip(true);
 	}
 }
 
@@ -553,6 +560,7 @@ void MainWindow::audio_level_callback(float level_lufs, float peak_db, vector<Au
 
 				Ui::AudioExpandedView *view = audio_expanded_views[bus_index];
 				view->vu_meter_meter->set_level(level.loudness_lufs);
+				view->reduction_meter->set_level(level.compressor_attenuation_db);
 				view->gainstaging_knob->blockSignals(true);
 				view->gainstaging_knob->setValue(lrintf(level.gain_staging_db * 10.0f));
 				view->gainstaging_knob->blockSignals(false);

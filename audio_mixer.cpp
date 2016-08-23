@@ -557,9 +557,17 @@ void AudioMixer::send_audio_level_callback()
 
 	vector<BusLevel> bus_levels;
 	bus_levels.resize(input_mapping.buses.size());
-	for (unsigned bus_index = 0; bus_index < bus_r128.size(); ++bus_index) {
-		bus_levels[bus_index].loudness_lufs = bus_r128[bus_index]->loudness_S();
-		bus_levels[bus_index].gain_staging_db = gain_staging_db[bus_index];
+	{
+		lock_guard<mutex> lock(compressor_mutex);
+		for (unsigned bus_index = 0; bus_index < bus_r128.size(); ++bus_index) {
+			bus_levels[bus_index].loudness_lufs = bus_r128[bus_index]->loudness_S();
+			bus_levels[bus_index].gain_staging_db = gain_staging_db[bus_index];
+			if (compressor_enabled[bus_index]) {
+				bus_levels[bus_index].compressor_attenuation_db = -to_db(compressor[bus_index]->get_attenuation());
+			} else {
+				bus_levels[bus_index].compressor_attenuation_db = 0.0;
+			}
+		}
 	}
 
 	audio_level_callback(loudness_s, to_db(peak), bus_levels,
