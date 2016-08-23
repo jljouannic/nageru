@@ -1,5 +1,3 @@
-// TODO: This isn't really an LRA meter right now (it ignores the range).
-
 #ifndef LRAMETER_H
 #define LRAMETER_H
 
