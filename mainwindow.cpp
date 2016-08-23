@@ -49,6 +49,34 @@ void quit_signal(int ignored)
 	global_mainwindow->close();
 }
 
+string format_db_with_sign(double db)
+{
+	if (isfinite(db)) {
+		char buf[256];
+		snprintf(buf, sizeof(buf), "%+.1f dB", db);
+		return buf;
+	} else if (db < 0.0) {
+		return "-∞ dB";
+	} else {
+		// Should never happen, really.
+		return "+∞ dB";
+	}
+}
+
+string format_db(double db)
+{
+	if (isfinite(db)) {
+		char buf[256];
+		snprintf(buf, sizeof(buf), "%.1f dB", db);
+		return buf;
+	} else if (db < 0.0) {
+		return "-∞ dB";
+	} else {
+		// Should never happen, really.
+		return "+∞ dB";
+	}
+}
+
 }  // namespace
 
 MainWindow::MainWindow()
@@ -137,11 +165,10 @@ void MainWindow::mixer_created(Mixer *mixer)
 	ui->limiter_enabled->setChecked(global_mixer->get_limiter_enabled());
 	ui->makeup_gain_auto_checkbox->setChecked(global_mixer->get_final_makeup_gain_auto());
 
-	char buf[256];
-	snprintf(buf, sizeof(buf), "%.1f dB", mixer->get_limiter_threshold_dbfs());
-	ui->limiter_threshold_db_display->setText(buf);
-	snprintf(buf, sizeof(buf), "%.1f dB", mixer->get_compressor_threshold_dbfs());
-	ui->compressor_threshold_db_display->setText(buf);
+	ui->limiter_threshold_db_display->setText(
+		QString::fromStdString(format_db(mixer->get_limiter_threshold_dbfs())));
+	ui->compressor_threshold_db_display->setText(
+		QString::fromStdString(format_db(mixer->get_compressor_threshold_dbfs())));
 
 	connect(ui->locut_cutoff_knob, &QDial::valueChanged, this, &MainWindow::cutoff_knob_changed);
 	cutoff_knob_changed(ui->locut_cutoff_knob->value());
@@ -252,20 +279,16 @@ void MainWindow::limiter_threshold_knob_changed(int value)
 {
 	float threshold_dbfs = value * 0.1f;
 	global_mixer->set_limiter_threshold_dbfs(threshold_dbfs);
-
-	char buf[256];
-	snprintf(buf, sizeof(buf), "%.1f dB", threshold_dbfs);
-	ui->limiter_threshold_db_display->setText(buf);
+	ui->limiter_threshold_db_display->setText(
+		QString::fromStdString(format_db(threshold_dbfs)));
 }
 
 void MainWindow::compressor_threshold_knob_changed(int value)
 {
 	float threshold_dbfs = value * 0.1f;
 	global_mixer->set_compressor_threshold_dbfs(threshold_dbfs);
-
-	char buf[256];
-	snprintf(buf, sizeof(buf), "%.1f dB", threshold_dbfs);
-	ui->compressor_threshold_db_display->setText(buf);
+	ui->compressor_threshold_db_display->setText(
+		QString::fromStdString(format_db(threshold_dbfs)));
 }
 
 void MainWindow::reset_meters_button_clicked()
@@ -297,9 +320,7 @@ void MainWindow::audio_level_callback(float level_lufs, float peak_db, float glo
 		ui->lra_meter->set_levels(global_level_lufs, range_low_lufs, range_high_lufs);
 		ui->correlation_meter->set_correlation(correlation);
 
-		char buf[256];
-		snprintf(buf, sizeof(buf), "%.1f", peak_db);
-		ui->peak_display->setText(buf);
+		ui->peak_display->setText(QString::fromStdString(format_db(peak_db)));
 		if (peak_db > -0.1f) {  // -0.1 dBFS is EBU peak limit.
 			ui->peak_display->setStyleSheet("QLabel { background-color: red; color: white; }");
 		} else {
@@ -309,14 +330,14 @@ void MainWindow::audio_level_callback(float level_lufs, float peak_db, float glo
 		ui->gainstaging_knob->blockSignals(true);
 		ui->gainstaging_knob->setValue(lrintf(gain_staging_db * 10.0f));
 		ui->gainstaging_knob->blockSignals(false);
-		snprintf(buf, sizeof(buf), "%+.1f dB", gain_staging_db);
-		ui->gainstaging_db_display->setText(buf);
+		ui->gainstaging_db_display->setText(
+			QString::fromStdString(format_db_with_sign(gain_staging_db)));
 
 		ui->makeup_gain_knob->blockSignals(true);
 		ui->makeup_gain_knob->setValue(lrintf(final_makeup_gain_db * 10.0f));
 		ui->makeup_gain_knob->blockSignals(false);
-		snprintf(buf, sizeof(buf), "%+.1f dB", final_makeup_gain_db);
-		ui->makeup_gain_db_display->setText(buf);
+		ui->makeup_gain_db_display->setText(
+			QString::fromStdString(format_db_with_sign(final_makeup_gain_db)));
 	});
 }
 
