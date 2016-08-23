@@ -303,13 +303,13 @@ void MainWindow::audio_level_callback(float level_lufs, float peak_db, float glo
                                       float gain_staging_db, float final_makeup_gain_db,
                                       float correlation)
 {
-	timeval now;
-	gettimeofday(&now, nullptr);
+	timespec now;
+	clock_gettime(CLOCK_MONOTONIC, &now);
 
 	// The meters are somewhat inefficient to update. Only update them
 	// every 100 ms or so (we get updates every 5–20 ms).
 	double last_update_age = now.tv_sec - last_audio_level_callback.tv_sec +
-		1e-6 * (now.tv_usec - last_audio_level_callback.tv_usec);
+		1e-9 * (now.tv_nsec - last_audio_level_callback.tv_nsec);
 	if (last_update_age < 0.100) {
 		return;
 	}
