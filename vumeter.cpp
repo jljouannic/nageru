@@ -25,7 +25,7 @@ void VUMeter::paintEvent(QPaintEvent *event)
 		level_lufs = this->level_lufs;
 	}
 
-	float level_lu = level_lufs + 23.0f;
+	float level_lu = level_lufs - ref_level_lufs;
 	int on_pos = lrint(lufs_to_pos(level_lu, height()));
 	QRect off_rect(0, 0, width(), on_pos);
 	QRect on_rect(0, on_pos, width(), height() - on_pos);

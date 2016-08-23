@@ -41,6 +41,11 @@ public:
 		recalculate_pixmaps();
 	}
 
+	void set_ref_level(float ref_level_lufs)
+	{
+		this->ref_level_lufs = ref_level_lufs;
+	}
+
 private:
 	void resizeEvent(QResizeEvent *event) override;
 	void paintEvent(QPaintEvent *event) override;
@@ -50,7 +55,7 @@ private:
 	float level_lufs = -HUGE_VAL;
 	float range_low_lufs = -HUGE_VAL;
 	float range_high_lufs = -HUGE_VAL;
-	float min_level = -18.0f, max_level = 9.0f;
+	float min_level = -18.0f, max_level = 9.0f, ref_level_lufs = -23.0f;
 
 	QPixmap on_pixmap, off_pixmap;
 };

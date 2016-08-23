@@ -33,9 +33,9 @@ void LRAMeter::paintEvent(QPaintEvent *event)
 		range_high_lufs = this->range_high_lufs;
 	}
 
-	float level_lu = level_lufs + 23.0f;
-	float range_low_lu = range_low_lufs + 23.0f;
-	float range_high_lu = range_high_lufs + 23.0f;
+	float level_lu = level_lufs - ref_level_lufs;
+	float range_low_lu = range_low_lufs - ref_level_lufs;
+	float range_high_lu = range_high_lufs - ref_level_lufs;
 	int range_low_pos = lrint(lufs_to_pos(range_low_lu, height()));
 	int range_high_pos = lrint(lufs_to_pos(range_high_lu, height()));
 
