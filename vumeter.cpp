@@ -12,13 +12,7 @@ VUMeter::VUMeter(QWidget *parent)
 
 void VUMeter::resizeEvent(QResizeEvent *event)
 {
-	on_pixmap = QPixmap(width(), height());
-	QPainter on_painter(&on_pixmap);
-	draw_vu_meter(on_painter, width(), height(), 0, true);
-
-	off_pixmap = QPixmap(width(), height());
-	QPainter off_painter(&off_pixmap);
-	draw_vu_meter(off_painter, width(), height(), 0, false);
+	recalculate_pixmaps();
 }
 
 void VUMeter::paintEvent(QPaintEvent *event)
@@ -38,4 +32,15 @@ void VUMeter::paintEvent(QPaintEvent *event)
 
 	painter.drawPixmap(off_rect, off_pixmap, off_rect);
 	painter.drawPixmap(on_rect, on_pixmap, on_rect);
+}
+
+void VUMeter::recalculate_pixmaps()
+{
+	on_pixmap = QPixmap(width(), height());
+	QPainter on_painter(&on_pixmap);
+	draw_vu_meter(on_painter, width(), height(), 0, true, min_level, max_level);
+
+	off_pixmap = QPixmap(width(), height());
+	QPainter off_painter(&off_pixmap);
+	draw_vu_meter(off_painter, width(), height(), 0, false, min_level, max_level);
 }

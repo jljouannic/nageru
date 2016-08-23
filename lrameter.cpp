@@ -16,17 +16,7 @@ LRAMeter::LRAMeter(QWidget *parent)
 
 void LRAMeter::resizeEvent(QResizeEvent *event)
 {
-	const int margin = 5;
-
-	on_pixmap = QPixmap(width(), height());
-	QPainter on_painter(&on_pixmap);
-	on_painter.fillRect(0, 0, width(), height(), parentWidget()->palette().window());
-	draw_vu_meter(on_painter, width(), height(), margin, true);
-
-	off_pixmap = QPixmap(width(), height());
-	QPainter off_painter(&off_pixmap);
-	off_painter.fillRect(0, 0, width(), height(), parentWidget()->palette().window());
-	draw_vu_meter(off_painter, width(), height(), margin, false);
+	recalculate_pixmaps();
 }
 
 void LRAMeter::paintEvent(QPaintEvent *event)
@@ -100,4 +90,19 @@ void LRAMeter::paintEvent(QPaintEvent *event)
 		painter.setPen(pen);
 		painter.drawRect(2, y, width() - 5, 1);
 	}
+}
+
+void LRAMeter::recalculate_pixmaps()
+{
+	const int margin = 5;
+
+	on_pixmap = QPixmap(width(), height());
+	QPainter on_painter(&on_pixmap);
+	on_painter.fillRect(0, 0, width(), height(), parentWidget()->palette().window());
+	draw_vu_meter(on_painter, width(), height(), margin, true, min_level, max_level);
+
+	off_pixmap = QPixmap(width(), height());
+	QPainter off_painter(&off_pixmap);
+	off_painter.fillRect(0, 0, width(), height(), parentWidget()->palette().window());
+	draw_vu_meter(off_painter, width(), height(), margin, false, min_level, max_level);
 }

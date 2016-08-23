@@ -9,23 +9,22 @@
 
 using namespace std;
 
-double lufs_to_pos(float level_lu, int height)
-{       
-	const float min_level = 9.0f;    // y=0 is top of screen, so “min” is the loudest level.
-	const float max_level = -18.0f;
+double lufs_to_pos(float level_lu, int height, float min_level, float max_level)
+{
+	// Note: “max” is the loudest level, but y=0 is top of screen.
 
 	// Handle -inf.
-	if (level_lu < max_level) {
+	if (level_lu < min_level) {
 		return height - 1;
 	}
 
-	double y = height * (level_lu - min_level) / (max_level - min_level);
+	double y = height * (level_lu - max_level) / (min_level - max_level);
 	y = max<double>(y, 0);
 	y = min<double>(y, height - 1);
 
 	// If we are big enough, snap to pixel grid instead of antialiasing
 	// the edges; the unevenness will be less noticeable than the blurriness.
-	double height_per_level = height / (min_level - max_level) - 2.0;
+	double height_per_level = height / (max_level - min_level) - 2.0;
 	if (height_per_level >= 10.0) {
 		y = round(y);
 	}
@@ -33,16 +32,16 @@ double lufs_to_pos(float level_lu, int height)
 	return y;
 }
 
-void draw_vu_meter(QPainter &painter, int width, int height, int margin, bool is_on)
+void draw_vu_meter(QPainter &painter, int width, int height, int margin, bool is_on, float min_level, float max_level)
 {
 	painter.fillRect(margin, 0, width - 2 * margin, height, Qt::black);
 
 	for (int y = 0; y < height; ++y) {
 		// Find coverage of “on” rectangles in this pixel row.
 		double coverage = 0.0;
-		for (int level = -18; level < 9; ++level) {
-			double min_y = lufs_to_pos(level + 1.0, height) + 1.0;
-			double max_y = lufs_to_pos(level, height) - 1.0;
+		for (int level = floor(min_level); level <= ceil(max_level); ++level) {
+			double min_y = lufs_to_pos(level + 1.0, height, min_level, max_level) + 1.0;
+			double max_y = lufs_to_pos(level, height, min_level, max_level) - 1.0;
 			min_y = std::max<double>(min_y, y);
 			min_y = std::min<double>(min_y, y + 1);
 			max_y = std::max<double>(max_y, y);
