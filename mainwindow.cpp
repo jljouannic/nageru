@@ -448,6 +448,11 @@ void MainWindow::cutoff_knob_changed(int value)
 	snprintf(buf, sizeof(buf), "%ld Hz", lrintf(cutoff_hz));
 	ui->locut_cutoff_display->setText(buf);
 	ui->locut_cutoff_display_2->setText(buf);
+
+	for (unsigned bus_index = 0; bus_index < audio_expanded_views.size(); ++bus_index) {
+		audio_expanded_views[bus_index]->locut_enabled->setText(
+			QString("Lo-cut: ") + buf);
+	}
 }
 
 void MainWindow::report_disk_space(off_t free_bytes, double estimated_seconds_left)
