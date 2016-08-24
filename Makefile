@@ -17,7 +17,8 @@ OBJS=glwidget.o main.o mainwindow.o vumeter.o lrameter.o vu_common.o correlation
 OBJS += glwidget.moc.o mainwindow.moc.o vumeter.moc.o lrameter.moc.o correlation_meter.moc.o aboutdialog.moc.o ellipsis_label.moc.o input_mapping_dialog.moc.o nonlinear_fader.moc.o
 
 # Mixer objects
-OBJS += mixer.o audio_mixer.o pbo_frame_allocator.o context.o ref_counted_frame.o theme.o resampling_queue.o httpd.o ebu_r128_proc.o flags.o image_input.o stereocompressor.o filter.o alsa_input.o alsa_output.o correlation_measurer.o disk_space_estimator.o
+AUDIO_MIXER_OBJS = audio_mixer.o alsa_input.o ebu_r128_proc.o stereocompressor.o resampling_queue.o flags.o correlation_measurer.o filter.o disk_space_estimator.o
+OBJS += mixer.o pbo_frame_allocator.o context.o ref_counted_frame.o theme.o httpd.o flags.o image_input.o alsa_output.o disk_space_estimator.o $(AUDIO_MIXER_OBJS)
 
 # Streaming and encoding objects
 OBJS += quicksync_encoder.o x264_encoder.o x264_speed_control.o video_encoder.o metacube2.o mux.o audio_encoder.o ffmpeg_raii.o
@@ -30,6 +31,9 @@ ifeq ($(EMBEDDED_BMUSB),yes)
   OBJS += bmusb/bmusb.o bmusb/fake_capture.o
 endif
 
+# Benchmark program.
+BM_OBJS = benchmark_audio_mixer.o $(AUDIO_MIXER_OBJS) flags.o
+
 %.o: %.cpp
 	$(CXX) -MMD -MP $(CPPFLAGS) $(CXXFLAGS) -o $@ -c $<
 %.o: %.cc
@@ -41,9 +45,11 @@ endif
 %.moc.cpp: %.h
 	moc $< -o $@
 
-all: nageru
+all: nageru benchmark_audio_mixer
 
 nageru: $(OBJS)
+	$(CXX) -o $@ $^ $(LDFLAGS) $(LDLIBS)
+benchmark_audio_mixer: $(BM_OBJS)
 	$(CXX) -o $@ $^ $(LDFLAGS) $(LDLIBS)
 
 mainwindow.o: mainwindow.cpp ui_mainwindow.h ui_display.h ui_audio_miniview.h ui_audio_expanded_view.h
@@ -56,7 +62,7 @@ DEPS=$(OBJS:.o=.d)
 -include $(DEPS)
 
 clean:
-	$(RM) $(OBJS) $(DEPS) nageru ui_aboutdialog.h ui_mainwindow.h ui_display.h ui_about.h ui_audio_miniview.h ui_audio_expanded_view.h aboutdialog.moc.cpp correlation_meter.moc.cpp lrameter.moc.cpp vumeter.moc.cpp glwidget.moc.cpp mainwindow.moc.cpp window.moc.cpp chain-*.frag *.dot
+	$(RM) $(OBJS) $(BM_OBJS) $(DEPS) nageru benchmark_audio_mixer ui_aboutdialog.h ui_mainwindow.h ui_display.h ui_about.h ui_audio_miniview.h ui_audio_expanded_view.h aboutdialog.moc.cpp correlation_meter.moc.cpp lrameter.moc.cpp vumeter.moc.cpp glwidget.moc.cpp mainwindow.moc.cpp window.moc.cpp chain-*.frag *.dot
 
 PREFIX=/usr/local
 install:

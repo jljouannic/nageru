@@ -8,3 +8,4 @@ ui_display.h
 ui_input_mapping.h
 ui_mainwindow.h
 nageru
+benchmark_audio_mixer
