@@ -6,6 +6,9 @@
 #include <stdio.h>
 #include <endian.h>
 #include <cmath>
+#ifdef __SSE__
+#include <immintrin.h>
+#endif
 
 #include "db.h"
 #include "flags.h"
@@ -77,7 +80,9 @@ void convert_fixed32_to_fp32(float *dst, size_t out_channel, size_t out_num_chan
 	}
 }
 
-float find_peak(const float *samples, size_t num_samples)
+float find_peak_plain(const float *samples, size_t num_samples) __attribute__((unused));
+
+float find_peak_plain(const float *samples, size_t num_samples)
 {
 	float m = fabs(samples[0]);
 	for (size_t i = 1; i < num_samples; ++i) {
@@ -85,6 +90,54 @@ float find_peak(const float *samples, size_t num_samples)
 	}
 	return m;
 }
+
+#ifdef __SSE__
+static inline float horizontal_max(__m128 m)
+{
+	__m128 tmp = _mm_shuffle_ps(m, m, _MM_SHUFFLE(1, 0, 3, 2));
+	m = _mm_max_ps(m, tmp);
+	tmp = _mm_shuffle_ps(m, m, _MM_SHUFFLE(2, 3, 0, 1));
+	m = _mm_max_ps(m, tmp);
+	return _mm_cvtss_f32(m);
+}
+
+float find_peak(const float *samples, size_t num_samples)
+{
+	const __m128 abs_mask = _mm_castsi128_ps(_mm_set1_epi32(0x7fffffffu));
+	__m128 m = _mm_setzero_ps();
+	for (size_t i = 0; i < (num_samples & ~3); i += 4) {
+		__m128 x = _mm_loadu_ps(samples + i);
+		x = _mm_and_ps(x, abs_mask);
+		m = _mm_max_ps(m, x);
+	}
+	float result = horizontal_max(m);
+
+	for (size_t i = (num_samples & ~3); i < num_samples; ++i) {
+		result = max(result, fabs(samples[i]));
+	}
+
+#if 0
+	// Self-test. We should be bit-exact the same.
+	float reference_result = find_peak_plain(samples, num_samples);
+	if (result != reference_result) {
+		fprintf(stderr, "Error: Peak is %f [%f %f %f %f]; should be %f.\n",
+			result,
+			_mm_cvtss_f32(_mm_shuffle_ps(m, m, _MM_SHUFFLE(0, 0, 0, 0))),
+			_mm_cvtss_f32(_mm_shuffle_ps(m, m, _MM_SHUFFLE(1, 1, 1, 1))),
+			_mm_cvtss_f32(_mm_shuffle_ps(m, m, _MM_SHUFFLE(2, 2, 2, 2))),
+			_mm_cvtss_f32(_mm_shuffle_ps(m, m, _MM_SHUFFLE(3, 3, 3, 3))),
+			reference_result);
+		abort();
+	}
+#endif
+	return result;
+}
+#else
+float find_peak(const float *samples, size_t num_samples)
+{
+	return find_peak_plain(samples, num_samples);
+}
+#endif
 
 void deinterleave_samples(const vector<float> &in, vector<float> *out_l, vector<float> *out_r)
 {
