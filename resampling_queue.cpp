@@ -56,9 +56,7 @@ void ResamplingQueue::add_input_samples(double pts, const float *samples, ssize_
 	k_a0 = k_a1;
 	k_a1 += num_samples;
 
-	for (ssize_t i = 0; i < num_samples * num_channels; ++i) {
-		buffer.push_back(samples[i]);
-	}
+	buffer.insert(buffer.end(), samples, samples + num_samples * num_channels);
 }
 
 bool ResamplingQueue::get_output_samples(double pts, float *samples, ssize_t num_samples, ResamplingQueue::RateAdjustmentPolicy rate_adjustment_policy)
@@ -146,9 +144,7 @@ bool ResamplingQueue::get_output_samples(double pts, float *samples, ssize_t num
 		if (num_input_samples * num_channels > buffer.size()) {
 			num_input_samples = buffer.size() / num_channels;
 		}
-		for (size_t i = 0; i < num_input_samples * num_channels; ++i) {
-			inbuf[i] = buffer[i];
-		}
+		copy(buffer.begin(), buffer.begin() + num_input_samples * num_channels, inbuf);
 
 		vresampler.inp_count = num_input_samples;
 		vresampler.inp_data = inbuf;
