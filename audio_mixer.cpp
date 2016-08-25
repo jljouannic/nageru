@@ -264,8 +264,7 @@ bool AudioMixer::add_audio(DeviceSpec device_spec, const uint8_t *data, unsigned
 	assert(num_channels > 0);
 
 	// Convert the audio to fp32.
-	vector<float> audio;
-	audio.resize(num_samples * num_channels);
+	unique_ptr<float[]> audio(new float[num_samples * num_channels]);
 	unsigned channel_index = 0;
 	for (auto channel_it = device->interesting_channels.cbegin(); channel_it != device->interesting_channels.end(); ++channel_it, ++channel_index) {
 		switch (audio_format.bits_per_sample) {
@@ -273,13 +272,13 @@ bool AudioMixer::add_audio(DeviceSpec device_spec, const uint8_t *data, unsigned
 			assert(num_samples == 0);
 			break;
 		case 16:
-			convert_fixed16_to_fp32(&audio[0], channel_index, num_channels, data, *channel_it, audio_format.num_channels, num_samples);
+			convert_fixed16_to_fp32(audio.get(), channel_index, num_channels, data, *channel_it, audio_format.num_channels, num_samples);
 			break;
 		case 24:
-			convert_fixed24_to_fp32(&audio[0], channel_index, num_channels, data, *channel_it, audio_format.num_channels, num_samples);
+			convert_fixed24_to_fp32(audio.get(), channel_index, num_channels, data, *channel_it, audio_format.num_channels, num_samples);
 			break;
 		case 32:
-			convert_fixed32_to_fp32(&audio[0], channel_index, num_channels, data, *channel_it, audio_format.num_channels, num_samples);
+			convert_fixed32_to_fp32(audio.get(), channel_index, num_channels, data, *channel_it, audio_format.num_channels, num_samples);
 			break;
 		default:
 			fprintf(stderr, "Cannot handle audio with %u bits per sample\n", audio_format.bits_per_sample);
@@ -289,7 +288,7 @@ bool AudioMixer::add_audio(DeviceSpec device_spec, const uint8_t *data, unsigned
 
 	// Now add it.
 	int64_t local_pts = device->next_local_pts;
-	device->resampling_queue->add_input_samples(local_pts / double(TIMEBASE), audio.data(), num_samples);
+	device->resampling_queue->add_input_samples(local_pts / double(TIMEBASE), audio.get(), num_samples);
 	device->next_local_pts = local_pts + frame_length;
 	return true;
 }
