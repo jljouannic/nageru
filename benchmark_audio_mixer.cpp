@@ -18,7 +18,11 @@
 using namespace std;
 using namespace std::chrono;
 
-uint8_t samples[(NUM_SAMPLES * NUM_CHANNELS + 1024) * sizeof(uint16_t)];
+// 16-bit samples, white noise at full volume.
+uint8_t samples16[(NUM_SAMPLES * NUM_CHANNELS + 1024) * sizeof(uint16_t)];
+
+// 24-bit samples, white noise at low volume (-48 dB).
+uint8_t samples24[(NUM_SAMPLES * NUM_CHANNELS + 1024) * 3];
 
 void callback(float level_lufs, float peak_db,
               std::vector<AudioMixer::BusLevel> bus_levels,
@@ -32,7 +36,12 @@ void callback(float level_lufs, float peak_db,
 int main(void)
 {
 	for (unsigned i = 0; i < NUM_SAMPLES * NUM_CHANNELS + 1024; ++i) {
-		samples[i] = rand() & 0xff;
+		samples16[i * 2] = rand() & 0xff;
+		samples16[i * 2 + 1] = rand() & 0xff;
+
+		samples24[i * 3] = rand() & 0xff;
+		samples24[i * 3 + 1] = rand() & 0xff;
+		samples24[i * 3 + 2] = 0;
 	}
 	AudioMixer mixer(NUM_BENCHMARK_CARDS);
 	mixer.set_audio_level_callback(callback);
@@ -63,11 +72,13 @@ int main(void)
 		// Feed the inputs.
 		for (unsigned card_index = 0; card_index < NUM_BENCHMARK_CARDS; ++card_index) {
 			bmusb::AudioFormat audio_format;
-			audio_format.bits_per_sample = 16;
+			audio_format.bits_per_sample = card_index == 3 ? 24 : 16;
 			audio_format.num_channels = NUM_CHANNELS;
 			
 			unsigned num_samples = NUM_SAMPLES + (rand() % 9) - 5;
-			bool ok = mixer.add_audio(DeviceSpec{InputSourceType::CAPTURE_CARD, card_index}, samples, num_samples, audio_format, NUM_SAMPLES * TIMEBASE / OUTPUT_FREQUENCY);
+			bool ok = mixer.add_audio(DeviceSpec{InputSourceType::CAPTURE_CARD, card_index},
+				card_index == 3 ? samples24 : samples16, num_samples, audio_format,
+				NUM_SAMPLES * TIMEBASE / OUTPUT_FREQUENCY);
 			assert(ok);
 		}
 
