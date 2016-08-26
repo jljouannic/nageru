@@ -68,7 +68,7 @@ inline float fastpow(float x, float y)
 inline float compressor_knee(float x, float threshold, float inv_threshold, float inv_ratio_minus_one, float postgain)
 {
 	assert(inv_ratio_minus_one <= 0.0f);
-	if (x > threshold && inv_ratio_minus_one < 0.0f) {
+	if (x > threshold) {
 		return postgain * fastpow(x * inv_threshold, inv_ratio_minus_one);
 	} else {
 		return postgain;
@@ -92,6 +92,17 @@ void StereoCompressor::process(float *buf, size_t num_samples, float threshold, 
 
 	float *left_ptr = buf;
 	float *right_ptr = buf + 1;
+
+	if (inv_ratio_minus_one >= 0.0) {
+		for (size_t i = 0; i < num_samples; ++i) {
+			*left_ptr *= makeup_gain;
+			left_ptr += 2;
+
+			*right_ptr *= makeup_gain;
+			right_ptr += 2;
+		}
+		return;
+	}
 
 	float peak_level = this->peak_level;
 	float compr_level = this->compr_level;
