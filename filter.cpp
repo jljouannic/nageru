@@ -36,6 +36,7 @@ Filter::Filter()
 {
 	omega = M_PI;
 	resonance = 0.01f;
+	A = 1.0f;
 
 	init(FILTER_NONE, 1);
 	update();
@@ -129,6 +130,33 @@ void Filter::update()
 		b2 = 1.0f;
 		// a1 = -2*cs;
 		// a2 = 1 - alpha;
+		break;
+
+	case FILTER_PEAKING_EQ:
+		b0 = 1 + alpha * A;
+		b1 = -2*cs;
+		b2 = 1 - alpha * A;
+		a0 = 1 + alpha / A;
+		// a1 = -2*cs;
+		a2 = 1 - alpha / A;
+		break;
+
+	case FILTER_LOW_SHELF:
+		b0 =      A * ((A + 1) - (A - 1)*cs + 2 * sqrt(A) * alpha);
+		b1 =  2 * A * ((A - 1) - (A + 1)*cs                      );
+		b2 =      A * ((A + 1) - (A - 1)*cs - 2 * sqrt(A) * alpha);
+		a0 =           (A + 1) + (A - 1)*cs + 2 * sqrt(A) * alpha ;
+		a1 =     -2 * ((A - 1) + (A + 1)*cs                      );
+		a2 =           (A + 1) + (A - 1)*cs - 2 * sqrt(A) * alpha ;
+		break;
+
+	case FILTER_HIGH_SHELF:
+		b0 =      A * ((A + 1) + (A - 1)*cs + 2 * sqrt(A) * alpha);
+		b1 = -2 * A * ((A - 1) + (A + 1)*cs                      );
+		b2 =      A * ((A + 1) + (A - 1)*cs - 2 * sqrt(A) * alpha);
+		a0 =           (A + 1) - (A - 1)*cs + 2 * sqrt(A) * alpha ;
+		a1 =      2 * ((A - 1) - (A + 1)*cs                      );
+		a2 =           (A + 1) - (A - 1)*cs - 2 * sqrt(A) * alpha ;
 		break;
 
 	default:
@@ -266,7 +294,7 @@ void StereoFilter::init(FilterType type, int new_order)
 #endif
 }
 
-void StereoFilter::render(float *inout_left_ptr, unsigned n_samples, float cutoff, float resonance)
+void StereoFilter::render(float *inout_left_ptr, unsigned n_samples, float cutoff, float resonance, float dbgain_normalized)
 {
 #ifdef __SSE__
 	if (parm_filter.filtertype == FILTER_NONE || parm_filter.filter_order == 0)
@@ -277,6 +305,7 @@ void StereoFilter::render(float *inout_left_ptr, unsigned n_samples, float cutof
 
 	parm_filter.set_linear_cutoff(cutoff);
 	parm_filter.set_resonance(resonance);
+	parm_filter.set_dbgain_normalized(dbgain_normalized);
 	parm_filter.update();
 
 	__m128 b0 = _mm_set1_ps(parm_filter.b0);

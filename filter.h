@@ -32,6 +32,11 @@ enum FilterType
 	FILTER_BPF,
 	FILTER_NOTCH,
 	FILTER_APF,
+
+	// EQ filters.
+	FILTER_PEAKING_EQ,
+	FILTER_LOW_SHELF,
+	FILTER_HIGH_SHELF,
 };
 
 #define FILTER_MAX_ORDER 4
@@ -69,6 +74,12 @@ public:
 		resonance = new_resonance;
 	}
 
+	// For EQ filters only.
+	void set_dbgain_normalized(float db_gain_div_40)
+	{
+		A = pow(10.0f, db_gain_div_40);
+	}
+
 #ifdef __SSE__
 	// We don't need the stride argument for SSE, as StereoFilter
 	// has its own SSE implementations.
@@ -81,6 +92,7 @@ public:
 private:
 	float omega; //which is 2*Pi*frequency /SAMPLE_RATE
 	float resonance;
+	float A;  // which is 10^(db_gain / 40)
 
 public:
 	unsigned filter_order;
@@ -104,7 +116,7 @@ class StereoFilter
 public:
 	void init(FilterType type, int new_order);
 	
-	void render(float *inout_left_ptr, unsigned n_samples, float cutoff, float resonance);
+	void render(float *inout_left_ptr, unsigned n_samples, float cutoff, float resonance, float dbgain_normalized = 0.0f);
 #ifndef NDEBUG
 #ifdef __SSE__
 	void debug() { parm_filter.debug(); }
