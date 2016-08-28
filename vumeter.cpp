@@ -19,27 +19,34 @@ void VUMeter::paintEvent(QPaintEvent *event)
 {
 	QPainter painter(this);
 
-	float level_lufs;
+	float level_lufs[2];
 	{
 		unique_lock<mutex> lock(level_mutex);
-		level_lufs = this->level_lufs;
+		level_lufs[0] = this->level_lufs[0];
+		level_lufs[1] = this->level_lufs[1];
 	}
 
-	float level_lu = level_lufs - ref_level_lufs;
-	int on_pos = lrint(lufs_to_pos(level_lu, height()));
+	int mid = width() / 2;
 
-	if (flip) {
-		QRect on_rect(0, 0, width(), height() - on_pos);
-		QRect off_rect(0, height() - on_pos, width(), height());
+	for (unsigned channel = 0; channel < 2; ++channel) {
+		int left = (channel == 0) ? 0 : mid;
+		int right = (channel == 0) ? mid : width();
+		float level_lu = level_lufs[channel] - ref_level_lufs;
+		int on_pos = lrint(lufs_to_pos(level_lu, height()));
 
-		painter.drawPixmap(on_rect, on_pixmap, on_rect);
-		painter.drawPixmap(off_rect, off_pixmap, off_rect);
-	} else {
-		QRect off_rect(0, 0, width(), on_pos);
-		QRect on_rect(0, on_pos, width(), height() - on_pos);
+		if (flip) {
+			QRect on_rect(left, 0, right, height() - on_pos);
+			QRect off_rect(left, height() - on_pos, right, height());
 
-		painter.drawPixmap(off_rect, off_pixmap, off_rect);
-		painter.drawPixmap(on_rect, on_pixmap, on_rect);
+			painter.drawPixmap(on_rect, on_pixmap, on_rect);
+			painter.drawPixmap(off_rect, off_pixmap, off_rect);
+		} else {
+			QRect off_rect(left, 0, right, on_pos);
+			QRect on_rect(left, on_pos, right, height() - on_pos);
+
+			painter.drawPixmap(off_rect, off_pixmap, off_rect);
+			painter.drawPixmap(on_rect, on_pixmap, on_rect);
+		}
 	}
 }
 
