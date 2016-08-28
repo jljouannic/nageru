@@ -343,6 +343,10 @@ void MainWindow::setup_audio_miniview()
 
 		connect(ui_audio_miniview->fader, &NonLinearFader::dbValueChanged,
 			bind(&MainWindow::mini_fader_changed, this, bus_index, _1));
+		connect(ui_audio_miniview->peak_display_label, &ClickableLabel::clicked,
+		        [bus_index]() {
+				global_mixer->get_audio_mixer()->reset_peak(bus_index);
+			});
 	}
 }
 
@@ -394,6 +398,11 @@ void MainWindow::setup_audio_expanded_view()
 		peak_meter->set_min_level(-30.0f);
 		peak_meter->set_max_level(0.0f);
 		peak_meter->set_ref_level(0.0f);
+
+		connect(ui_audio_expanded_view->peak_display_label, &ClickableLabel::clicked,
+		        [bus_index]() {
+				global_mixer->get_audio_mixer()->reset_peak(bus_index);
+			});
 
 		// Set up the compression attenuation meter.
 		VUMeter *reduction_meter = ui_audio_expanded_view->reduction_meter;

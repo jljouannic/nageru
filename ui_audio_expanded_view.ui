@@ -383,7 +383,7 @@
         </layout>
        </item>
        <item>
-        <widget class="QLabel" name="peak_display_label">
+        <widget class="ClickableLabel" name="peak_display_label">
          <property name="minimumSize">
           <size>
            <width>60</width>
@@ -451,6 +451,11 @@
    <class>EllipsisLabel</class>
    <extends>QLabel</extends>
    <header>ellipsis_label.h</header>
+  </customwidget>
+  <customwidget>
+   <class>ClickableLabel</class>
+   <extends>QLabel</extends>
+   <header>clickable_label.h</header>
   </customwidget>
  </customwidgets>
  <resources/>

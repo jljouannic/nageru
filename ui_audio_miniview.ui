@@ -231,7 +231,7 @@
                </layout>
               </item>
               <item>
-               <widget class="QLabel" name="peak_display_label">
+               <widget class="ClickableLabel" name="peak_display_label">
                 <property name="minimumSize">
                  <size>
                   <width>30</width>
@@ -343,6 +343,11 @@
    <class>NonLinearFader</class>
    <extends>QSlider</extends>
    <header>nonlinear_fader.h</header>
+  </customwidget>
+  <customwidget>
+   <class>ClickableLabel</class>
+   <extends>QLabel</extends>
+   <header>clickable_label.h</header>
   </customwidget>
  </customwidgets>
  <resources/>

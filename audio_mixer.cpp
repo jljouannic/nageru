@@ -768,3 +768,16 @@ InputMapping AudioMixer::get_input_mapping() const
 	lock_guard<timed_mutex> lock(audio_mutex);
 	return input_mapping;
 }
+
+void AudioMixer::reset_peak(unsigned bus_index)
+{
+	lock_guard<timed_mutex> lock(audio_mutex);
+	for (unsigned channel = 0; channel < 2; ++channel) {
+		PeakHistory &history = peak_history[bus_index][channel];
+		history.current_level = 0.0f;
+		history.historic_peak = 0.0f;
+		history.current_peak = 0.0f;
+		history.last_peak = 0.0f;
+		history.age_seconds = 0.0f;
+	}
+}

@@ -201,6 +201,8 @@ public:
 		return final_makeup_gain_auto;
 	}
 
+	void reset_peak(unsigned bus_index);
+
 	struct BusLevel {
 		float current_level_dbfs[2];  // Digital peak of last frame, left and right.
 		float peak_level_dbfs[2];  // Digital peak with hold, left and right.
@@ -280,7 +282,7 @@ private:
 		float last_peak = 0.0f;
 		float age_seconds = 0.0f;   // Time since "last_peak" was set.
 	};
-	PeakHistory peak_history[MAX_BUSES][2];  // Separate for each channel.
+	PeakHistory peak_history[MAX_BUSES][2];  // Separate for each channel. Under audio_mutex.
 
 	double final_makeup_gain = 1.0;  // Under compressor_mutex. Read/write by the user. Note: Not in dB, we want the numeric precision so that we can change it slowly.
 	bool final_makeup_gain_auto = true;  // Under compressor_mutex.
