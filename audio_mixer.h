@@ -238,7 +238,8 @@ private:
 	void reset_alsa_mutex_held(DeviceSpec device_spec);
 	std::map<DeviceSpec, DeviceInfo> get_devices_mutex_held() const;
 	void update_meters(const std::vector<float> &samples);
-	void measure_bus_levels(unsigned bus_index, const std::vector<float> &left, const std::vector<float> &right, float volume);
+	void add_bus_to_master(unsigned bus_index, const std::vector<float> &samples_bus, std::vector<float> *samples_out);
+	void measure_bus_levels(unsigned bus_index, const std::vector<float> &left, const std::vector<float> &right);
 	void send_audio_level_callback();
 
 	unsigned num_cards;
@@ -286,6 +287,7 @@ private:
 
 	InputMapping input_mapping;  // Under audio_mutex.
 	std::atomic<float> fader_volume_db[MAX_BUSES] {{ 0.0f }};
+	float last_fader_volume_db[MAX_BUSES] { 0.0f };  // Under audio_mutex.
 
 	audio_level_callback_t audio_level_callback = nullptr;
 	mutable std::mutex audio_measure_mutex;

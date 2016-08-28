@@ -462,19 +462,9 @@ vector<float> AudioMixer::get_output(double pts, unsigned num_samples, Resamplin
 			}
 		}
 
-		float volume = from_db(fader_volume_db[bus_index]);
-		if (bus_index == 0) {
-			for (unsigned i = 0; i < num_samples * 2; ++i) {
-				samples_out[i] = samples_bus[i] * volume;
-			}
-		} else {
-			for (unsigned i = 0; i < num_samples * 2; ++i) {
-				samples_out[i] += samples_bus[i] * volume;
-			}
-		}
-
+		add_bus_to_master(bus_index, samples_bus, &samples_out);
 		deinterleave_samples(samples_bus, &left, &right);
-		measure_bus_levels(bus_index, left, right, volume);
+		measure_bus_levels(bus_index, left, right);
 	}
 
 	{
@@ -541,9 +531,56 @@ vector<float> AudioMixer::get_output(double pts, unsigned num_samples, Resamplin
 	return samples_out;
 }
 
-void AudioMixer::measure_bus_levels(unsigned bus_index, const vector<float> &left, const vector<float> &right, float volume)
+void AudioMixer::add_bus_to_master(unsigned bus_index, const vector<float> &samples_bus, vector<float> *samples_out)
+{
+	assert(samples_bus.size() == samples_out->size());
+	assert(samples_bus.size() % 2 == 0);
+	unsigned num_samples = samples_bus.size() / 2;
+	if (fabs(fader_volume_db[bus_index] - last_fader_volume_db[bus_index]) > 1e-3) {
+		// The volume has changed; do a fade over the course of this frame.
+		// (We might have some numerical issues here, but it seems to sound OK.)
+		// For the purpose of fading here, the silence floor is set to -90 dB
+		// (the fader only goes to -84).
+		float old_volume = from_db(max<float>(last_fader_volume_db[bus_index], -90.0f));
+		float volume = from_db(max<float>(fader_volume_db[bus_index], -90.0f));
+
+		float volume_inc = pow(volume / old_volume, 1.0 / num_samples);
+		volume = old_volume;
+		if (bus_index == 0) {
+			for (unsigned i = 0; i < num_samples; ++i) {
+				(*samples_out)[i * 2 + 0] = samples_bus[i * 2 + 0] * volume;
+				(*samples_out)[i * 2 + 1] = samples_bus[i * 2 + 1] * volume;
+				volume *= volume_inc;
+			}
+		} else {
+			for (unsigned i = 0; i < num_samples; ++i) {
+				(*samples_out)[i * 2 + 0] += samples_bus[i * 2 + 0] * volume;
+				(*samples_out)[i * 2 + 1] += samples_bus[i * 2 + 1] * volume;
+				volume *= volume_inc;
+			}
+		}
+	} else {
+		float volume = from_db(fader_volume_db[bus_index]);
+		if (bus_index == 0) {
+			for (unsigned i = 0; i < num_samples; ++i) {
+				(*samples_out)[i * 2 + 0] = samples_bus[i * 2 + 0] * volume;
+				(*samples_out)[i * 2 + 1] = samples_bus[i * 2 + 1] * volume;
+			}
+		} else {
+			for (unsigned i = 0; i < num_samples; ++i) {
+				(*samples_out)[i * 2 + 0] += samples_bus[i * 2 + 0] * volume;
+				(*samples_out)[i * 2 + 1] += samples_bus[i * 2 + 1] * volume;
+			}
+		}
+	}
+
+	last_fader_volume_db[bus_index] = fader_volume_db[bus_index];
+}
+
+void AudioMixer::measure_bus_levels(unsigned bus_index, const vector<float> &left, const vector<float> &right)
 {
 	assert(left.size() == right.size());
+	const float volume = from_db(fader_volume_db[bus_index]);
 	const float peak_levels[2] = {
 		find_peak(left.data(), left.size()) * volume,
 		find_peak(right.data(), right.size()) * volume
