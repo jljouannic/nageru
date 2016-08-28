@@ -132,7 +132,7 @@ bool ResamplingQueue::get_output_samples(double pts, float *samples, ssize_t num
 			// or we're dropping a lot of data.
 			fprintf(stderr, "Card %u: PANIC: Out of input samples to resample, still need %d output samples! (correction factor is %f)\n",
 				card_num, int(vresampler.out_count), rcorr);
-			memset(vresampler.out_data, 0, vresampler.out_count * 2 * sizeof(float));
+			memset(vresampler.out_data, 0, vresampler.out_count * num_channels * sizeof(float));
 			return false;
 		}
 
