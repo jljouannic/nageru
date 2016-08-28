@@ -19,11 +19,13 @@ void VUMeter::paintEvent(QPaintEvent *event)
 {
 	QPainter painter(this);
 
-	float level_lufs[2];
+	float level_lufs[2], peak_lufs[2];
 	{
 		unique_lock<mutex> lock(level_mutex);
 		level_lufs[0] = this->level_lufs[0];
 		level_lufs[1] = this->level_lufs[1];
+		peak_lufs[0] = this->peak_lufs[0];
+		peak_lufs[1] = this->peak_lufs[1];
 	}
 
 	int mid = width() / 2;
@@ -35,28 +37,39 @@ void VUMeter::paintEvent(QPaintEvent *event)
 		int on_pos = lrint(lufs_to_pos(level_lu, height()));
 
 		if (flip) {
-			QRect on_rect(left, 0, right, height() - on_pos);
-			QRect off_rect(left, height() - on_pos, right, height());
+			QRect on_rect(left, 0, right - left, height() - on_pos);
+			QRect off_rect(left, height() - on_pos, right - left, height());
 
 			painter.drawPixmap(on_rect, on_pixmap, on_rect);
 			painter.drawPixmap(off_rect, off_pixmap, off_rect);
 		} else {
-			QRect off_rect(left, 0, right, on_pos);
-			QRect on_rect(left, on_pos, right, height() - on_pos);
+			QRect off_rect(left, 0, right - left, on_pos);
+			QRect on_rect(left, on_pos, right - left, height() - on_pos);
 
 			painter.drawPixmap(off_rect, off_pixmap, off_rect);
 			painter.drawPixmap(on_rect, on_pixmap, on_rect);
+		}
+
+		float peak_lu = peak_lufs[channel] - ref_level_lufs;
+		if (peak_lu >= min_level && peak_lu <= max_level) {
+			int peak_pos = lrint(lufs_to_pos(peak_lu, height()));
+			QRect peak_rect(left, peak_pos - 1, right, 2);
+			painter.drawPixmap(peak_rect, full_on_pixmap, peak_rect);
 		}
 	}
 }
 
 void VUMeter::recalculate_pixmaps()
 {
+	full_on_pixmap = QPixmap(width(), height());
+	QPainter full_on_painter(&full_on_pixmap);
+	draw_vu_meter(full_on_painter, width(), height(), 0, 0.0, true, min_level, max_level, flip);
+
 	on_pixmap = QPixmap(width(), height());
 	QPainter on_painter(&on_pixmap);
-	draw_vu_meter(on_painter, width(), height(), 0, true, min_level, max_level, flip);
+	draw_vu_meter(on_painter, width(), height(), 0, 2.0, true, min_level, max_level, flip);
 
 	off_pixmap = QPixmap(width(), height());
 	QPainter off_painter(&off_pixmap);
-	draw_vu_meter(off_painter, width(), height(), 0, false, min_level, max_level, flip);
+	draw_vu_meter(off_painter, width(), height(), 0, 2.0, false, min_level, max_level, flip);
 }

@@ -99,10 +99,10 @@ void LRAMeter::recalculate_pixmaps()
 	on_pixmap = QPixmap(width(), height());
 	QPainter on_painter(&on_pixmap);
 	on_painter.fillRect(0, 0, width(), height(), parentWidget()->palette().window());
-	draw_vu_meter(on_painter, width(), height(), margin, true, min_level, max_level, /*flip=*/false);
+	draw_vu_meter(on_painter, width(), height(), margin, 2.0, true, min_level, max_level, /*flip=*/false);
 
 	off_pixmap = QPixmap(width(), height());
 	QPainter off_painter(&off_pixmap);
 	off_painter.fillRect(0, 0, width(), height(), parentWidget()->palette().window());
-	draw_vu_meter(off_painter, width(), height(), margin, false, min_level, max_level, /*flip=*/false);
+	draw_vu_meter(off_painter, width(), height(), margin, 2.0, false, min_level, max_level, /*flip=*/false);
 }

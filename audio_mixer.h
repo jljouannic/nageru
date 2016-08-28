@@ -202,7 +202,8 @@ public:
 	}
 
 	struct BusLevel {
-		float loudness_lufs;
+		float current_level_dbfs[2];  // Digital peak of last frame, left and right.
+		float peak_level_dbfs[2];  // Digital peak with hold, left and right.
 		float gain_staging_db;
 		float compressor_attenuation_db;  // A positive number; 0.0 for no attenuation.
 	};
@@ -236,7 +237,7 @@ private:
 	void reset_alsa_mutex_held(DeviceSpec device_spec);
 	std::map<DeviceSpec, DeviceInfo> get_devices_mutex_held() const;
 	void update_meters(const std::vector<float> &samples);
-	void measure_bus_levels(unsigned bus_index, const std::vector<float> &left, const std::vector<float> &right);
+	void measure_bus_levels(unsigned bus_index, const std::vector<float> &left, const std::vector<float> &right, float volume);
 	void send_audio_level_callback();
 
 	unsigned num_cards;
@@ -269,6 +270,14 @@ private:
 	std::atomic<float> compressor_threshold_dbfs[MAX_BUSES];
 	std::atomic<bool> compressor_enabled[MAX_BUSES];
 
+	struct PeakHistory {
+		float current_level = 0.0f;  // Peak of the last frame (not in dB).
+		float current_peak = 0.0f;  // Current peak of the peak meter (not in dB).
+		float last_peak = 0.0f;
+		float age_seconds = 0.0f;   // Time since "last_peak" was set.
+	};
+	PeakHistory peak_history[MAX_BUSES][2];  // Separate for each channel.
+
 	double final_makeup_gain = 1.0;  // Under compressor_mutex. Read/write by the user. Note: Not in dB, we want the numeric precision so that we can change it slowly.
 	bool final_makeup_gain_auto = true;  // Under compressor_mutex.
 
@@ -281,12 +290,6 @@ private:
 	CorrelationMeasurer correlation;  // Under audio_measure_mutex.
 	Resampler peak_resampler;  // Under audio_measure_mutex.
 	std::atomic<float> peak{0.0f};
-
-	// Under audio_measure_mutex. Note that Ebu_r128_proc has a broken
-	// copy constructor (it uses the default, but holds arrays),
-	// so we can't just use raw Ebu_r128_proc elements, but need to use
-	// unique_ptrs.
-	std::vector<std::unique_ptr<Ebu_r128_proc>> bus_r128;
 };
 
 #endif  // !defined(_AUDIO_MIXER_H)

@@ -134,7 +134,7 @@
                  <number>0</number>
                 </property>
                 <item>
-                 <widget class="VUMeter" name="vu_meter_meter" native="true">
+                 <widget class="VUMeter" name="peak_meter" native="true">
                   <property name="sizePolicy">
                    <sizepolicy hsizetype="Fixed" vsizetype="Preferred">
                     <horstretch>0</horstretch>

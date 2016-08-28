@@ -27,6 +27,17 @@ public:
 		QMetaObject::invokeMethod(this, "update", Qt::AutoConnection);
 	}
 
+	void set_peak(float peak_lufs) {
+		set_peak(peak_lufs, peak_lufs);
+	}
+
+	void set_peak(float peak_lufs_left, float peak_lufs_right) {
+		std::unique_lock<std::mutex> lock(level_mutex);
+		this->peak_lufs[0] = peak_lufs_left;
+		this->peak_lufs[1] = peak_lufs_right;
+		QMetaObject::invokeMethod(this, "update", Qt::AutoConnection);
+	}
+
 	double lufs_to_pos(float level_lu, int height)
 	{
 		return ::lufs_to_pos(level_lu, height, min_level, max_level);
@@ -62,10 +73,11 @@ private:
 
 	std::mutex level_mutex;
 	float level_lufs[2] { -HUGE_VALF, -HUGE_VALF };
+	float peak_lufs[2] { -HUGE_VALF, -HUGE_VALF };
 	float min_level = -18.0f, max_level = 9.0f, ref_level_lufs = -23.0f;
 	bool flip = false;
 
-	QPixmap on_pixmap, off_pixmap;
+	QPixmap full_on_pixmap, on_pixmap, off_pixmap;
 };
 
 #endif

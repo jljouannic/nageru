@@ -318,6 +318,13 @@ void MainWindow::setup_audio_miniview()
 		ui_audio_miniview->bus_desc_label->setFullText(
 			QString::fromStdString(mapping.buses[bus_index].name));
 		audio_miniviews[bus_index] = ui_audio_miniview;
+
+		// Set up the peak meter.
+		VUMeter *peak_meter = ui_audio_miniview->peak_meter;
+		peak_meter->set_min_level(-30.0f);
+		peak_meter->set_max_level(0.0f);
+		peak_meter->set_ref_level(0.0f);
+
 		// TODO: Set the fader position.
 		ui->faders->addWidget(channel);
 
@@ -368,6 +375,12 @@ void MainWindow::setup_audio_expanded_view()
 		});
 
 		slave_fader(audio_miniviews[bus_index]->fader, ui_audio_expanded_view->fader);
+
+		// Set up the peak meter.
+		VUMeter *peak_meter = ui_audio_expanded_view->peak_meter;
+		peak_meter->set_min_level(-30.0f);
+		peak_meter->set_max_level(0.0f);
+		peak_meter->set_ref_level(0.0f);
 
 		// Set up the compression attenuation meter.
 		VUMeter *reduction_meter = ui_audio_expanded_view->reduction_meter;
@@ -544,7 +557,12 @@ void MainWindow::audio_level_callback(float level_lufs, float peak_db, vector<Au
 	steady_clock::time_point now = steady_clock::now();
 
 	// The meters are somewhat inefficient to update. Only update them
-	// every 100 ms or so (we get updates every 5–20 ms).
+	// every 100 ms or so (we get updates every 5–20 ms). Note that this
+	// means that the digital peak meters are ever so slightly too low
+	// (each update won't be a faithful representation of the highest peak
+	// since the previous update, since there are frames we won't draw),
+	// but the _peak_ of the peak meters will be correct (it's tracked in
+	// AudioMixer, not here), and that's much more important.
 	double last_update_age = duration<double>(now - last_audio_level_callback).count();
 	if (last_update_age < 0.100) {
 		return;
@@ -556,10 +574,17 @@ void MainWindow::audio_level_callback(float level_lufs, float peak_db, vector<Au
 		for (unsigned bus_index = 0; bus_index < bus_levels.size(); ++bus_index) {
 			if (bus_index < audio_miniviews.size()) {
 				const AudioMixer::BusLevel &level = bus_levels[bus_index];
-				audio_miniviews[bus_index]->vu_meter_meter->set_level(level.loudness_lufs);
+				Ui::AudioMiniView *miniview = audio_miniviews[bus_index];
+				miniview->peak_meter->set_level(
+					level.current_level_dbfs[0], level.current_level_dbfs[1]);
+				miniview->peak_meter->set_peak(
+					level.peak_level_dbfs[0], level.peak_level_dbfs[1]);
 
 				Ui::AudioExpandedView *view = audio_expanded_views[bus_index];
-				view->vu_meter_meter->set_level(level.loudness_lufs);
+				view->peak_meter->set_level(
+					level.current_level_dbfs[0], level.current_level_dbfs[1]);
+				view->peak_meter->set_peak(
+					level.peak_level_dbfs[0], level.peak_level_dbfs[1]);
 				view->reduction_meter->set_level(level.compressor_attenuation_db);
 				view->gainstaging_knob->blockSignals(true);
 				view->gainstaging_knob->setValue(lrintf(level.gain_staging_db * 10.0f));

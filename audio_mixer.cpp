@@ -462,10 +462,6 @@ vector<float> AudioMixer::get_output(double pts, unsigned num_samples, Resamplin
 			}
 		}
 
-		// TODO: We should measure post-fader.
-		deinterleave_samples(samples_bus, &left, &right);
-		measure_bus_levels(bus_index, left, right);
-
 		float volume = from_db(fader_volume_db[bus_index]);
 		if (bus_index == 0) {
 			for (unsigned i = 0; i < num_samples * 2; ++i) {
@@ -476,6 +472,9 @@ vector<float> AudioMixer::get_output(double pts, unsigned num_samples, Resamplin
 				samples_out[i] += samples_bus[i] * volume;
 			}
 		}
+
+		deinterleave_samples(samples_bus, &left, &right);
+		measure_bus_levels(bus_index, left, right, volume);
 	}
 
 	{
@@ -542,12 +541,36 @@ vector<float> AudioMixer::get_output(double pts, unsigned num_samples, Resamplin
 	return samples_out;
 }
 
-void AudioMixer::measure_bus_levels(unsigned bus_index, const vector<float> &left, const vector<float> &right)
+void AudioMixer::measure_bus_levels(unsigned bus_index, const vector<float> &left, const vector<float> &right, float volume)
 {
-	const float *ptrs[] = { left.data(), right.data() };
-	{
-		lock_guard<mutex> lock(audio_measure_mutex);
-		bus_r128[bus_index]->process(left.size(), const_cast<float **>(ptrs));
+	assert(left.size() == right.size());
+	const float peak_levels[2] = {
+		find_peak(left.data(), left.size()) * volume,
+		find_peak(right.data(), right.size()) * volume
+	};
+	for (unsigned channel = 0; channel < 2; ++channel) {
+		// Compute the current value, including hold and falloff.
+		// The constants are borrowed from zita-mu1 by Fons Adriaensen.
+		static constexpr float hold_sec = 0.5f;
+		static constexpr float falloff_db_sec = 15.0f;  // dB/sec falloff after hold.
+		float current_peak;
+		PeakHistory &history = peak_history[bus_index][channel];
+		if (history.age_seconds < hold_sec) {
+			current_peak = history.last_peak;
+		} else {
+			current_peak = history.last_peak * from_db(-falloff_db_sec * (history.age_seconds - hold_sec));
+		}
+
+		// See if we have a new peak to replace the old (possibly falling) one.
+		if (peak_levels[channel] > current_peak) {
+			history.last_peak = peak_levels[channel];
+			history.age_seconds = 0.0f;  // Not 100% correct, but more than good enough given our frame sizes.
+			current_peak = peak_levels[channel];
+		} else {
+			history.age_seconds += float(left.size()) / OUTPUT_FREQUENCY;
+		}
+		history.current_level = peak_levels[channel];
+		history.current_peak = current_peak;
 	}
 }
 
@@ -611,8 +634,11 @@ void AudioMixer::send_audio_level_callback()
 	bus_levels.resize(input_mapping.buses.size());
 	{
 		lock_guard<mutex> lock(compressor_mutex);
-		for (unsigned bus_index = 0; bus_index < bus_r128.size(); ++bus_index) {
-			bus_levels[bus_index].loudness_lufs = bus_r128[bus_index]->loudness_S();
+		for (unsigned bus_index = 0; bus_index < bus_levels.size(); ++bus_index) {
+			bus_levels[bus_index].current_level_dbfs[0] = to_db(peak_history[bus_index][0].current_level);
+			bus_levels[bus_index].current_level_dbfs[1] = to_db(peak_history[bus_index][1].current_level);
+			bus_levels[bus_index].peak_level_dbfs[0] = to_db(peak_history[bus_index][0].current_peak);
+			bus_levels[bus_index].peak_level_dbfs[1] = to_db(peak_history[bus_index][1].current_peak);
 			bus_levels[bus_index].gain_staging_db = gain_staging_db[bus_index];
 			if (compressor_enabled[bus_index]) {
 				bus_levels[bus_index].compressor_attenuation_db = -to_db(compressor[bus_index]->get_attenuation());
@@ -690,17 +716,6 @@ void AudioMixer::set_input_mapping(const InputMapping &new_input_mapping)
 				reset_alsa_mutex_held(device_spec);
 			}
 			reset_resampler_mutex_held(device_spec);
-		}
-	}
-
-	{
-		lock_guard<mutex> lock(audio_measure_mutex);
-		bus_r128.resize(new_input_mapping.buses.size());
-		for (unsigned bus_index = 0; bus_index < bus_r128.size(); ++bus_index) {
-			if (bus_r128[bus_index] == nullptr) {
-				bus_r128[bus_index].reset(new Ebu_r128_proc);
-			}
-			bus_r128[bus_index]->init(2, OUTPUT_FREQUENCY);
 		}
 	}
 

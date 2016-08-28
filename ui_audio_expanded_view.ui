@@ -371,7 +371,7 @@
        <item>
         <layout class="QHBoxLayout" name="vu_centerer">
          <item>
-          <widget class="VUMeter" name="vu_meter_meter" native="true">
+          <widget class="VUMeter" name="peak_meter" native="true">
            <property name="maximumSize">
             <size>
              <width>20</width>
