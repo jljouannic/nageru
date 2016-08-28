@@ -164,6 +164,10 @@ AudioMixer::AudioMixer(unsigned num_cards)
 	for (unsigned bus_index = 0; bus_index < MAX_BUSES; ++bus_index) {
 		locut[bus_index].init(FILTER_HPF, 2);
 		locut_enabled[bus_index] = global_flags.locut_enabled;
+		eq[bus_index][EQ_BAND_BASS].init(FILTER_LOW_SHELF, 1);
+		// Note: EQ_BAND_MID isn't used (see comments in apply_eq()).
+		eq[bus_index][EQ_BAND_TREBLE].init(FILTER_HIGH_SHELF, 1);
+
 		gain_staging_db[bus_index] = global_flags.initial_gain_staging_db;
 		compressor[bus_index].reset(new StereoCompressor(OUTPUT_FREQUENCY));
 		compressor_threshold_dbfs[bus_index] = ref_level_dbfs - 12.0f;  // -12 dB.
@@ -409,14 +413,7 @@ vector<float> AudioMixer::get_output(double pts, unsigned num_samples, Resamplin
 	samples_bus.resize(num_samples * 2);
 	for (unsigned bus_index = 0; bus_index < input_mapping.buses.size(); ++bus_index) {
 		fill_audio_bus(samples_card, input_mapping.buses[bus_index], num_samples, &samples_bus[0]);
-
-		// Cut away everything under 120 Hz (or whatever the cutoff is);
-		// we don't need it for voice, and it will reduce headroom
-		// and confuse the compressor. (In particular, any hums at 50 or 60 Hz
-		// should be dampened.)
-		if (locut_enabled[bus_index]) {
-			locut[bus_index].render(samples_bus.data(), samples_bus.size() / 2, locut_cutoff_hz * 2.0 * M_PI / OUTPUT_FREQUENCY, 0.5f);
-		}
+		apply_eq(bus_index, &samples_bus);
 
 		{
 			lock_guard<mutex> lock(compressor_mutex);
@@ -529,6 +526,44 @@ vector<float> AudioMixer::get_output(double pts, unsigned num_samples, Resamplin
 	update_meters(samples_out);
 
 	return samples_out;
+}
+
+void AudioMixer::apply_eq(unsigned bus_index, vector<float> *samples_bus)
+{
+	constexpr float bass_freq_hz = 200.0f;
+	constexpr float treble_freq_hz = 4700.0f;
+
+	// Cut away everything under 120 Hz (or whatever the cutoff is);
+	// we don't need it for voice, and it will reduce headroom
+	// and confuse the compressor. (In particular, any hums at 50 or 60 Hz
+	// should be dampened.)
+	if (locut_enabled[bus_index]) {
+		locut[bus_index].render(samples_bus->data(), samples_bus->size() / 2, locut_cutoff_hz * 2.0 * M_PI / OUTPUT_FREQUENCY, 0.5f);
+	}
+
+	// Apply the rest of the EQ. Since we only have a simple three-band EQ,
+	// we can implement it with two shelf filters. We use a simple gain to
+	// set the mid-level filter, and then offset the low and high bands
+	// from that if we need to. (We could perhaps have folded the gain into
+	// the next part, but it's so cheap that the trouble isn't worth it.)
+	if (fabs(eq_level_db[bus_index][EQ_BAND_MID]) > 0.01f) {
+		float g = from_db(eq_level_db[bus_index][EQ_BAND_MID]);
+		for (size_t i = 0; i < samples_bus->size(); ++i) {
+			(*samples_bus)[i] *= g;
+		}
+	}
+
+	float bass_adj_db = eq_level_db[bus_index][EQ_BAND_BASS] - eq_level_db[bus_index][EQ_BAND_MID];
+	if (fabs(bass_adj_db) > 0.01f) {
+		eq[bus_index][EQ_BAND_BASS].render(samples_bus->data(), samples_bus->size() / 2,
+			bass_freq_hz * 2.0 * M_PI / OUTPUT_FREQUENCY, 0.5f, bass_adj_db / 40.0f);
+	}
+
+	float treble_adj_db = eq_level_db[bus_index][EQ_BAND_TREBLE] - eq_level_db[bus_index][EQ_BAND_MID];
+	if (fabs(treble_adj_db) > 0.01f) {
+		eq[bus_index][EQ_BAND_TREBLE].render(samples_bus->data(), samples_bus->size() / 2,
+			treble_freq_hz * 2.0 * M_PI / OUTPUT_FREQUENCY, 0.5f, treble_adj_db / 40.0f);
+	}
 }
 
 void AudioMixer::add_bus_to_master(unsigned bus_index, const vector<float> &samples_bus, vector<float> *samples_out)

@@ -52,6 +52,13 @@ struct DeviceInfo {
 	unsigned num_channels;
 };
 
+enum EQBand {
+	EQ_BAND_BASS = 0,
+	EQ_BAND_MID,
+	EQ_BAND_TREBLE,
+	NUM_EQ_BANDS
+};
+
 static inline uint64_t DeviceSpec_to_key(const DeviceSpec &device_spec)
 {
 	return (uint64_t(device_spec.type) << 32) | device_spec.index;
@@ -109,6 +116,12 @@ public:
 	bool get_locut_enabled(unsigned bus)
 	{
 		return locut_enabled[bus];
+	}
+
+	void set_eq(unsigned bus_index, EQBand band, float db_gain)
+	{
+		assert(band >= 0 && band < NUM_EQ_BANDS);
+		eq_level_db[bus_index][band] = db_gain;
 	}
 
 	float get_limiter_threshold_dbfs() const
@@ -239,6 +252,7 @@ private:
 	void reset_resampler_mutex_held(DeviceSpec device_spec);
 	void reset_alsa_mutex_held(DeviceSpec device_spec);
 	std::map<DeviceSpec, DeviceInfo> get_devices_mutex_held() const;
+	void apply_eq(unsigned bus_index, std::vector<float> *samples_bus);
 	void update_meters(const std::vector<float> &samples);
 	void add_bus_to_master(unsigned bus_index, const std::vector<float> &samples_bus, std::vector<float> *samples_out);
 	void measure_bus_levels(unsigned bus_index, const std::vector<float> &left, const std::vector<float> &right);
@@ -257,6 +271,7 @@ private:
 	std::atomic<float> locut_cutoff_hz;
 	StereoFilter locut[MAX_BUSES];  // Default cutoff 120 Hz, 24 dB/oct.
 	std::atomic<bool> locut_enabled[MAX_BUSES];
+	StereoFilter eq[MAX_BUSES][NUM_EQ_BANDS];  // The one for EQBand::MID isn't actually used (see comments in apply_eq()).
 
 	// First compressor; takes us up to about -12 dBFS.
 	mutable std::mutex compressor_mutex;
@@ -290,6 +305,7 @@ private:
 	InputMapping input_mapping;  // Under audio_mutex.
 	std::atomic<float> fader_volume_db[MAX_BUSES] {{ 0.0f }};
 	float last_fader_volume_db[MAX_BUSES] { 0.0f };  // Under audio_mutex.
+	std::atomic<float> eq_level_db[MAX_BUSES][NUM_EQ_BANDS] {{{ 0.0f }}};
 
 	audio_level_callback_t audio_level_callback = nullptr;
 	mutable std::mutex audio_measure_mutex;
