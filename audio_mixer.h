@@ -204,6 +204,7 @@ public:
 	struct BusLevel {
 		float current_level_dbfs[2];  // Digital peak of last frame, left and right.
 		float peak_level_dbfs[2];  // Digital peak with hold, left and right.
+		float historic_peak_dbfs;
 		float gain_staging_db;
 		float compressor_attenuation_db;  // A positive number; 0.0 for no attenuation.
 	};
@@ -270,9 +271,11 @@ private:
 	std::atomic<float> compressor_threshold_dbfs[MAX_BUSES];
 	std::atomic<bool> compressor_enabled[MAX_BUSES];
 
+	// Note: The values here are not in dB.
 	struct PeakHistory {
-		float current_level = 0.0f;  // Peak of the last frame (not in dB).
-		float current_peak = 0.0f;  // Current peak of the peak meter (not in dB).
+		float current_level = 0.0f;  // Peak of the last frame.
+		float historic_peak = 0.0f;  // Highest peak since last reset; no falloff.
+		float current_peak = 0.0f;  // Current peak of the peak meter.
 		float last_peak = 0.0f;
 		float age_seconds = 0.0f;   // Time since "last_peak" was set.
 	};

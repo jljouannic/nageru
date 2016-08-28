@@ -555,6 +555,7 @@ void AudioMixer::measure_bus_levels(unsigned bus_index, const vector<float> &lef
 		static constexpr float falloff_db_sec = 15.0f;  // dB/sec falloff after hold.
 		float current_peak;
 		PeakHistory &history = peak_history[bus_index][channel];
+		history.historic_peak = max(history.historic_peak, peak_levels[channel]);
 		if (history.age_seconds < hold_sec) {
 			current_peak = history.last_peak;
 		} else {
@@ -639,6 +640,9 @@ void AudioMixer::send_audio_level_callback()
 			bus_levels[bus_index].current_level_dbfs[1] = to_db(peak_history[bus_index][1].current_level);
 			bus_levels[bus_index].peak_level_dbfs[0] = to_db(peak_history[bus_index][0].current_peak);
 			bus_levels[bus_index].peak_level_dbfs[1] = to_db(peak_history[bus_index][1].current_peak);
+			bus_levels[bus_index].historic_peak_dbfs = to_db(
+				max(peak_history[bus_index][0].historic_peak,
+				    peak_history[bus_index][1].historic_peak));
 			bus_levels[bus_index].gain_staging_db = gain_staging_db[bus_index];
 			if (compressor_enabled[bus_index]) {
 				bus_levels[bus_index].compressor_attenuation_db = -to_db(compressor[bus_index]->get_attenuation());

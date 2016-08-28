@@ -127,6 +127,19 @@ string format_db(double db, unsigned flags)
 	return text;
 }
 
+void set_peak_label(QLabel *peak_label, float peak_db)
+{
+	peak_label->setText(QString::fromStdString(format_db(peak_db, DB_BARE)));
+
+	// -0.1 dBFS is EBU peak limit. We use it consistently, even for the bus meters
+	// (which don't calculate interpolate peak, and in general don't follow EBU recommendations).
+	if (peak_db > -0.1f) {
+		peak_label->setStyleSheet("QLabel { background-color: red; color: white; }");
+	} else {
+		peak_label->setStyleSheet("");
+	}
+}
+
 }  // namespace
 
 MainWindow::MainWindow()
@@ -579,6 +592,7 @@ void MainWindow::audio_level_callback(float level_lufs, float peak_db, vector<Au
 					level.current_level_dbfs[0], level.current_level_dbfs[1]);
 				miniview->peak_meter->set_peak(
 					level.peak_level_dbfs[0], level.peak_level_dbfs[1]);
+				set_peak_label(miniview->peak_display_label, level.historic_peak_dbfs);
 
 				Ui::AudioExpandedView *view = audio_expanded_views[bus_index];
 				view->peak_meter->set_level(
@@ -592,17 +606,14 @@ void MainWindow::audio_level_callback(float level_lufs, float peak_db, vector<Au
 				view->gainstaging_db_display->setText(
 					QString("Gain: ") +
 					QString::fromStdString(format_db(level.gain_staging_db, DB_WITH_SIGN)));
+				set_peak_label(view->peak_display_label, level.historic_peak_dbfs);
 			}
 		}
 		ui->lra_meter->set_levels(global_level_lufs, range_low_lufs, range_high_lufs);
 		ui->correlation_meter->set_correlation(correlation);
 
 		ui->peak_display->setText(QString::fromStdString(format_db(peak_db, DB_BARE)));
-		if (peak_db > -0.1f) {  // -0.1 dBFS is EBU peak limit.
-			ui->peak_display->setStyleSheet("QLabel { background-color: red; color: white; }");
-		} else {
-			ui->peak_display->setStyleSheet("");
-		}
+		set_peak_label(ui->peak_display, peak_db);
 
 		// NOTE: Will be invisible when using multitrack audio.
 		ui->gainstaging_knob->blockSignals(true);
