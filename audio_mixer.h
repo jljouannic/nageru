@@ -108,6 +108,11 @@ public:
 		locut_cutoff_hz = cutoff_hz;
 	}
 
+	float get_locut_cutoff() const
+	{
+		return locut_cutoff_hz;
+	}
+
 	void set_locut_enabled(unsigned bus, bool enabled)
 	{
 		locut_enabled[bus] = enabled;

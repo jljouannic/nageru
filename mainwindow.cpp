@@ -421,6 +421,8 @@ void MainWindow::setup_audio_expanded_view()
 		reduction_meter->set_ref_level(0.0f);
 		reduction_meter->set_flip(true);
 	}
+
+	update_cutoff_labels(global_mixer->get_audio_mixer()->get_locut_cutoff());
 }
 
 void MainWindow::mixer_shutting_down()
@@ -495,7 +497,11 @@ void MainWindow::cutoff_knob_changed(int value)
 	float octaves = value * 0.1f;
 	float cutoff_hz = 20.0 * pow(2.0, octaves);
 	global_mixer->get_audio_mixer()->set_locut_cutoff(cutoff_hz);
+	update_cutoff_labels(cutoff_hz);
+}
 
+void MainWindow::update_cutoff_labels(float cutoff_hz)
+{
 	char buf[256];
 	snprintf(buf, sizeof(buf), "%ld Hz", lrintf(cutoff_hz));
 	ui->locut_cutoff_display->setText(buf);
