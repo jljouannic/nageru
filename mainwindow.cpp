@@ -369,6 +369,9 @@ void MainWindow::setup_audio_expanded_view()
 		ui_audio_expanded_view->bus_desc_label->setFullText(
 			QString::fromStdString(mapping.buses[bus_index].name));
 		audio_expanded_views[bus_index] = ui_audio_expanded_view;
+		update_eq_label(bus_index, EQ_BAND_TREBLE, global_mixer->get_audio_mixer()->get_eq(bus_index, EQ_BAND_TREBLE));
+		update_eq_label(bus_index, EQ_BAND_MID, global_mixer->get_audio_mixer()->get_eq(bus_index, EQ_BAND_MID));
+		update_eq_label(bus_index, EQ_BAND_BASS, global_mixer->get_audio_mixer()->get_eq(bus_index, EQ_BAND_BASS));
 		// TODO: Set the fader position.
 		ui->buses->addWidget(channel);
 
@@ -376,6 +379,13 @@ void MainWindow::setup_audio_expanded_view()
 		connect(ui_audio_expanded_view->locut_enabled, &QCheckBox::stateChanged, [this, bus_index](int state){
 			global_mixer->get_audio_mixer()->set_locut_enabled(bus_index, state == Qt::Checked);
 		});
+
+		connect(ui_audio_expanded_view->treble_knob, &QDial::valueChanged,
+		        bind(&MainWindow::eq_knob_changed, this, bus_index, EQ_BAND_TREBLE, _1));
+		connect(ui_audio_expanded_view->mid_knob, &QDial::valueChanged,
+		        bind(&MainWindow::eq_knob_changed, this, bus_index, EQ_BAND_MID, _1));
+		connect(ui_audio_expanded_view->bass_knob, &QDial::valueChanged,
+		        bind(&MainWindow::eq_knob_changed, this, bus_index, EQ_BAND_BASS, _1));
 
 		ui_audio_expanded_view->gainstaging_knob->setValue(global_mixer->get_audio_mixer()->get_gain_staging_db(bus_index));
 		ui_audio_expanded_view->gainstaging_auto_checkbox->setChecked(global_mixer->get_audio_mixer()->get_gain_staging_auto(bus_index));
@@ -528,6 +538,33 @@ void MainWindow::report_disk_space(off_t free_bytes, double estimated_seconds_le
 		disk_free_label->setText(QString::fromStdString(label));
 		ui->menuBar->setCornerWidget(disk_free_label);  // Need to set this again for the sizing to get right.
 	});
+}
+
+void MainWindow::eq_knob_changed(unsigned bus_index, EQBand band, int value)
+{
+	float gain_db = value * 0.1f;
+	global_mixer->get_audio_mixer()->set_eq(bus_index, band, gain_db);
+
+	update_eq_label(bus_index, band, gain_db);
+}
+
+void MainWindow::update_eq_label(unsigned bus_index, EQBand band, float gain_db)
+{
+	Ui::AudioExpandedView *view = audio_expanded_views[bus_index];
+	string db_string = format_db(gain_db, DB_WITH_SIGN);
+	switch (band) {
+	case EQ_BAND_TREBLE:
+		view->treble_label->setText(QString::fromStdString("Treble: " + db_string));
+		break;
+	case EQ_BAND_MID:
+		view->mid_label->setText(QString::fromStdString("Mid: " + db_string));
+		break;
+	case EQ_BAND_BASS:
+		view->bass_label->setText(QString::fromStdString("Bass: " + db_string));
+		break;
+	default:
+		assert(false);
+	}
 }
 
 void MainWindow::limiter_threshold_knob_changed(int value)

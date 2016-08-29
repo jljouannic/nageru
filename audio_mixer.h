@@ -124,6 +124,12 @@ public:
 		eq_level_db[bus_index][band] = db_gain;
 	}
 
+	float get_eq(unsigned bus_index, EQBand band) const
+	{
+		assert(band >= 0 && band < NUM_EQ_BANDS);
+		return eq_level_db[bus_index][band];
+	}
+
 	float get_limiter_threshold_dbfs() const
 	{
 		return limiter_threshold_dbfs;

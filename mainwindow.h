@@ -50,6 +50,7 @@ public slots:
 	void gain_staging_knob_changed(unsigned bus_index, int value);
 	void final_makeup_gain_knob_changed(int value);
 	void cutoff_knob_changed(int value);
+	void eq_knob_changed(unsigned bus_index, EQBand band, int value);
 	void limiter_threshold_knob_changed(int value);
 	void compressor_threshold_knob_changed(unsigned bus_index, int value);
 	void mini_fader_changed(int bus, double db_volume);
@@ -61,6 +62,7 @@ private:
 	void setup_audio_expanded_view();
 	bool eventFilter(QObject *watched, QEvent *event) override;
 	void set_white_balance(int channel_number, int x, int y);
+	void update_eq_label(unsigned bus_index, EQBand band, float gain_db);
 
 	// Called from DiskSpaceEstimator.
 	void report_disk_space(off_t free_bytes, double estimated_seconds_left);
