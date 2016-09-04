@@ -279,7 +279,7 @@ private:
 	AudioDevice alsa_inputs[MAX_ALSA_CARDS];  // Under audio_mutex.
 	std::vector<ALSAInput::Device> available_alsa_cards;
 
-	std::atomic<float> locut_cutoff_hz;
+	std::atomic<float> locut_cutoff_hz{120};
 	StereoFilter locut[MAX_BUSES];  // Default cutoff 120 Hz, 24 dB/oct.
 	std::atomic<bool> locut_enabled[MAX_BUSES];
 	StereoFilter eq[MAX_BUSES][NUM_EQ_BANDS];  // The one for EQBand::MID isn't actually used (see comments in apply_eq()).
