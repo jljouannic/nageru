@@ -326,4 +326,6 @@ private:
 	std::atomic<float> peak{0.0f};
 };
 
+extern AudioMixer *global_audio_mixer;
+
 #endif  // !defined(_AUDIO_MIXER_H)

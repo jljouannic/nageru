@@ -234,6 +234,7 @@ public:
 		theme->set_wb(channel, r, g, b);
 	}
 
+	// Note: You can also get this through the global variable global_audio_mixer.
 	AudioMixer *get_audio_mixer() { return &audio_mixer; }
 	const AudioMixer *get_audio_mixer() const { return &audio_mixer; }
 
@@ -367,7 +368,7 @@ private:
 		int last_timecode = -1;  // Unwrapped.
 	};
 	CaptureCard cards[MAX_VIDEO_CARDS];  // protected by <bmusb_mutex>
-	AudioMixer audio_mixer;
+	AudioMixer audio_mixer;  // Same as global_audio_mixer (see audio_mixer.h).
 	void get_one_frame_from_each_card(unsigned master_card_index, CaptureCard::NewFrame new_frames[MAX_VIDEO_CARDS], bool has_new_frame[MAX_VIDEO_CARDS], int num_samples[MAX_VIDEO_CARDS]);
 
 	InputState input_state;

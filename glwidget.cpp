@@ -53,6 +53,7 @@ void GLWidget::initializeGL()
 	static once_flag flag;
 	call_once(flag, [this]{
 		global_mixer = new Mixer(QGLFormat::toSurfaceFormat(format()), global_flags.num_cards);
+		global_audio_mixer = global_mixer->get_audio_mixer();
 		global_mainwindow->mixer_created(global_mixer);
 		global_mixer->start();
 	});

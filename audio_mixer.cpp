@@ -816,3 +816,5 @@ void AudioMixer::reset_peak(unsigned bus_index)
 		history.age_seconds = 0.0f;
 	}
 }
+
+AudioMixer *global_audio_mixer = nullptr;

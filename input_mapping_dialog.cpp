@@ -9,9 +9,9 @@ using namespace std::placeholders;
 
 InputMappingDialog::InputMappingDialog()
 	: ui(new Ui::InputMappingDialog),
-	  mapping(global_mixer->get_audio_mixer()->get_input_mapping()),
+	  mapping(global_audio_mixer->get_input_mapping()),
 	  old_mapping(mapping),
-	  devices(global_mixer->get_audio_mixer()->get_devices())
+	  devices(global_audio_mixer->get_devices())
 {
 	ui->setupUi(this);
 	ui->table->setSelectionBehavior(QAbstractItemView::SelectRows);
@@ -97,13 +97,13 @@ void InputMappingDialog::setup_channel_choices_from_bus(unsigned row, const Inpu
 
 void InputMappingDialog::ok_clicked()
 {
-	global_mixer->get_audio_mixer()->set_input_mapping(mapping);
+	global_audio_mixer->set_input_mapping(mapping);
 	accept();
 }
 
 void InputMappingDialog::cancel_clicked()
 {
-	global_mixer->get_audio_mixer()->set_input_mapping(old_mapping);
+	global_audio_mixer->set_input_mapping(old_mapping);
 	reject();
 }
 
