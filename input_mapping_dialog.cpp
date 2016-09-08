@@ -54,9 +54,20 @@ void InputMappingDialog::fill_row_from_bus(unsigned row, const InputMapping::Bus
 	unsigned current_index = 0;
 	card_combo->addItem(QString("(none)   "));
 	for (const auto &spec_and_info : devices) {
+		QString label(QString::fromStdString(spec_and_info.second.name));
+		if (spec_and_info.first.type == InputSourceType::ALSA_INPUT) {
+			ALSAPool::Device::State state = global_audio_mixer->get_alsa_card_state(spec_and_info.first.index);
+			if (state == ALSAPool::Device::State::EMPTY) {
+				continue;
+			} else if (state == ALSAPool::Device::State::STARTING) {
+				label += " (busy)";
+			} else if (state == ALSAPool::Device::State::DEAD) {
+				label += " (dead)";
+			}
+		}
 		++current_index;
 		card_combo->addItem(
-			QString::fromStdString(spec_and_info.second.name + "   "),
+			label + "   ",
 			qulonglong(DeviceSpec_to_key(spec_and_info.first)));
 		if (bus.device == spec_and_info.first) {
 			card_combo->setCurrentIndex(current_index);

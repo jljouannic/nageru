@@ -15,16 +15,19 @@
 #include <functional>
 #include <string>
 #include <thread>
+#include <unordered_map>
 #include <vector>
 
 #include "bmusb/bmusb.h"
 #include "timebase.h"
 
+class ALSAPool;
+
 class ALSAInput {
 public:
 	typedef std::function<bool(const uint8_t *data, unsigned num_samples, bmusb::AudioFormat audio_format, int64_t frame_length)> audio_callback_t;
 
-	ALSAInput(const char *device, unsigned sample_rate, unsigned num_channels, audio_callback_t audio_callback);
+	ALSAInput(const char *device, unsigned sample_rate, unsigned num_channels, audio_callback_t audio_callback, ALSAPool *parent_pool, unsigned internal_dev_index);
 	~ALSAInput();
 
 	// NOTE: Might very well be different from the sample rate given to the
@@ -50,6 +53,8 @@ private:
 	std::thread capture_thread;
 	std::atomic<bool> should_quit{false};
 	std::unique_ptr<uint8_t[]> buffer;
+	ALSAPool *parent_pool;
+	unsigned internal_dev_index;
 };
 
 // The class dealing with the collective of all ALSA cards in the system.
@@ -89,7 +94,7 @@ public:
 			// installed in place of this card, and then presumably be put
 			// back into STARTING or RUNNING.
 			DEAD
-		} state;
+		} state = State::EMPTY;
 
 		std::string address;  // E.g. “hw:0,0”.
 		std::string name, info;
@@ -124,6 +129,16 @@ public:
 	// Note: The card must be held. Returns OUTPUT_FREQUENCY if the card is in EMPTY or DEAD.
 	unsigned get_capture_frequency(unsigned index);
 
+	// Note: The card must be held.
+	Device::State get_card_state(unsigned index);
+
+	// Only for ALSAInput.
+	void set_card_state(unsigned index, Device::State state);
+
+	// Just a short form for taking <mu> and then moving the card to
+	// EMPTY or DEAD state. Only for ALSAInput and for internal use.
+	void free_card(unsigned index);
+
 	// TODO: Add accessors and/or callbacks about changed state, so that
 	// the UI actually stands a chance in using that information.
 
@@ -132,8 +147,35 @@ private:
 	std::vector<Device> devices;  // Under mu.
 	std::vector<std::unique_ptr<ALSAInput>> inputs;  // Under mu, corresponds 1:1 to devices.
 
+	// Keyed on device address (e.g. “hw:0,0”). If there's an entry here,
+	// it means we already have a thread doing retries, so we shouldn't
+	// start a new one.
+	std::unordered_map<std::string, unsigned> add_device_tries_left;  // Under add_device_mutex.
+	std::mutex add_device_mutex;
+
+	static constexpr int num_retries = 10;
+
+	void inotify_thread_func();
 	void enumerate_devices();
-	bool add_device(unsigned card_index, unsigned dev_index);
+
+	// Try to add an input at the given card/device. If it succeeds, return
+	// synchronously. If not, fire off a background thread to try up to
+	// <num_retries> times.
+	void probe_device_with_retry(unsigned card_index, unsigned dev_index);
+	void probe_device_retry_thread_func(unsigned card_index, unsigned dev_index);
+
+	enum class ProbeResult {
+		SUCCESS,
+		DEFER,
+		FAILURE
+	};
+	ProbeResult probe_device_once(unsigned card_index, unsigned dev_index);
+
+	// Must be called with <mu> held. Will allocate a new entry if needed.
+	// The returned entry will be set to READY state.
+	unsigned find_free_device_index();
+
+	friend class ALSAInput;
 };
 
 #endif  // !defined(_ALSA_INPUT_H)

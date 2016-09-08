@@ -102,6 +102,12 @@ public:
 	// or every card will be held forever.
 	std::map<DeviceSpec, DeviceInfo> get_devices();
 
+	// See comments on ALSAPool::get_card_state().
+	ALSAPool::Device::State get_alsa_card_state(unsigned index)
+	{
+		return alsa_pool.get_card_state(index);
+	}
+
 	void set_name(DeviceSpec device_spec, const std::string &name);
 
 	void set_input_mapping(const InputMapping &input_mapping);
