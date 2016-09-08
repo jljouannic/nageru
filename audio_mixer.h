@@ -82,7 +82,6 @@ struct InputMapping {
 class AudioMixer {
 public:
 	AudioMixer(unsigned num_cards);
-	~AudioMixer();
 	void reset_resampler(DeviceSpec device_spec);
 	void reset_meters();
 
@@ -97,7 +96,12 @@ public:
 	std::vector<float> get_output(double pts, unsigned num_samples, ResamplingQueue::RateAdjustmentPolicy rate_adjustment_policy);
 
 	void set_fader_volume(unsigned bus_index, float level_db) { fader_volume_db[bus_index] = level_db; }
-	std::map<DeviceSpec, DeviceInfo> get_devices() const;
+
+	// Note: This operation holds all ALSA devices (see ALSAPool::get_devices()).
+	// You will need to call set_input_mapping() to get the hold state correctly,
+	// or every card will be held forever.
+	std::map<DeviceSpec, DeviceInfo> get_devices();
+
 	void set_name(DeviceSpec device_spec, const std::string &name);
 
 	void set_input_mapping(const InputMapping &input_mapping);
@@ -253,31 +257,32 @@ private:
 		unsigned capture_frequency = OUTPUT_FREQUENCY;
 		// Which channels we consider interesting (ie., are part of some input_mapping).
 		std::set<unsigned> interesting_channels;
-		// Only used for ALSA cards, obviously.
-		std::unique_ptr<ALSAInput> alsa_device;
 	};
+
+	const AudioDevice *find_audio_device(DeviceSpec device_spec) const
+	{
+		return const_cast<AudioMixer *>(this)->find_audio_device(device_spec);
+	}
+
 	AudioDevice *find_audio_device(DeviceSpec device_spec);
 
 	void find_sample_src_from_device(const std::map<DeviceSpec, std::vector<float>> &samples_card, DeviceSpec device_spec, int source_channel, const float **srcptr, unsigned *stride);
 	void fill_audio_bus(const std::map<DeviceSpec, std::vector<float>> &samples_card, const InputMapping::Bus &bus, unsigned num_samples, float *output);
 	void reset_resampler_mutex_held(DeviceSpec device_spec);
-	void reset_alsa_mutex_held(DeviceSpec device_spec);
-	std::map<DeviceSpec, DeviceInfo> get_devices_mutex_held() const;
 	void apply_eq(unsigned bus_index, std::vector<float> *samples_bus);
 	void update_meters(const std::vector<float> &samples);
 	void add_bus_to_master(unsigned bus_index, const std::vector<float> &samples_bus, std::vector<float> *samples_out);
 	void measure_bus_levels(unsigned bus_index, const std::vector<float> &left, const std::vector<float> &right);
 	void send_audio_level_callback();
+	std::vector<DeviceSpec> get_active_devices() const;
 
 	unsigned num_cards;
 
 	mutable std::timed_mutex audio_mutex;
 
+	ALSAPool alsa_pool;
 	AudioDevice video_cards[MAX_VIDEO_CARDS];  // Under audio_mutex.
-
-	// TODO: Figure out a better way to unify these two, as they are sharing indexing.
 	AudioDevice alsa_inputs[MAX_ALSA_CARDS];  // Under audio_mutex.
-	std::vector<ALSAInput::Device> available_alsa_cards;
 
 	std::atomic<float> locut_cutoff_hz{120};
 	StereoFilter locut[MAX_BUSES];  // Default cutoff 120 Hz, 24 dB/oct.

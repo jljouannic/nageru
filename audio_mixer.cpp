@@ -12,6 +12,7 @@
 
 #include "db.h"
 #include "flags.h"
+#include "mixer.h"
 #include "timebase.h"
 
 using namespace bmusb;
@@ -190,8 +191,7 @@ AudioMixer::AudioMixer(unsigned num_cards)
 	new_input_mapping.buses.push_back(input);
 	set_input_mapping(new_input_mapping);
 
-	// Look for ALSA cards.
-	available_alsa_cards = ALSAInput::enumerate_devices();
+	alsa_pool.init();
 
 	r128.init(2, OUTPUT_FREQUENCY);
 	r128.integr_start();
@@ -200,17 +200,6 @@ AudioMixer::AudioMixer(unsigned num_cards)
 	// and there's a limit to how important the peak meter is.
 	peak_resampler.setup(OUTPUT_FREQUENCY, OUTPUT_FREQUENCY * 4, /*num_channels=*/2, /*hlen=*/16, /*frel=*/1.0);
 }
-
-AudioMixer::~AudioMixer()
-{
-	for (unsigned card_index = 0; card_index < available_alsa_cards.size(); ++card_index) {
-		const AudioDevice &device = alsa_inputs[card_index];
-		if (device.alsa_device != nullptr) {
-			device.alsa_device->stop_capture_thread();
-		}
-	}
-}
-
 
 void AudioMixer::reset_resampler(DeviceSpec device_spec)
 {
@@ -230,25 +219,6 @@ void AudioMixer::reset_resampler_mutex_held(DeviceSpec device_spec)
 		device->resampling_queue.reset(new ResamplingQueue(device_spec.index, device->capture_frequency, OUTPUT_FREQUENCY, device->interesting_channels.size()));
 	}
 	device->next_local_pts = 0;
-}
-
-void AudioMixer::reset_alsa_mutex_held(DeviceSpec device_spec)
-{
-	assert(device_spec.type == InputSourceType::ALSA_INPUT);
-	unsigned card_index = device_spec.index;
-	AudioDevice *device = find_audio_device(device_spec);
-
-	if (device->alsa_device != nullptr) {
-		device->alsa_device->stop_capture_thread();
-	}
-	if (device->interesting_channels.empty()) {
-		device->alsa_device.reset();
-	} else {
-		const ALSAInput::Device &alsa_dev = available_alsa_cards[card_index];
-		device->alsa_device.reset(new ALSAInput(alsa_dev.address.c_str(), OUTPUT_FREQUENCY, alsa_dev.num_channels, bind(&AudioMixer::add_audio, this, device_spec, _1, _2, _3, _4)));
-		device->capture_frequency = device->alsa_device->get_sample_rate();
-		device->alsa_device->start_capture_thread();
-	}
 }
 
 bool AudioMixer::add_audio(DeviceSpec device_spec, const uint8_t *data, unsigned num_samples, AudioFormat audio_format, int64_t frame_length)
@@ -384,6 +354,24 @@ void AudioMixer::fill_audio_bus(const map<DeviceSpec, vector<float>> &samples_ca
 	}
 }
 
+vector<DeviceSpec> AudioMixer::get_active_devices() const
+{
+	vector<DeviceSpec> ret;
+	for (unsigned card_index = 0; card_index < MAX_VIDEO_CARDS; ++card_index) {
+		const DeviceSpec device_spec{InputSourceType::CAPTURE_CARD, card_index};
+		if (!find_audio_device(device_spec)->interesting_channels.empty()) {
+			ret.push_back(device_spec);
+		}
+	}
+	for (unsigned card_index = 0; card_index < MAX_ALSA_CARDS; ++card_index) {
+		const DeviceSpec device_spec{InputSourceType::ALSA_INPUT, card_index};
+		if (!find_audio_device(device_spec)->interesting_channels.empty()) {
+			ret.push_back(device_spec);
+		}
+	}
+	return ret;
+}
+
 vector<float> AudioMixer::get_output(double pts, unsigned num_samples, ResamplingQueue::RateAdjustmentPolicy rate_adjustment_policy)
 {
 	map<DeviceSpec, vector<float>> samples_card;
@@ -392,20 +380,14 @@ vector<float> AudioMixer::get_output(double pts, unsigned num_samples, Resamplin
 	lock_guard<timed_mutex> lock(audio_mutex);
 
 	// Pick out all the interesting channels from all the cards.
-	// TODO: If the card has been hotswapped, the number of channels
-	// might have changed; if so, we need to do some sort of remapping
-	// to silence.
-	for (const auto &spec_and_info : get_devices_mutex_held()) {
-		const DeviceSpec &device_spec = spec_and_info.first;
+	for (const DeviceSpec &device_spec : get_active_devices()) {
 		AudioDevice *device = find_audio_device(device_spec);
-		if (!device->interesting_channels.empty()) {
-			samples_card[device_spec].resize(num_samples * device->interesting_channels.size());
-			device->resampling_queue->get_output_samples(
-				pts,
-				&samples_card[device_spec][0],
-				num_samples,
-				rate_adjustment_policy);
-		}
+		samples_card[device_spec].resize(num_samples * device->interesting_channels.size());
+		device->resampling_queue->get_output_samples(
+			pts,
+			&samples_card[device_spec][0],
+			num_samples,
+			rate_adjustment_policy);
 	}
 
 	vector<float> samples_out, left, right;
@@ -730,14 +712,10 @@ void AudioMixer::send_audio_level_callback()
 		correlation.get_correlation());
 }
 
-map<DeviceSpec, DeviceInfo> AudioMixer::get_devices() const
+map<DeviceSpec, DeviceInfo> AudioMixer::get_devices()
 {
 	lock_guard<timed_mutex> lock(audio_mutex);
-	return get_devices_mutex_held();
-}
 
-map<DeviceSpec, DeviceInfo> AudioMixer::get_devices_mutex_held() const
-{
 	map<DeviceSpec, DeviceInfo> devices;
 	for (unsigned card_index = 0; card_index < num_cards; ++card_index) {
 		const DeviceSpec spec{ InputSourceType::CAPTURE_CARD, card_index };
@@ -747,9 +725,10 @@ map<DeviceSpec, DeviceInfo> AudioMixer::get_devices_mutex_held() const
 		info.num_channels = 8;  // FIXME: This is wrong for fake cards.
 		devices.insert(make_pair(spec, info));
 	}
-	for (unsigned card_index = 0; card_index < available_alsa_cards.size(); ++card_index) {
+	vector<ALSAPool::Device> available_alsa_devices = alsa_pool.get_devices();
+	for (unsigned card_index = 0; card_index < available_alsa_devices.size(); ++card_index) {
 		const DeviceSpec spec{ InputSourceType::ALSA_INPUT, card_index };
-		const ALSAInput::Device &device = available_alsa_cards[card_index];
+		const ALSAPool::Device &device = available_alsa_devices[card_index];
 		DeviceInfo info;
 		info.name = device.name + " (" + device.info + ")";
 		info.num_channels = device.num_channels;
@@ -783,14 +762,25 @@ void AudioMixer::set_input_mapping(const InputMapping &new_input_mapping)
 	}
 
 	// Reset resamplers for all cards that don't have the exact same state as before.
-	for (const auto &spec_and_info : get_devices_mutex_held()) {
-		const DeviceSpec &device_spec = spec_and_info.first;
+	for (unsigned card_index = 0; card_index < MAX_VIDEO_CARDS; ++card_index) {
+		const DeviceSpec device_spec{InputSourceType::CAPTURE_CARD, card_index};
 		AudioDevice *device = find_audio_device(device_spec);
 		if (device->interesting_channels != interesting_channels[device_spec]) {
 			device->interesting_channels = interesting_channels[device_spec];
-			if (device_spec.type == InputSourceType::ALSA_INPUT) {
-				reset_alsa_mutex_held(device_spec);
-			}
+			reset_resampler_mutex_held(device_spec);
+		}
+	}
+	for (unsigned card_index = 0; card_index < MAX_ALSA_CARDS; ++card_index) {
+		const DeviceSpec device_spec{InputSourceType::ALSA_INPUT, card_index};
+		AudioDevice *device = find_audio_device(device_spec);
+		if (interesting_channels[device_spec].empty()) {
+			alsa_pool.release_device(card_index);
+		} else {
+			alsa_pool.hold_device(card_index);
+		}
+		if (device->interesting_channels != interesting_channels[device_spec]) {
+			device->interesting_channels = interesting_channels[device_spec];
+			alsa_pool.reset_device(device_spec.index);
 			reset_resampler_mutex_held(device_spec);
 		}
 	}
