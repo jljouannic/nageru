@@ -5,8 +5,10 @@
 #include <time.h>
 
 #include <algorithm>
+#include <chrono>
 
 using namespace std;
+using namespace std::chrono;
 
 X264SpeedControl::X264SpeedControl(x264_t *x264, float f_speed, int i_buffer_size, float f_buffer_init)
 	: x264(x264), f_speed(f_speed)
@@ -20,7 +22,7 @@ X264SpeedControl::X264SpeedControl(x264_t *x264, float f_speed, int i_buffer_siz
 	buffer_fill = buffer_size * f_buffer_init;
 	buffer_fill = max<int64_t>(buffer_fill, uspf);
 	buffer_fill = min(buffer_fill, buffer_size);
-	timestamp = mdate();
+	timestamp = steady_clock::now();
 	preset = -1;
 	cplx_num = 3e3; //FIXME estimate initial complexity
 	cplx_den = .1;
@@ -164,22 +166,22 @@ void X264SpeedControl::before_frame(float new_buffer_fill, int new_buffer_size, 
 	}
 	buffer_fill = buffer_size * new_buffer_fill;
 
-	int64_t t, delta_t;
+	steady_clock::time_point t;
 
 	// update buffer state after encoding and outputting the previous frame(s)
 	if (first) {
-		t = timestamp = mdate();
+		t = timestamp = steady_clock::now();
 		first = false;
 	} else {
-		t = mdate();
+		t = steady_clock::now();
 	}
 
-	delta_t = t - timestamp;
+	auto delta_t = t - timestamp;
 	timestamp = t;
 
 	// update the time predictor
 	if (preset >= 0) {
-		int cpu_time = cpu_time_last_frame;
+		int cpu_time = duration_cast<microseconds>(cpu_time_last_frame).count();
 		cplx_num *= cplx_decay;
 		cplx_den *= cplx_decay;
 		cplx_num += cpu_time / presets[preset].time;
@@ -194,12 +196,15 @@ void X264SpeedControl::before_frame(float new_buffer_fill, int new_buffer_size, 
 
 	if (buffer_fill >= buffer_size) { // oops, cpu was idle
 		// not really an error, but we'll warn for debugging purposes
-		static int64_t idle_t = 0, print_interval = 0;
+		static int64_t idle_t = 0;
+		static steady_clock::time_point print_interval;
+		static bool first = false;
 		idle_t += buffer_fill - buffer_size;
-		if (t - print_interval > 1e6) {
+		if (first || duration<double>(t - print_interval).count() > 0.1) {
 			//fprintf(stderr, "speedcontrol idle (%.6f sec)\n", idle_t/1e6);
 			print_interval = t;
 			idle_t = 0;
+			first = false;
 		}
 		buffer_fill = buffer_size;
 	} else if (buffer_fill <= 0) {  // oops, we're late
@@ -247,8 +252,8 @@ void X264SpeedControl::before_frame(float new_buffer_fill, int new_buffer_size, 
 		if (global_flags.x264_speedcontrol_verbose) {
 			static float cpu, wall, tgt, den;
 			const float decay = 1-1/100.;
-			cpu = cpu*decay + cpu_time_last_frame;
-			wall = wall*decay + delta_t;
+			cpu = cpu*decay + duration_cast<microseconds>(cpu_time_last_frame).count();
+			wall = wall*decay + duration_cast<microseconds>(delta_t).count();
 			tgt = tgt*decay + target;
 			den = den*decay + 1;
 			fprintf(stderr, "speed: %.2f+%.2f %d[%.5f] (t/c/w: %6.0f/%6.0f/%6.0f = %.4f) fps=%.2f\r",
@@ -261,7 +266,7 @@ void X264SpeedControl::before_frame(float new_buffer_fill, int new_buffer_size, 
 
 void X264SpeedControl::after_frame()
 {
-	cpu_time_last_frame = mdate() - timestamp;
+	cpu_time_last_frame = steady_clock::now() - timestamp;
 }
 
 void X264SpeedControl::set_buffer_size(int new_buffer_size)
@@ -310,11 +315,4 @@ void X264SpeedControl::apply_preset(int new_preset)
 	}
 	x264_encoder_reconfig(x264, &p);
 	preset = new_preset;
-}
-
-int64_t X264SpeedControl::mdate()
-{
-	timespec now;
-	clock_gettime(CLOCK_MONOTONIC, &now);
-	return now.tv_sec * 1000000 + now.tv_nsec / 1000;
 }

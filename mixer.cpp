@@ -18,6 +18,7 @@
 #include <sys/time.h>
 #include <time.h>
 #include <algorithm>
+#include <chrono>
 #include <cmath>
 #include <condition_variable>
 #include <cstddef>
@@ -46,6 +47,7 @@ class QOpenGLContext;
 
 using namespace movit;
 using namespace std;
+using namespace std::chrono;
 using namespace std::placeholders;
 using namespace bmusb;
 
@@ -380,10 +382,8 @@ void Mixer::bm_frame(unsigned card_index, uint16_t timecode,
 			is_mode_scanning[card_index] = false;
 		} else {
 			static constexpr double switch_time_s = 0.5;  // Should be enough time for the signal to stabilize.
-			timespec now;
-			clock_gettime(CLOCK_MONOTONIC, &now);
-			double sec_since_last_switch = (now.tv_sec - last_mode_scan_change[card_index].tv_sec) +
-				1e-9 * (now.tv_nsec - last_mode_scan_change[card_index].tv_nsec);
+			steady_clock::time_point now = steady_clock::now();
+			double sec_since_last_switch = duration<double>(steady_clock::now() - last_mode_scan_change[card_index]).count();
 			if (sec_since_last_switch > switch_time_s) {
 				// It isn't this mode; try the next one.
 				mode_scanlist_index[card_index]++;
@@ -505,7 +505,7 @@ void Mixer::bm_frame(unsigned card_index, uint16_t timecode,
 	PBOFrameAllocator::Userdata *userdata = (PBOFrameAllocator::Userdata *)video_frame.userdata;
 
 	unsigned num_fields = video_format.interlaced ? 2 : 1;
-	timespec frame_upload_start;
+	steady_clock::time_point frame_upload_start;
 	if (video_format.interlaced) {
 		// Send the two fields along as separate frames; the other side will need to add
 		// a deinterlacer to actually get this right.
@@ -514,7 +514,7 @@ void Mixer::bm_frame(unsigned card_index, uint16_t timecode,
 		assert(frame_length % 2 == 0);
 		frame_length /= 2;
 		num_fields = 2;
-		clock_gettime(CLOCK_MONOTONIC, &frame_upload_start);
+		frame_upload_start = steady_clock::now();
 	}
 	userdata->last_interlaced = video_format.interlaced;
 	userdata->last_has_signal = video_format.has_signal;
@@ -595,16 +595,9 @@ void Mixer::bm_frame(unsigned card_index, uint16_t timecode,
 			// against the video display, although the latter is not as critical.)
 			// This requires our system clock to be reasonably close to the
 			// video clock, but that's not an unreasonable assumption.
-			timespec second_field_start;
-			second_field_start.tv_nsec = frame_upload_start.tv_nsec +
-				frame_length * 1000000000 / TIMEBASE;
-			second_field_start.tv_sec = frame_upload_start.tv_sec +
-				second_field_start.tv_nsec / 1000000000;
-			second_field_start.tv_nsec %= 1000000000;
-
-			while (clock_nanosleep(CLOCK_MONOTONIC, TIMER_ABSTIME,
-			                       &second_field_start, nullptr) == -1 &&
-			       errno == EINTR) ;
+			steady_clock::time_point second_field_start = frame_upload_start +
+				nanoseconds(frame_length * 1000000000 / TIMEBASE);
+			this_thread::sleep_until(second_field_start);
 		}
 
 		{
@@ -642,8 +635,8 @@ void Mixer::thread_func()
 		exit(1);
 	}
 
-	struct timespec start, now;
-	clock_gettime(CLOCK_MONOTONIC, &start);
+	steady_clock::time_point start, now;
+	start = steady_clock::now();
 
 	int frame = 0;
 	int stats_dropped_frames = 0;
@@ -700,14 +693,13 @@ void Mixer::thread_func()
 			}
 		}
 
-		int64_t duration = new_frames[master_card_index].length;
-		render_one_frame(duration);
+		int64_t frame_duration = new_frames[master_card_index].length;
+		render_one_frame(frame_duration);
 		++frame;
-		pts_int += duration;
+		pts_int += frame_duration;
 
-		clock_gettime(CLOCK_MONOTONIC, &now);
-		double elapsed = now.tv_sec - start.tv_sec +
-			1e-9 * (now.tv_nsec - start.tv_nsec);
+		now = steady_clock::now();
+		double elapsed = duration<double>(now - start).count();
 		if (frame % 100 == 0) {
 			printf("%d frames (%d dropped) in %.3f seconds = %.1f fps (%.1f ms/frame)",
 				frame, stats_dropped_frames, elapsed, frame / elapsed,
@@ -1250,7 +1242,7 @@ void Mixer::start_mode_scanning(unsigned card_index)
 	assert(!mode_scanlist[card_index].empty());
 	mode_scanlist_index[card_index] = 0;
 	cards[card_index].capture->set_video_mode(mode_scanlist[card_index][0]);
-	clock_gettime(CLOCK_MONOTONIC, &last_mode_scan_change[card_index]);
+	last_mode_scan_change[card_index] = steady_clock::now();
 }
 
 Mixer::OutputChannel::~OutputChannel()

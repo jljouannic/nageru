@@ -4,6 +4,7 @@
 #include <stdio.h>
 #include <signal.h>
 #include <algorithm>
+#include <chrono>
 #include <string>
 #include <vector>
 #include <QBoxLayout>
@@ -30,6 +31,7 @@
 class QResizeEvent;
 
 using namespace std;
+using namespace std::chrono;
 using namespace std::placeholders;
 
 Q_DECLARE_METATYPE(std::string);
@@ -121,6 +123,8 @@ MainWindow::MainWindow()
 	qRegisterMetaType<vector<string>>("std::vector<std::string>");
 	connect(ui->me_live, &GLWidget::transition_names_updated, this, &MainWindow::set_transition_names);
 	qRegisterMetaType<Mixer::Output>("Mixer::Output");
+
+	last_audio_level_callback = steady_clock::now() - seconds(1);
 }
 
 void MainWindow::resizeEvent(QResizeEvent* event)
@@ -311,13 +315,11 @@ void MainWindow::audio_level_callback(float level_lufs, float peak_db, float glo
                                       float gain_staging_db, float final_makeup_gain_db,
                                       float correlation)
 {
-	timespec now;
-	clock_gettime(CLOCK_MONOTONIC, &now);
+	steady_clock::time_point now = steady_clock::now();
 
 	// The meters are somewhat inefficient to update. Only update them
 	// every 100 ms or so (we get updates every 5–20 ms).
-	double last_update_age = now.tv_sec - last_audio_level_callback.tv_sec +
-		1e-9 * (now.tv_nsec - last_audio_level_callback.tv_nsec);
+	double last_update_age = duration<double>(now - last_audio_level_callback).count();
 	if (last_update_age < 0.100) {
 		return;
 	}

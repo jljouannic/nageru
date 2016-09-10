@@ -12,6 +12,7 @@
 #include <movit/flat_input.h>
 #include <zita-resampler/resampler.h>
 #include <atomic>
+#include <chrono>
 #include <condition_variable>
 #include <cstddef>
 #include <functional>
@@ -561,7 +562,7 @@ private:
 	bool is_mode_scanning[MAX_CARDS]{ false };
 	std::vector<uint32_t> mode_scanlist[MAX_CARDS];
 	unsigned mode_scanlist_index[MAX_CARDS]{ 0 };
-	timespec last_mode_scan_change[MAX_CARDS];
+	std::chrono::steady_clock::time_point last_mode_scan_change[MAX_CARDS];
 };
 
 extern Mixer *global_mixer;

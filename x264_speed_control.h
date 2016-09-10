@@ -47,6 +47,7 @@
 #include <stdint.h>
 #include <string.h>
 #include <math.h>
+#include <chrono>
 #include <functional>
 
 extern "C" {
@@ -96,16 +97,15 @@ private:
 	void set_buffer_size(int new_buffer_size);
 	int dither_preset(float f);
 	void apply_preset(int new_preset);
-	int64_t mdate();  // Current time in microseconds.
 
 	// Not owned by us.
 	x264_t *x264;
 
 	float f_speed;
 
-	// all times are in usec
-	int64_t timestamp;   // when was speedcontrol last invoked
-	int64_t cpu_time_last_frame = 0;    // time spent encoding the previous frame
+	// all times that are not std::chrono::* are in usec
+	std::chrono::steady_clock::time_point timestamp;   // when was speedcontrol last invoked
+	std::chrono::steady_clock::duration cpu_time_last_frame{std::chrono::seconds{0}};   // time spent encoding the previous frame
 	int64_t buffer_size; // assumed application-side buffer of frames to be streamed (measured in microseconds),
 	int64_t buffer_fill; //   where full = we don't have to hurry
 	int64_t compensation_period; // how quickly we try to return to the target buffer fullness

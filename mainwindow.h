@@ -2,6 +2,7 @@
 #define MAINWINDOW_H
 
 #include <QMainWindow>
+#include <chrono>
 #include <string>
 #include <vector>
 #include <sys/time.h>
@@ -56,7 +57,7 @@ private:
 
 	// Called from the mixer.
 	void audio_level_callback(float level_lufs, float peak_db, float global_level_lufs, float range_low_lufs, float range_high_lufs, float gain_staging_db, float final_makeup_gain_db, float correlation);
-	timespec last_audio_level_callback{0, 0};
+	std::chrono::steady_clock::time_point last_audio_level_callback;
 
 	Ui::MainWindow *ui;
 	QPushButton *transition_btn1, *transition_btn2, *transition_btn3;
