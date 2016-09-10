@@ -45,6 +45,30 @@ bool set_base_params(const char *device_name, snd_pcm_t *pcm_handle, snd_pcm_hw_
 
 }  // namespace
 
+#define RETURN_ON_ERROR(msg, expr) do {                                                    \
+	int err = (expr);                                                                  \
+	if (err < 0) {                                                                     \
+		fprintf(stderr, "[%s] " msg ": %s\n", device.c_str(), snd_strerror(err));  \
+		if (err == -ENODEV) return CaptureEndReason::DEVICE_GONE;                  \
+		return CaptureEndReason::OTHER_ERROR;                                      \
+	}                                                                                  \
+} while (false)
+
+#define RETURN_FALSE_ON_ERROR(msg, expr) do {                                              \
+	int err = (expr);                                                                  \
+	if (err < 0) {                                                                     \
+		fprintf(stderr, "[%s] " msg ": %s\n", device.c_str(), snd_strerror(err));  \
+		return false;                                                              \
+	}                                                                                  \
+} while (false)
+
+#define WARN_ON_ERROR(msg, expr) do {                                                      \
+	int err = (expr);                                                                  \
+	if (err < 0) {                                                                     \
+		fprintf(stderr, "[%s] " msg ": %s\n", device.c_str(), snd_strerror(err));  \
+	}                                                                                  \
+} while (false)
+
 ALSAInput::ALSAInput(const char *device, unsigned sample_rate, unsigned num_channels, audio_callback_t audio_callback, ALSAPool *parent_pool, unsigned internal_dev_index)
 	: device(device),
 	  sample_rate(sample_rate),
@@ -53,16 +77,20 @@ ALSAInput::ALSAInput(const char *device, unsigned sample_rate, unsigned num_chan
 	  parent_pool(parent_pool),
 	  internal_dev_index(internal_dev_index)
 {
-	die_on_error(device, snd_pcm_open(&pcm_handle, device, SND_PCM_STREAM_CAPTURE, 0));
+}
+
+bool ALSAInput::open_device()
+{
+	RETURN_FALSE_ON_ERROR("snd_pcm_open()", snd_pcm_open(&pcm_handle, device.c_str(), SND_PCM_STREAM_CAPTURE, 0));
 
 	// Set format.
 	snd_pcm_hw_params_t *hw_params;
 	snd_pcm_hw_params_alloca(&hw_params);
-	if (!set_base_params(device, pcm_handle, hw_params, &sample_rate)) {
-		exit(1);
+	if (!set_base_params(device.c_str(), pcm_handle, hw_params, &sample_rate)) {
+		return false;
 	}
 
-	die_on_error("snd_pcm_hw_params_set_channels()", snd_pcm_hw_params_set_channels(pcm_handle, hw_params, num_channels));
+	RETURN_FALSE_ON_ERROR("snd_pcm_hw_params_set_channels()", snd_pcm_hw_params_set_channels(pcm_handle, hw_params, num_channels));
 
 	// Fragment size of 64 samples (about 1 ms at 48 kHz; a frame at 60
 	// fps/48 kHz is 800 samples.) We ask for 64 such periods in our buffer
@@ -74,19 +102,19 @@ ALSAInput::ALSAInput(const char *device, unsigned sample_rate, unsigned num_chan
 	// I can't have a big buffer.
 	num_periods = 16;
 	int dir = 0;
-	die_on_error("snd_pcm_hw_params_set_periods_near()", snd_pcm_hw_params_set_periods_near(pcm_handle, hw_params, &num_periods, &dir));
+	RETURN_FALSE_ON_ERROR("snd_pcm_hw_params_set_periods_near()", snd_pcm_hw_params_set_periods_near(pcm_handle, hw_params, &num_periods, &dir));
 	period_size = 64;
 	dir = 0;
-	die_on_error("snd_pcm_hw_params_set_period_size_near()", snd_pcm_hw_params_set_period_size_near(pcm_handle, hw_params, &period_size, &dir));
+	RETURN_FALSE_ON_ERROR("snd_pcm_hw_params_set_period_size_near()", snd_pcm_hw_params_set_period_size_near(pcm_handle, hw_params, &period_size, &dir));
 	buffer_frames = 64 * 64;
-	die_on_error("snd_pcm_hw_params_set_buffer_size_near()", snd_pcm_hw_params_set_buffer_size_near(pcm_handle, hw_params, &buffer_frames));
-	die_on_error("snd_pcm_hw_params()", snd_pcm_hw_params(pcm_handle, hw_params));
+	RETURN_FALSE_ON_ERROR("snd_pcm_hw_params_set_buffer_size_near()", snd_pcm_hw_params_set_buffer_size_near(pcm_handle, hw_params, &buffer_frames));
+	RETURN_FALSE_ON_ERROR("snd_pcm_hw_params()", snd_pcm_hw_params(pcm_handle, hw_params));
 	//snd_pcm_hw_params_free(hw_params);
 
 	// Figure out which format the card actually chose.
-	die_on_error("snd_pcm_hw_params_current()", snd_pcm_hw_params_current(pcm_handle, hw_params));
+	RETURN_FALSE_ON_ERROR("snd_pcm_hw_params_current()", snd_pcm_hw_params_current(pcm_handle, hw_params));
 	snd_pcm_format_t chosen_format;
-	die_on_error("snd_pcm_hw_params_get_format()", snd_pcm_hw_params_get_format(hw_params, &chosen_format));
+	RETURN_FALSE_ON_ERROR("snd_pcm_hw_params_get_format()", snd_pcm_hw_params_get_format(hw_params, &chosen_format));
 
 	audio_format.num_channels = num_channels;
 	audio_format.bits_per_sample = 0;
@@ -110,17 +138,18 @@ ALSAInput::ALSAInput(const char *device, unsigned sample_rate, unsigned num_chan
 
 	snd_pcm_sw_params_t *sw_params;
 	snd_pcm_sw_params_alloca(&sw_params);
-	die_on_error("snd_pcm_sw_params_current()", snd_pcm_sw_params_current(pcm_handle, sw_params));
-	die_on_error("snd_pcm_sw_params_set_start_threshold", snd_pcm_sw_params_set_start_threshold(pcm_handle, sw_params, num_periods * period_size / 2));
-	die_on_error("snd_pcm_sw_params()", snd_pcm_sw_params(pcm_handle, sw_params));
+	RETURN_FALSE_ON_ERROR("snd_pcm_sw_params_current()", snd_pcm_sw_params_current(pcm_handle, sw_params));
+	RETURN_FALSE_ON_ERROR("snd_pcm_sw_params_set_start_threshold", snd_pcm_sw_params_set_start_threshold(pcm_handle, sw_params, num_periods * period_size / 2));
+	RETURN_FALSE_ON_ERROR("snd_pcm_sw_params()", snd_pcm_sw_params(pcm_handle, sw_params));
 
-	die_on_error("snd_pcm_nonblock()", snd_pcm_nonblock(pcm_handle, 1));
-	die_on_error("snd_pcm_prepare()", snd_pcm_prepare(pcm_handle));
+	RETURN_FALSE_ON_ERROR("snd_pcm_nonblock()", snd_pcm_nonblock(pcm_handle, 1));
+	RETURN_FALSE_ON_ERROR("snd_pcm_prepare()", snd_pcm_prepare(pcm_handle));
+	return true;
 }
 
 ALSAInput::~ALSAInput()
 {
-	die_on_error("snd_pcm_close()", snd_pcm_close(pcm_handle));
+	WARN_ON_ERROR("snd_pcm_close()", snd_pcm_close(pcm_handle));
 }
 
 void ALSAInput::start_capture_thread()
@@ -137,8 +166,44 @@ void ALSAInput::stop_capture_thread()
 
 void ALSAInput::capture_thread_func()
 {
+	// If the device hasn't been opened already, we need to do so
+	// before we can capture.
+	while (!should_quit && pcm_handle == nullptr) {
+		if (!open_device()) {
+			fprintf(stderr, "[%s] Waiting one second and trying again...\n",
+				device.c_str());
+			sleep(1);
+		}
+	}
+
+	if (should_quit) {
+		// Don't call free_card(); that would be a deadlock.
+		return;
+	}
+
+	// Do the actual capture. (Termination condition within loop.)
+	for ( ;; ) {
+		switch (do_capture()) {
+		case CaptureEndReason::REQUESTED_QUIT:
+			// Don't call free_card(); that would be a deadlock.
+			return;
+		case CaptureEndReason::DEVICE_GONE:
+			parent_pool->free_card(internal_dev_index);
+			return;
+		case CaptureEndReason::OTHER_ERROR:
+			parent_pool->set_card_state(internal_dev_index, ALSAPool::Device::State::STARTING);
+			fprintf(stderr, "[%s] Sleeping one second and restarting capture...\n",
+				device.c_str());
+			sleep(1);
+			break;
+		}
+	}
+}
+
+ALSAInput::CaptureEndReason ALSAInput::do_capture()
+{
 	parent_pool->set_card_state(internal_dev_index, ALSAPool::Device::State::STARTING);
-	die_on_error("snd_pcm_start()", snd_pcm_start(pcm_handle));
+	RETURN_ON_ERROR("snd_pcm_start()", snd_pcm_start(pcm_handle));
 	parent_pool->set_card_state(internal_dev_index, ALSAPool::Device::State::RUNNING);
 
 	uint64_t num_frames_output = 0;
@@ -151,7 +216,7 @@ void ALSAInput::capture_thread_func()
 			snd_pcm_start(pcm_handle);
 			continue;
 		}
-		die_on_error("snd_pcm_wait()", ret);
+		RETURN_ON_ERROR("snd_pcm_wait()", ret);
 
 		snd_pcm_sframes_t frames = snd_pcm_readi(pcm_handle, buffer.get(), buffer_frames);
 		if (frames == -EPIPE) {
@@ -164,31 +229,23 @@ void ALSAInput::capture_thread_func()
 			fprintf(stderr, "snd_pcm_readi() returned 0\n");
 			break;
 		}
-		die_on_error("snd_pcm_readi()", frames);
+		RETURN_ON_ERROR("snd_pcm_readi()", frames);
 
 		const int64_t prev_pts = frames_to_pts(num_frames_output);
 		const int64_t pts = frames_to_pts(num_frames_output + frames);
 		bool success;
 		do {
-			if (should_quit) return;
+			if (should_quit) return CaptureEndReason::REQUESTED_QUIT;
 			success = audio_callback(buffer.get(), frames, audio_format, pts - prev_pts);
 		} while (!success);
 		num_frames_output += frames;
 	}
-	parent_pool->free_card(internal_dev_index);
+	return CaptureEndReason::REQUESTED_QUIT;
 }
 
 int64_t ALSAInput::frames_to_pts(uint64_t n) const
 {
 	return (n * TIMEBASE) / sample_rate;
-}
-
-void ALSAInput::die_on_error(const char *func_name, int err)
-{
-	if (err < 0) {
-		fprintf(stderr, "[%s] %s: %s\n", device.c_str(), func_name, snd_strerror(err));
-		exit(1);
-	}
 }
 
 ALSAPool::~ALSAPool()
