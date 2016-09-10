@@ -149,7 +149,9 @@ bool ALSAInput::open_device()
 
 ALSAInput::~ALSAInput()
 {
-	WARN_ON_ERROR("snd_pcm_close()", snd_pcm_close(pcm_handle));
+	if (pcm_handle) {
+		WARN_ON_ERROR("snd_pcm_close()", snd_pcm_close(pcm_handle));
+	}
 }
 
 void ALSAInput::start_capture_thread()
@@ -180,6 +182,8 @@ void ALSAInput::capture_thread_func()
 
 	if (should_quit) {
 		// Don't call free_card(); that would be a deadlock.
+		WARN_ON_ERROR("snd_pcm_close()", snd_pcm_close(pcm_handle));
+		pcm_handle = nullptr;
 		return;
 	}
 
@@ -188,9 +192,13 @@ void ALSAInput::capture_thread_func()
 		switch (do_capture()) {
 		case CaptureEndReason::REQUESTED_QUIT:
 			// Don't call free_card(); that would be a deadlock.
+			WARN_ON_ERROR("snd_pcm_close()", snd_pcm_close(pcm_handle));
+			pcm_handle = nullptr;
 			return;
 		case CaptureEndReason::DEVICE_GONE:
 			parent_pool->free_card(internal_dev_index);
+			WARN_ON_ERROR("snd_pcm_close()", snd_pcm_close(pcm_handle));
+			pcm_handle = nullptr;
 			return;
 		case CaptureEndReason::OTHER_ERROR:
 			parent_pool->set_card_state(internal_dev_index, ALSAPool::Device::State::STARTING);
