@@ -450,15 +450,23 @@ ALSAPool::ProbeResult ALSAPool::probe_device_once(unsigned card_index, unsigned 
 	snd_ctl_card_info_alloca(&card_info);
 	snd_ctl_card_info(ctl, card_info);
 
-	lock_guard<mutex> lock(mu);
-	unsigned internal_dev_index = find_free_device_index();
-	devices[internal_dev_index].address = address;
-	devices[internal_dev_index].name = snd_ctl_card_info_get_name(card_info);
-	devices[internal_dev_index].info = snd_pcm_info_get_name(pcm_info);
-	devices[internal_dev_index].num_channels = num_channels;
-	devices[internal_dev_index].state = Device::State::READY;
+	string name = snd_ctl_card_info_get_name(card_info);
+	string info = snd_pcm_info_get_name(pcm_info);
+
+	unsigned internal_dev_index;
+	{
+		lock_guard<mutex> lock(mu);
+		internal_dev_index = find_free_device_index(name, info, num_channels, address);
+		devices[internal_dev_index].address = address;
+		devices[internal_dev_index].name = name;
+		devices[internal_dev_index].info = info;
+		devices[internal_dev_index].num_channels = num_channels;
+		// Note: Purposefully does not overwrite held.
+	}
 
 	fprintf(stderr, "%s: Probed successfully.\n", address);
+
+	reset_device(internal_dev_index);  // Restarts it if it is held (ie., we just replaced a dead card).
 
 	return ALSAPool::ProbeResult::SUCCESS;
 }
@@ -570,16 +578,47 @@ void ALSAPool::set_card_state(unsigned index, ALSAPool::Device::State state)
 		;
 }
 
-unsigned ALSAPool::find_free_device_index()
+unsigned ALSAPool::find_free_device_index(const string &name, const string &info, unsigned num_channels, const string &address)
 {
+	// First try to find an exact match on a dead card.
 	for (unsigned i = 0; i < devices.size(); ++i) {
-		if (devices[i].state == Device::State::EMPTY) {
+		if (devices[i].state == Device::State::DEAD &&
+		    devices[i].address == address &&
+		    devices[i].name == name &&
+		    devices[i].info == info &&
+		    devices[i].num_channels == num_channels) {
 			devices[i].state = Device::State::READY;
 			return i;
 		}
 	}
+
+	// Then try to find a match on everything but the address
+	// (probably that devices were plugged back in a different order).
+	// If we have two cards that are equal, this might get them mixed up,
+	// but we don't have anything better.
+	for (unsigned i = 0; i < devices.size(); ++i) {
+		if (devices[i].state == Device::State::DEAD &&
+		    devices[i].name == name &&
+		    devices[i].info == info &&
+		    devices[i].num_channels == num_channels) {
+			devices[i].state = Device::State::READY;
+			return i;
+		}
+	}
+
+	// OK, so we didn't find a match; see if there are any empty slots.
+	for (unsigned i = 0; i < devices.size(); ++i) {
+		if (devices[i].state == Device::State::EMPTY) {
+			devices[i].state = Device::State::READY;
+			devices[i].held = false;
+			return i;
+		}
+	}
+
+	// Failing that, we just insert the new device at the end.
 	Device new_dev;
 	new_dev.state = Device::State::READY;
+	new_dev.held = false;
 	devices.push_back(new_dev);
 	inputs.emplace_back(nullptr);
 	return devices.size() - 1;

@@ -184,7 +184,10 @@ private:
 
 	// Must be called with <mu> held. Will allocate a new entry if needed.
 	// The returned entry will be set to READY state.
-	unsigned find_free_device_index();
+	unsigned find_free_device_index(const std::string &name,
+	                                const std::string &info,
+	                                unsigned num_channels,
+	                                const std::string &address);
 
 	friend class ALSAInput;
 };
