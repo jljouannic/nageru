@@ -294,6 +294,22 @@ bool AudioMixer::add_silence(DeviceSpec device_spec, unsigned samples_per_frame,
 	return true;
 }
 
+bool AudioMixer::silence_card(DeviceSpec device_spec, bool silence)
+{
+	AudioDevice *device = find_audio_device(device_spec);
+
+	unique_lock<timed_mutex> lock(audio_mutex, defer_lock);
+	if (!lock.try_lock_for(chrono::milliseconds(10))) {
+		return false;
+	}
+
+	if (device->silenced && !silence) {
+		reset_resampler_mutex_held(device_spec);
+	}
+	device->silenced = silence;
+	return true;
+}
+
 AudioMixer::AudioDevice *AudioMixer::find_audio_device(DeviceSpec device)
 {
 	switch (device.type) {
@@ -383,11 +399,15 @@ vector<float> AudioMixer::get_output(double pts, unsigned num_samples, Resamplin
 	for (const DeviceSpec &device_spec : get_active_devices()) {
 		AudioDevice *device = find_audio_device(device_spec);
 		samples_card[device_spec].resize(num_samples * device->interesting_channels.size());
-		device->resampling_queue->get_output_samples(
-			pts,
-			&samples_card[device_spec][0],
-			num_samples,
-			rate_adjustment_policy);
+		if (device->silenced) {
+			memset(&samples_card[device_spec][0], 0, samples_card[device_spec].size() * sizeof(float));
+		} else {
+			device->resampling_queue->get_output_samples(
+				pts,
+				&samples_card[device_spec][0],
+				num_samples,
+				rate_adjustment_policy);
+		}
 	}
 
 	vector<float> samples_out, left, right;

@@ -166,6 +166,8 @@ void ALSAInput::stop_capture_thread()
 
 void ALSAInput::capture_thread_func()
 {
+	parent_pool->set_card_state(internal_dev_index, ALSAPool::Device::State::STARTING);
+
 	// If the device hasn't been opened already, we need to do so
 	// before we can capture.
 	while (!should_quit && pcm_handle == nullptr) {
@@ -549,8 +551,15 @@ ALSAPool::Device::State ALSAPool::get_card_state(unsigned index)
 
 void ALSAPool::set_card_state(unsigned index, ALSAPool::Device::State state)
 {
-	lock_guard<mutex> lock(mu);
-	devices[index].state = state;
+	{
+		lock_guard<mutex> lock(mu);
+		devices[index].state = state;
+	}
+
+	DeviceSpec spec{InputSourceType::ALSA_INPUT, index};
+	bool silence = (state != ALSAPool::Device::State::RUNNING);
+	while (!global_audio_mixer->silence_card(spec, silence))
+		;
 }
 
 unsigned ALSAPool::find_free_device_index()
@@ -570,6 +579,10 @@ unsigned ALSAPool::find_free_device_index()
 
 void ALSAPool::free_card(unsigned index)
 {
+	DeviceSpec spec{InputSourceType::ALSA_INPUT, index};
+	while (!global_audio_mixer->silence_card(spec, true))
+		;
+
 	lock_guard<mutex> lock(mu);
 	if (devices[index].held) {
 		devices[index].state = Device::State::DEAD;

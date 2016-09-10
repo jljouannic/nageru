@@ -93,6 +93,13 @@ public:
 	bool add_audio(DeviceSpec device_spec, const uint8_t *data, unsigned num_samples, bmusb::AudioFormat audio_format, int64_t frame_length);
 	bool add_silence(DeviceSpec device_spec, unsigned samples_per_frame, unsigned num_frames, int64_t frame_length);
 
+	// If a given device is offline for whatever reason and cannot deliver audio
+	// (by means of add_audio() or add_silence()), you can call put it in silence mode,
+	// where it will be taken to only output silence. Note that when taking it _out_
+	// of silence mode, the resampler will be reset, so that old audio will not
+	// affect it. Same true/false behavior as add_audio().
+	bool silence_card(DeviceSpec device_spec, bool silence);
+
 	std::vector<float> get_output(double pts, unsigned num_samples, ResamplingQueue::RateAdjustmentPolicy rate_adjustment_policy);
 
 	void set_fader_volume(unsigned bus_index, float level_db) { fader_volume_db[bus_index] = level_db; }
@@ -263,6 +270,7 @@ private:
 		unsigned capture_frequency = OUTPUT_FREQUENCY;
 		// Which channels we consider interesting (ie., are part of some input_mapping).
 		std::set<unsigned> interesting_channels;
+		bool silenced = false;
 	};
 
 	const AudioDevice *find_audio_device(DeviceSpec device_spec) const
