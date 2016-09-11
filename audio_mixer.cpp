@@ -742,7 +742,7 @@ map<DeviceSpec, DeviceInfo> AudioMixer::get_devices()
 		const AudioDevice *device = &video_cards[card_index];
 		DeviceInfo info;
 		info.name = device->name;
-		info.num_channels = 8;  // FIXME: This is wrong for fake cards.
+		info.num_channels = 8;
 		devices.insert(make_pair(spec, info));
 	}
 	vector<ALSAPool::Device> available_alsa_devices = alsa_pool.get_devices();
