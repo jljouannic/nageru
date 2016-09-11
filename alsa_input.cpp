@@ -471,6 +471,19 @@ ALSAPool::ProbeResult ALSAPool::probe_device_once(unsigned card_index, unsigned 
 	return ALSAPool::ProbeResult::SUCCESS;
 }
 
+void ALSAPool::unplug_device(unsigned card_index, unsigned dev_index)
+{
+	char address[256];
+	snprintf(address, sizeof(address), "hw:%d,%d", card_index, dev_index);
+	for (unsigned i = 0; i < devices.size(); ++i) {
+		if (devices[i].state != Device::State::EMPTY &&
+		    devices[i].state != Device::State::DEAD &&
+		    devices[i].address == address) {
+			free_card(i);
+		}
+	}
+}
+
 void ALSAPool::init()
 {
 	thread(&ALSAPool::inotify_thread_func, this).detach();
@@ -519,7 +532,7 @@ void ALSAPool::inotify_thread_func()
 			if (sscanf(event->name, "pcmC%uD%u%c", &card, &device, &type) == 3 && type == 'c') {
 				if (event->mask & (IN_MOVED_FROM | IN_DELETE)) {
 					printf("Deleted capture device: Card %u, device %u\n", card, device);
-					// TODO: Unplug.
+					unplug_device(card, device);
 				}
 				if (event->mask & (IN_MOVED_TO | IN_CREATE)) {
 					printf("Adding capture device: Card %u, device %u\n", card, device);

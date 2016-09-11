@@ -182,6 +182,8 @@ private:
 	};
 	ProbeResult probe_device_once(unsigned card_index, unsigned dev_index);
 
+	void unplug_device(unsigned card_index, unsigned dev_index);
+
 	// Must be called with <mu> held. Will allocate a new entry if needed.
 	// The returned entry will be set to READY state.
 	unsigned find_free_device_index(const std::string &name,
