@@ -150,9 +150,6 @@ public:
 	// EMPTY or DEAD state. Only for ALSAInput and for internal use.
 	void free_card(unsigned index);
 
-	// TODO: Add accessors and/or callbacks about changed state, so that
-	// the UI actually stands a chance in using that information.
-
 private:
 	mutable std::mutex mu;
 	std::vector<Device> devices;  // Under mu.

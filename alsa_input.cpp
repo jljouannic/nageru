@@ -467,6 +467,9 @@ ALSAPool::ProbeResult ALSAPool::probe_device_once(unsigned card_index, unsigned 
 	fprintf(stderr, "%s: Probed successfully.\n", address);
 
 	reset_device(internal_dev_index);  // Restarts it if it is held (ie., we just replaced a dead card).
+	if (global_audio_mixer) {
+		global_audio_mixer->trigger_state_changed_callback();
+	}
 
 	return ALSAPool::ProbeResult::SUCCESS;
 }
@@ -589,6 +592,7 @@ void ALSAPool::set_card_state(unsigned index, ALSAPool::Device::State state)
 	bool silence = (state != ALSAPool::Device::State::RUNNING);
 	while (!global_audio_mixer->silence_card(spec, silence))
 		;
+	global_audio_mixer->trigger_state_changed_callback();
 }
 
 unsigned ALSAPool::find_free_device_index(const string &name, const string &info, unsigned num_channels, const string &address)
@@ -643,15 +647,19 @@ void ALSAPool::free_card(unsigned index)
 	while (!global_audio_mixer->silence_card(spec, true))
 		;
 
-	lock_guard<mutex> lock(mu);
-	if (devices[index].held) {
-		devices[index].state = Device::State::DEAD;
-	} else {
-		devices[index].state = Device::State::EMPTY;
-		inputs[index].reset();
+	{
+		lock_guard<mutex> lock(mu);
+		if (devices[index].held) {
+			devices[index].state = Device::State::DEAD;
+		} else {
+			devices[index].state = Device::State::EMPTY;
+			inputs[index].reset();
+		}
+		while (!devices.empty() && devices.back().state == Device::State::EMPTY) {
+			devices.pop_back();
+			inputs.pop_back();
+		}
 	}
-	while (!devices.empty() && devices.back().state == Device::State::EMPTY) {
-		devices.pop_back();
-		inputs.pop_back();
-	}
+
+	global_audio_mixer->trigger_state_changed_callback();
 }

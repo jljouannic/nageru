@@ -262,6 +262,24 @@ public:
 		audio_level_callback = callback;
 	}
 
+	typedef std::function<void()> state_changed_callback_t;
+	void set_state_changed_callback(state_changed_callback_t callback)
+	{
+		state_changed_callback = callback;
+	}
+
+	state_changed_callback_t get_state_changed_callback() const
+	{
+		return state_changed_callback;
+	}
+
+	void trigger_state_changed_callback()
+	{
+		if (state_changed_callback != nullptr) {
+			state_changed_callback();
+		}
+	}
+
 private:
 	struct AudioDevice {
 		std::unique_ptr<ResamplingQueue> resampling_queue;
@@ -338,6 +356,7 @@ private:
 	std::atomic<float> eq_level_db[MAX_BUSES][NUM_EQ_BANDS] {{{ 0.0f }}};
 
 	audio_level_callback_t audio_level_callback = nullptr;
+	state_changed_callback_t state_changed_callback = nullptr;
 	mutable std::mutex audio_measure_mutex;
 	Ebu_r128_proc r128;  // Under audio_measure_mutex.
 	CorrelationMeasurer correlation;  // Under audio_measure_mutex.

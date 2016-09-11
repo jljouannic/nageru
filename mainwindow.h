@@ -72,6 +72,8 @@ private:
 	void audio_level_callback(float level_lufs, float peak_db, std::vector<AudioMixer::BusLevel> bus_levels, float global_level_lufs, float range_low_lufs, float range_high_lufs, float final_makeup_gain_db, float correlation);
 	std::chrono::steady_clock::time_point last_audio_level_callback;
 
+	void audio_state_changed();
+
 	Ui::MainWindow *ui;
 	QLabel *disk_free_label;
 	QPushButton *transition_btn1, *transition_btn2, *transition_btn3;

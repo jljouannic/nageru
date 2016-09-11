@@ -235,6 +235,7 @@ void MainWindow::mixer_created(Mixer *mixer)
 
 	setup_audio_miniview();
 	setup_audio_expanded_view();
+	global_audio_mixer->set_state_changed_callback(bind(&MainWindow::audio_state_changed, this));
 
 	slave_knob(ui->locut_cutoff_knob, ui->locut_cutoff_knob_2);
 	slave_knob(ui->limiter_threshold_knob, ui->limiter_threshold_knob_2);
@@ -840,4 +841,28 @@ void MainWindow::set_white_balance(int channel_number, int x, int y)
 	double b = srgb_to_linear(qBlue(reference_color) / 255.0);
 	global_mixer->set_wb(Mixer::OUTPUT_INPUT0 + channel_number, r, g, b);
 	previews[channel_number]->display->updateGL();
+}
+
+void MainWindow::audio_state_changed()
+{
+	post_to_main_thread([this]{
+		InputMapping mapping = global_audio_mixer->get_input_mapping();
+		for (unsigned bus_index = 0; bus_index < mapping.buses.size(); ++bus_index) {
+			const InputMapping::Bus &bus = mapping.buses[bus_index];
+			string suffix;
+			if (bus.device.type == InputSourceType::ALSA_INPUT) {
+				ALSAPool::Device::State state = global_audio_mixer->get_alsa_card_state(bus.device.index);
+				if (state == ALSAPool::Device::State::STARTING) {
+					suffix = " (busy)";
+				} else if (state == ALSAPool::Device::State::DEAD) {
+					suffix = " (dead)";
+				}
+			}
+
+			audio_miniviews[bus_index]->bus_desc_label->setFullText(
+				QString::fromStdString(bus.name + suffix));
+			audio_expanded_views[bus_index]->bus_desc_label->setFullText(
+				QString::fromStdString(bus.name + suffix));
+		}
+	});
 }

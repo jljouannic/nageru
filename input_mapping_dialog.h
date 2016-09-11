@@ -6,6 +6,7 @@
 #include <vector>
 #include <sys/time.h>
 
+#include "audio_mixer.h"
 #include "mixer.h"
 
 namespace Ui {
@@ -20,6 +21,7 @@ class InputMappingDialog : public QDialog
 
 public:
 	InputMappingDialog();
+	~InputMappingDialog();
 
 private:
 	void fill_ui_from_mapping(const InputMapping &mapping);
@@ -43,7 +45,9 @@ private:
 	// held forever).
 	InputMapping old_mapping;
 
-	const std::map<DeviceSpec, DeviceInfo> devices;
+	std::map<DeviceSpec, DeviceInfo> devices;
+
+	AudioMixer::state_changed_callback_t saved_callback;
 };
 
 #endif  // !defined(_INPUT_MAPPING_DIALOG_H)

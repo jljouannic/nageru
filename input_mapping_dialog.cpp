@@ -1,5 +1,6 @@
 #include "input_mapping_dialog.h"
 
+#include "post_to_main_thread.h"
 #include "ui_input_mapping.h"
 
 #include <QComboBox>
@@ -28,6 +29,21 @@ InputMappingDialog::InputMappingDialog()
 
 	update_button_state();
 	connect(ui->table, &QTableWidget::itemSelectionChanged, this, &InputMappingDialog::update_button_state);
+
+	saved_callback = global_audio_mixer->get_state_changed_callback();
+	global_audio_mixer->set_state_changed_callback([this]{
+		post_to_main_thread([this]{
+			devices = global_audio_mixer->get_devices();
+			for (unsigned row = 0; row < mapping.buses.size(); ++row) {
+				fill_row_from_bus(row, mapping.buses[row]);
+			}
+		});
+	});
+}
+
+InputMappingDialog::~InputMappingDialog()
+{
+	global_audio_mixer->set_state_changed_callback(saved_callback);
 }
 
 void InputMappingDialog::fill_ui_from_mapping(const InputMapping &mapping)
@@ -49,10 +65,17 @@ void InputMappingDialog::fill_row_from_bus(unsigned row, const InputMapping::Bus
 	QString name(QString::fromStdString(bus.name));
 	ui->table->setItem(row, 0, new QTableWidgetItem(name));
 
-	// Card choices.
-	QComboBox *card_combo = new QComboBox;
+	// Card choices. If there's already a combobox here, we try to modify
+	// the elements in-place, so that the UI doesn't go away under the user's feet
+	// if they are in the process of choosing an item.
+	QComboBox *card_combo = static_cast<QComboBox *>(ui->table->cellWidget(row, 1));
+	if (card_combo == nullptr) {
+		card_combo = new QComboBox;
+	}
 	unsigned current_index = 0;
-	card_combo->addItem(QString("(none)   "));
+	if (card_combo->count() == 0) {
+		card_combo->addItem(QString("(none)   "));
+	}
 	for (const auto &spec_and_info : devices) {
 		QString label(QString::fromStdString(spec_and_info.second.name));
 		if (spec_and_info.first.type == InputSourceType::ALSA_INPUT) {
@@ -66,12 +89,22 @@ void InputMappingDialog::fill_row_from_bus(unsigned row, const InputMapping::Bus
 			}
 		}
 		++current_index;
-		card_combo->addItem(
-			label + "   ",
-			qulonglong(DeviceSpec_to_key(spec_and_info.first)));
+		if (unsigned(card_combo->count()) > current_index) {
+			card_combo->setItemText(current_index, label + "   ");
+			card_combo->setItemData(current_index, qulonglong(DeviceSpec_to_key(spec_and_info.first)));
+		} else {
+			card_combo->addItem(
+				label + "   ",
+				qulonglong(DeviceSpec_to_key(spec_and_info.first)));
+		}
 		if (bus.device == spec_and_info.first) {
 			card_combo->setCurrentIndex(current_index);
 		}
+	}
+	// Remove any excess items from earlier. (This is only for paranoia;
+	// they should be held, so it shouldn't matter.)
+	while (unsigned(card_combo->count()) > current_index + 1) {
+		card_combo->removeItem(current_index + 1);
 	}
 	connect(card_combo, static_cast<void(QComboBox::*)(int)>(&QComboBox::currentIndexChanged),
 		bind(&InputMappingDialog::card_selected, this, card_combo, row, _1));
@@ -83,6 +116,8 @@ void InputMappingDialog::fill_row_from_bus(unsigned row, const InputMapping::Bus
 void InputMappingDialog::setup_channel_choices_from_bus(unsigned row, const InputMapping::Bus &bus)
 {
 	// Left and right channel.
+	// TODO: If there's already a widget here, modify it instead of creating a new one,
+	// as we do with card choices.
 	for (unsigned channel = 0; channel < 2; ++channel) {
 		QComboBox *channel_combo = new QComboBox;
 		channel_combo->addItem(QString("(none)"));
@@ -108,12 +143,14 @@ void InputMappingDialog::setup_channel_choices_from_bus(unsigned row, const Inpu
 
 void InputMappingDialog::ok_clicked()
 {
+	global_audio_mixer->set_state_changed_callback(saved_callback);
 	global_audio_mixer->set_input_mapping(mapping);
 	accept();
 }
 
 void InputMappingDialog::cancel_clicked()
 {
+	global_audio_mixer->set_state_changed_callback(saved_callback);
 	global_audio_mixer->set_input_mapping(old_mapping);
 	reject();
 }
