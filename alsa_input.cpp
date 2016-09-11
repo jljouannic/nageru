@@ -467,9 +467,10 @@ ALSAPool::ProbeResult ALSAPool::probe_device_once(unsigned card_index, unsigned 
 	fprintf(stderr, "%s: Probed successfully.\n", address);
 
 	reset_device(internal_dev_index);  // Restarts it if it is held (ie., we just replaced a dead card).
-	if (global_audio_mixer) {
-		global_audio_mixer->trigger_state_changed_callback();
-	}
+
+	DeviceSpec spec{InputSourceType::ALSA_INPUT, internal_dev_index};
+	global_audio_mixer->set_name(spec, name + " (" + info + ")");
+	global_audio_mixer->trigger_state_changed_callback();
 
 	return ALSAPool::ProbeResult::SUCCESS;
 }

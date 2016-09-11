@@ -162,6 +162,8 @@ AudioMixer::AudioMixer(unsigned num_cards)
 	  limiter(OUTPUT_FREQUENCY),
 	  correlation(OUTPUT_FREQUENCY)
 {
+	global_audio_mixer = this;
+
 	for (unsigned bus_index = 0; bus_index < MAX_BUSES; ++bus_index) {
 		locut[bus_index].init(FILTER_HPF, 2);
 		locut_enabled[bus_index] = global_flags.locut_enabled;
