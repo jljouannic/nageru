@@ -280,7 +280,7 @@ void Mixer::configure_card(unsigned card_index, CaptureInterface *capture, bool 
 
 	DeviceSpec device{InputSourceType::CAPTURE_CARD, card_index};
 	audio_mixer.reset_resampler(device);
-	audio_mixer.set_name(device, card->capture->get_description());
+	audio_mixer.set_display_name(device, card->capture->get_description());
 	audio_mixer.trigger_state_changed_callback();
 }
 

@@ -48,7 +48,7 @@ struct DeviceSpec {
 	}
 };
 struct DeviceInfo {
-	std::string name;
+	std::string display_name;
 	unsigned num_channels;
 };
 
@@ -115,7 +115,7 @@ public:
 		return alsa_pool.get_card_state(index);
 	}
 
-	void set_name(DeviceSpec device_spec, const std::string &name);
+	void set_display_name(DeviceSpec device_spec, const std::string &name);
 
 	void set_input_mapping(const InputMapping &input_mapping);
 	InputMapping get_input_mapping() const;
@@ -284,7 +284,7 @@ private:
 	struct AudioDevice {
 		std::unique_ptr<ResamplingQueue> resampling_queue;
 		int64_t next_local_pts = 0;
-		std::string name;
+		std::string display_name;
 		unsigned capture_frequency = OUTPUT_FREQUENCY;
 		// Which channels we consider interesting (ie., are part of some input_mapping).
 		std::set<unsigned> interesting_channels;

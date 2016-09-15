@@ -454,6 +454,7 @@ ALSAPool::ProbeResult ALSAPool::probe_device_once(unsigned card_index, unsigned 
 	string info = snd_pcm_info_get_name(pcm_info);
 
 	unsigned internal_dev_index;
+	string display_name;
 	{
 		lock_guard<mutex> lock(mu);
 		internal_dev_index = find_free_device_index(name, info, num_channels, address);
@@ -462,6 +463,8 @@ ALSAPool::ProbeResult ALSAPool::probe_device_once(unsigned card_index, unsigned 
 		devices[internal_dev_index].info = info;
 		devices[internal_dev_index].num_channels = num_channels;
 		// Note: Purposefully does not overwrite held.
+
+		display_name = devices[internal_dev_index].display_name();
 	}
 
 	fprintf(stderr, "%s: Probed successfully.\n", address);
@@ -469,7 +472,7 @@ ALSAPool::ProbeResult ALSAPool::probe_device_once(unsigned card_index, unsigned 
 	reset_device(internal_dev_index);  // Restarts it if it is held (ie., we just replaced a dead card).
 
 	DeviceSpec spec{InputSourceType::ALSA_INPUT, internal_dev_index};
-	global_audio_mixer->set_name(spec, name + " (" + info + ")");
+	global_audio_mixer->set_display_name(spec, display_name);
 	global_audio_mixer->trigger_state_changed_callback();
 
 	return ALSAPool::ProbeResult::SUCCESS;

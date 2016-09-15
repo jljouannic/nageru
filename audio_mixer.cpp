@@ -743,7 +743,7 @@ map<DeviceSpec, DeviceInfo> AudioMixer::get_devices()
 		const DeviceSpec spec{ InputSourceType::CAPTURE_CARD, card_index };
 		const AudioDevice *device = &video_cards[card_index];
 		DeviceInfo info;
-		info.name = device->name;
+		info.display_name = device->display_name;
 		info.num_channels = 8;
 		devices.insert(make_pair(spec, info));
 	}
@@ -752,19 +752,19 @@ map<DeviceSpec, DeviceInfo> AudioMixer::get_devices()
 		const DeviceSpec spec{ InputSourceType::ALSA_INPUT, card_index };
 		const ALSAPool::Device &device = available_alsa_devices[card_index];
 		DeviceInfo info;
-		info.name = device.name + " (" + device.info + ")";
+		info.display_name = device.display_name();
 		info.num_channels = device.num_channels;
 		devices.insert(make_pair(spec, info));
 	}
 	return devices;
 }
 
-void AudioMixer::set_name(DeviceSpec device_spec, const string &name)
+void AudioMixer::set_display_name(DeviceSpec device_spec, const string &name)
 {
 	AudioDevice *device = find_audio_device(device_spec);
 
 	lock_guard<timed_mutex> lock(audio_mutex);
-	device->name = name;
+	device->display_name = name;
 }
 
 void AudioMixer::set_input_mapping(const InputMapping &new_input_mapping)

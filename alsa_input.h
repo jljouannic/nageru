@@ -119,6 +119,8 @@ public:
 		// at any given time as a result of an error or hotplug event;
 		// a card that is held will go to the DEAD state instead.
 		bool held = false;
+
+		std::string display_name() const { return name + " (" + info + ")"; }
 	};
 
 	void init();
