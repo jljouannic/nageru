@@ -35,6 +35,8 @@ private:
 	void add_clicked();
 	void remove_clicked();
 	void updown_clicked(int direction);
+	void save_clicked();
+	void load_clicked();
 	void update_button_state();
 
 	Ui::InputMappingDialog *ui;
@@ -45,8 +47,7 @@ private:
 	// held forever).
 	InputMapping old_mapping;
 
-	std::map<DeviceSpec, DeviceInfo> devices;
-
+	std::map<DeviceSpec, DeviceInfo> devices;  // Needs no lock, accessed only on the UI thread.
 	AudioMixer::state_changed_callback_t saved_callback;
 };
 

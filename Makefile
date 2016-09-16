@@ -1,7 +1,8 @@
 CXX=g++
+PROTOC=protoc
 INSTALL=install
 EMBEDDED_BMUSB=no
-PKG_MODULES := Qt5Core Qt5Gui Qt5Widgets Qt5OpenGLExtensions Qt5OpenGL libusb-1.0 movit lua52 libmicrohttpd epoxy x264
+PKG_MODULES := Qt5Core Qt5Gui Qt5Widgets Qt5OpenGLExtensions Qt5OpenGL libusb-1.0 movit lua52 libmicrohttpd epoxy x264 protobuf
 CXXFLAGS ?= -O2 -g -Wall  # Will be overridden by environment.
 CXXFLAGS += -std=gnu++11 -fPIC $(shell pkg-config --cflags $(PKG_MODULES)) -pthread -DMOVIT_SHADER_DIR=\"$(shell pkg-config --variable=shaderdir movit)\" -Idecklink/
 
@@ -17,7 +18,7 @@ OBJS=glwidget.o main.o mainwindow.o vumeter.o lrameter.o vu_common.o correlation
 OBJS += glwidget.moc.o mainwindow.moc.o vumeter.moc.o lrameter.moc.o correlation_meter.moc.o aboutdialog.moc.o ellipsis_label.moc.o input_mapping_dialog.moc.o nonlinear_fader.moc.o clickable_label.moc.o
 
 # Mixer objects
-AUDIO_MIXER_OBJS = audio_mixer.o alsa_input.o ebu_r128_proc.o stereocompressor.o resampling_queue.o flags.o correlation_measurer.o filter.o disk_space_estimator.o
+AUDIO_MIXER_OBJS = audio_mixer.o alsa_input.o ebu_r128_proc.o stereocompressor.o resampling_queue.o flags.o correlation_measurer.o filter.o input_mapping.o state.pb.o
 OBJS += mixer.o pbo_frame_allocator.o context.o ref_counted_frame.o theme.o httpd.o flags.o image_input.o alsa_output.o disk_space_estimator.o $(AUDIO_MIXER_OBJS)
 
 # Streaming and encoding objects
@@ -38,6 +39,8 @@ BM_OBJS = benchmark_audio_mixer.o $(AUDIO_MIXER_OBJS) flags.o
 	$(CXX) -MMD -MP $(CPPFLAGS) $(CXXFLAGS) -o $@ -c $<
 %.o: %.cc
 	$(CXX) -MMD -MP $(CPPFLAGS) $(CXXFLAGS) -o $@ -c $<
+%.pb.cc %.pb.h : %.proto
+	$(PROTOC) --cpp_out=. $<
 
 %.h: %.ui
 	uic $< -o $@

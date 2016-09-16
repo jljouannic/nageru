@@ -4,6 +4,8 @@
 #include "ui_input_mapping.h"
 
 #include <QComboBox>
+#include <QFileDialog>
+#include <QMessageBox>
 
 using namespace std;
 using namespace std::placeholders;
@@ -26,6 +28,8 @@ InputMappingDialog::InputMappingDialog()
 	connect(ui->remove_button, &QPushButton::clicked, this, &InputMappingDialog::remove_clicked);
 	connect(ui->up_button, &QPushButton::clicked, bind(&InputMappingDialog::updown_clicked, this, -1));
 	connect(ui->down_button, &QPushButton::clicked, bind(&InputMappingDialog::updown_clicked, this, 1));
+	connect(ui->save_button, &QPushButton::clicked, this, &InputMappingDialog::save_clicked);
+	connect(ui->load_button, &QPushButton::clicked, this, &InputMappingDialog::load_clicked);
 
 	update_button_state();
 	connect(ui->table, &QTableWidget::itemSelectionChanged, this, &InputMappingDialog::update_button_state);
@@ -229,6 +233,37 @@ void InputMappingDialog::updown_clicked(int direction)
 	QTableWidgetSelectionRange b_sel(b_row, 0, b_row, ui->table->columnCount() - 1);
 	ui->table->setRangeSelected(a_sel, false);
 	ui->table->setRangeSelected(b_sel, true);
+}
+
+void InputMappingDialog::save_clicked()
+{
+	QString filename = QFileDialog::getSaveFileName(this,
+		"Save input mapping", QString(), tr("Mapping files (*.mapping)"));
+	if (!filename.endsWith(".mapping")) {
+		filename += ".mapping";
+	}
+	if (!save_input_mapping_to_file(devices, mapping, filename.toStdString())) {
+		QMessageBox box;
+		box.setText("Could not save mapping to '" + filename + "'. Check that you have the right permissions and try again.");
+		box.exec();
+	}
+}
+
+void InputMappingDialog::load_clicked()
+{
+	QString filename = QFileDialog::getOpenFileName(this,
+		"Load input mapping", QString(), tr("Mapping files (*.mapping)"));
+	InputMapping new_mapping;
+	if (!load_input_mapping_from_file(devices, filename.toStdString(), &new_mapping)) {
+		QMessageBox box;
+		box.setText("Could not load mapping from '" + filename + "'. Check that the file exists, has the right permissions and is valid.");
+		box.exec();
+		return;
+	}
+
+	mapping = new_mapping;
+	devices = global_audio_mixer->get_devices();  // New dead cards may have been made.
+	fill_ui_from_mapping(mapping);
 }
 
 void InputMappingDialog::update_button_state()

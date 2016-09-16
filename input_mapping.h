@@ -2,6 +2,7 @@
 #define _INPUT_MAPPING_H 1
 
 #include <stdint.h>
+#include <map>
 #include <string>
 #include <vector>
 
@@ -45,5 +46,12 @@ struct InputMapping {
 
 	std::vector<Bus> buses;
 };
+
+bool save_input_mapping_to_file(const std::map<DeviceSpec, DeviceInfo> &devices,
+                                const InputMapping &mapping,
+                                const std::string &filename);
+bool load_input_mapping_from_file(const std::map<DeviceSpec, DeviceInfo> &devices,
+                                  const std::string &filename,
+                                  InputMapping *mapping);
 
 #endif  // !defined(_INPUT_MAPPING_H)

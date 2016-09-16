@@ -76,7 +76,17 @@ public:
 		return alsa_pool.get_card_state(index);
 	}
 
+	// See comments on ALSAPool::create_dead_card().
+	DeviceSpec create_dead_card(const std::string &name, const std::string &info, unsigned num_channels)
+	{
+		unsigned dead_card_index = alsa_pool.create_dead_card(name, info, num_channels);
+		return DeviceSpec{InputSourceType::ALSA_INPUT, dead_card_index};
+	}
+
 	void set_display_name(DeviceSpec device_spec, const std::string &name);
+
+	// Note: The card should be held (currently this isn't enforced, though).
+	void serialize_device(DeviceSpec device_spec, DeviceSpecProto *device_spec_proto);
 
 	void set_input_mapping(const InputMapping &input_mapping);
 	InputMapping get_input_mapping() const;

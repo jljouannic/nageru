@@ -13,6 +13,7 @@
 #include "db.h"
 #include "flags.h"
 #include "mixer.h"
+#include "state.pb.h"
 #include "timebase.h"
 
 using namespace bmusb;
@@ -754,6 +755,9 @@ map<DeviceSpec, DeviceInfo> AudioMixer::get_devices()
 		DeviceInfo info;
 		info.display_name = device.display_name();
 		info.num_channels = device.num_channels;
+		info.alsa_name = device.name;
+		info.alsa_info = device.info;
+		info.alsa_address = device.address;
 		devices.insert(make_pair(spec, info));
 	}
 	return devices;
@@ -765,6 +769,24 @@ void AudioMixer::set_display_name(DeviceSpec device_spec, const string &name)
 
 	lock_guard<timed_mutex> lock(audio_mutex);
 	device->display_name = name;
+}
+
+void AudioMixer::serialize_device(DeviceSpec device_spec, DeviceSpecProto *device_spec_proto)
+{
+	lock_guard<timed_mutex> lock(audio_mutex);
+	switch (device_spec.type) {
+		case InputSourceType::SILENCE:
+			device_spec_proto->set_type(DeviceSpecProto::SILENCE);
+			break;
+		case InputSourceType::CAPTURE_CARD:
+			device_spec_proto->set_type(DeviceSpecProto::CAPTURE_CARD);
+			device_spec_proto->set_index(device_spec.index);
+			device_spec_proto->set_display_name(video_cards[device_spec.index].display_name);
+			break;
+		case InputSourceType::ALSA_INPUT:
+			alsa_pool.serialize_device(device_spec.index, device_spec_proto);
+			break;
+	}
 }
 
 void AudioMixer::set_input_mapping(const InputMapping &new_input_mapping)

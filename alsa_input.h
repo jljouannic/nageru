@@ -22,6 +22,7 @@
 #include "timebase.h"
 
 class ALSAPool;
+class DeviceSpecProto;
 
 class ALSAInput {
 public:
@@ -151,6 +152,15 @@ public:
 	// Just a short form for taking <mu> and then moving the card to
 	// EMPTY or DEAD state. Only for ALSAInput and for internal use.
 	void free_card(unsigned index);
+
+	// Create a new card, mark it immediately as DEAD and hold it.
+	// Returns the new index.
+	unsigned create_dead_card(const std::string &name, const std::string &info, unsigned num_channels);
+
+	// Make a protobuf representation of the given card, so that it can be
+	// matched against at a later stage. For AudioMixer only.
+	// The given card must be held.
+	void serialize_device(unsigned index, DeviceSpecProto *serialized);
 
 private:
 	mutable std::mutex mu;

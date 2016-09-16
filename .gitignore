@@ -1,5 +1,7 @@
 *.d
 *.o
+*.pb.h
+*.pb.cc
 *.moc.cpp
 ui_aboutdialog.h
 ui_audio_expanded_view.h

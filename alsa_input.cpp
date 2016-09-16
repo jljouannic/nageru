@@ -1,9 +1,11 @@
 #include "alsa_input.h"
 #include "audio_mixer.h"
 #include "defs.h"
+#include "state.pb.h"
 
 #include <sys/inotify.h>
 
+#include <algorithm>
 #include <functional>
 #include <unordered_map>
 
@@ -643,6 +645,43 @@ unsigned ALSAPool::find_free_device_index(const string &name, const string &info
 	devices.push_back(new_dev);
 	inputs.emplace_back(nullptr);
 	return devices.size() - 1;
+}
+
+unsigned ALSAPool::create_dead_card(const string &name, const string &info, unsigned num_channels)
+{
+	lock_guard<mutex> lock(mu);
+
+	// See if there are any empty slots. If not, insert one at the end.
+	vector<Device>::iterator free_device =
+		find_if(devices.begin(), devices.end(),
+			[](const Device &device) { return device.state == Device::State::EMPTY; });
+	if (free_device == devices.end()) {
+		devices.push_back(Device());
+		inputs.emplace_back(nullptr);
+		free_device = devices.end() - 1;
+	}
+
+	free_device->state = Device::State::DEAD;
+	free_device->name = name;
+	free_device->info = info;
+	free_device->num_channels = num_channels;
+	free_device->held = true;
+
+	return distance(devices.begin(), free_device);
+}
+
+void ALSAPool::serialize_device(unsigned index, DeviceSpecProto *serialized)
+{
+	lock_guard<mutex> lock(mu);
+	assert(index < devices.size());
+	assert(devices[index].held);
+	serialized->set_type(DeviceSpecProto::ALSA_INPUT);
+	serialized->set_index(index);
+	serialized->set_display_name(devices[index].display_name());
+	serialized->set_alsa_name(devices[index].name);
+	serialized->set_alsa_info(devices[index].info);
+	serialized->set_num_channels(devices[index].num_channels);
+	serialized->set_address(devices[index].address);
 }
 
 void ALSAPool::free_card(unsigned index)
