@@ -181,20 +181,29 @@ AudioMixer::AudioMixer(unsigned num_cards)
 	}
 	set_limiter_enabled(global_flags.limiter_enabled);
 	set_final_makeup_gain_auto(global_flags.final_makeup_gain_auto);
-
-	// Generate a very simple, default input mapping.
-	InputMapping::Bus input;
-	input.name = "Main";
-	input.device.type = InputSourceType::CAPTURE_CARD;
-	input.device.index = 0;
-	input.source_channel[0] = 0;
-	input.source_channel[1] = 1;
+	alsa_pool.init();
 
 	InputMapping new_input_mapping;
-	new_input_mapping.buses.push_back(input);
-	set_input_mapping(new_input_mapping);
+	if (!global_flags.input_mapping_filename.empty()) {
+		if (!load_input_mapping_from_file(get_devices(),
+		                                  global_flags.input_mapping_filename,
+		                                  &new_input_mapping)) {
+			fprintf(stderr, "Failed to load input mapping from '%s', exiting.\n",
+				global_flags.input_mapping_filename.c_str());
+			exit(1);
+		}
+	} else {
+		// Generate a very simple, default input mapping.
+		InputMapping::Bus input;
+		input.name = "Main";
+		input.device.type = InputSourceType::CAPTURE_CARD;
+		input.device.index = 0;
+		input.source_channel[0] = 0;
+		input.source_channel[1] = 1;
 
-	alsa_pool.init();
+		new_input_mapping.buses.push_back(input);
+	}
+	set_input_mapping(new_input_mapping);
 
 	r128.init(2, OUTPUT_FREQUENCY);
 	r128.integr_start();

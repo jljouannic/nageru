@@ -36,6 +36,7 @@ struct Flags {
 	std::vector<std::string> x264_extra_param;  // In “key[,value]” format.
 	bool enable_alsa_output = true;
 	std::map<int, int> default_stream_mapping;
+	std::string input_mapping_filename;  // Empty for none.
 };
 extern Flags global_flags;
 
