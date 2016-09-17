@@ -25,6 +25,7 @@
 #include "defs.h"
 #include "ebu_r128_proc.h"
 #include "filter.h"
+#include "input_mapping.h"
 #include "resampling_queue.h"
 #include "stereocompressor.h"
 
@@ -32,51 +33,11 @@ namespace bmusb {
 struct AudioFormat;
 }  // namespace bmusb
 
-enum class InputSourceType { SILENCE, CAPTURE_CARD, ALSA_INPUT };
-struct DeviceSpec {
-	InputSourceType type;
-	unsigned index;
-
-	bool operator== (const DeviceSpec &other) const {
-		return type == other.type && index == other.index;
-	}
-
-	bool operator< (const DeviceSpec &other) const {
-		if (type != other.type)
-			return type < other.type;
-		return index < other.index;
-	}
-};
-struct DeviceInfo {
-	std::string display_name;
-	unsigned num_channels;
-};
-
 enum EQBand {
 	EQ_BAND_BASS = 0,
 	EQ_BAND_MID,
 	EQ_BAND_TREBLE,
 	NUM_EQ_BANDS
-};
-
-static inline uint64_t DeviceSpec_to_key(const DeviceSpec &device_spec)
-{
-	return (uint64_t(device_spec.type) << 32) | device_spec.index;
-}
-
-static inline DeviceSpec key_to_DeviceSpec(uint64_t key)
-{
-	return DeviceSpec{ InputSourceType(key >> 32), unsigned(key & 0xffffffff) };
-}
-
-struct InputMapping {
-	struct Bus {
-		std::string name;
-		DeviceSpec device;
-		int source_channel[2] { -1, -1 };  // Left and right. -1 = none.
-	};
-
-	std::vector<Bus> buses;
 };
 
 class AudioMixer {
