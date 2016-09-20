@@ -63,6 +63,7 @@ public:
 
 	std::vector<float> get_output(double pts, unsigned num_samples, ResamplingQueue::RateAdjustmentPolicy rate_adjustment_policy);
 
+	float get_fader_volume(unsigned bus_index) const { return fader_volume_db[bus_index]; }
 	void set_fader_volume(unsigned bus_index, float level_db) { fader_volume_db[bus_index] = level_db; }
 
 	// Note: This operation holds all ALSA devices (see ALSAPool::get_devices()).

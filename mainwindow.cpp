@@ -339,7 +339,8 @@ void MainWindow::setup_audio_miniview()
 		peak_meter->set_max_level(0.0f);
 		peak_meter->set_ref_level(0.0f);
 
-		// TODO: Set the fader position.
+		ui_audio_miniview->fader->setDbValue(global_audio_mixer->get_fader_volume(bus_index));
+
 		ui->faders->addWidget(channel);
 
 		connect(ui_audio_miniview->fader, &NonLinearFader::dbValueChanged,
@@ -373,7 +374,7 @@ void MainWindow::setup_audio_expanded_view()
 		update_eq_label(bus_index, EQ_BAND_TREBLE, global_audio_mixer->get_eq(bus_index, EQ_BAND_TREBLE));
 		update_eq_label(bus_index, EQ_BAND_MID, global_audio_mixer->get_eq(bus_index, EQ_BAND_MID));
 		update_eq_label(bus_index, EQ_BAND_BASS, global_audio_mixer->get_eq(bus_index, EQ_BAND_BASS));
-		// TODO: Set the fader position.
+		ui_audio_expanded_view->fader->setDbValue(global_audio_mixer->get_fader_volume(bus_index));
 		ui->buses->addWidget(channel);
 
 		ui_audio_expanded_view->locut_enabled->setChecked(global_audio_mixer->get_locut_enabled(bus_index));
