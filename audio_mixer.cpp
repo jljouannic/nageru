@@ -583,6 +583,36 @@ vector<float> AudioMixer::get_output(double pts, unsigned num_samples, Resamplin
 	return samples_out;
 }
 
+namespace {
+
+void apply_filter_fade(StereoFilter *filter, float *data, unsigned num_samples, float cutoff_hz, float db, float last_db)
+{
+	// A granularity of 32 samples is an okay tradeoff between speed and
+	// smoothness; recalculating the filters is pretty expensive, so it's
+	// good that we don't do this all the time.
+	static constexpr unsigned filter_granularity_samples = 32;
+
+	const float cutoff_linear = cutoff_hz * 2.0 * M_PI / OUTPUT_FREQUENCY;
+	if (fabs(db - last_db) < 1e-3) {
+		// Constant over this frame.
+		if (fabs(db) > 0.01f) {
+			filter->render(data, num_samples, cutoff_linear, 0.5f, db / 40.0f);
+		}
+	} else {
+		// We need to do a fade. (Rounding up avoids division by zero.)
+		unsigned num_blocks = (num_samples + filter_granularity_samples - 1) / filter_granularity_samples;
+		const float inc_db_norm = (db - last_db) / 40.0f / num_blocks;
+		float db_norm = db / 40.0f;
+		for (size_t i = 0; i < num_samples; i += filter_granularity_samples) {
+			size_t samples_this_block = std::min<size_t>(num_samples - i, filter_granularity_samples);
+			filter->render(data + i * 2, samples_this_block, cutoff_linear, 0.5f, db_norm);
+			db_norm += inc_db_norm;
+		}
+	}
+}
+
+}  // namespace
+
 void AudioMixer::apply_eq(unsigned bus_index, vector<float> *samples_bus)
 {
 	constexpr float bass_freq_hz = 200.0f;
@@ -601,24 +631,43 @@ void AudioMixer::apply_eq(unsigned bus_index, vector<float> *samples_bus)
 	// set the mid-level filter, and then offset the low and high bands
 	// from that if we need to. (We could perhaps have folded the gain into
 	// the next part, but it's so cheap that the trouble isn't worth it.)
-	if (fabs(eq_level_db[bus_index][EQ_BAND_MID]) > 0.01f) {
-		float g = from_db(eq_level_db[bus_index][EQ_BAND_MID]);
+	//
+	// If any part of the EQ has changed appreciably since last frame,
+	// we fade smoothly during the course of this frame.
+	const float bass_db = eq_level_db[bus_index][EQ_BAND_BASS];
+	const float mid_db = eq_level_db[bus_index][EQ_BAND_MID];
+	const float treble_db = eq_level_db[bus_index][EQ_BAND_TREBLE];
+
+	const float last_bass_db = last_eq_level_db[bus_index][EQ_BAND_BASS];
+	const float last_mid_db = last_eq_level_db[bus_index][EQ_BAND_MID];
+	const float last_treble_db = last_eq_level_db[bus_index][EQ_BAND_TREBLE];
+
+	assert(samples_bus->size() % 2 == 0);
+	const unsigned num_samples = samples_bus->size() / 2;
+
+	if (fabs(mid_db - last_mid_db) < 1e-3) {
+		// Constant over this frame.
+		const float gain = from_db(mid_db);
 		for (size_t i = 0; i < samples_bus->size(); ++i) {
-			(*samples_bus)[i] *= g;
+			(*samples_bus)[i] *= gain;
+		}
+	} else {
+		// We need to do a fade.
+		float gain = from_db(last_mid_db);
+		const float gain_inc = pow(from_db(mid_db - last_mid_db), 1.0 / num_samples);
+		for (size_t i = 0; i < num_samples; ++i) {
+			(*samples_bus)[i * 2 + 0] *= gain;
+			(*samples_bus)[i * 2 + 1] *= gain;
+			gain *= gain_inc;
 		}
 	}
 
-	float bass_adj_db = eq_level_db[bus_index][EQ_BAND_BASS] - eq_level_db[bus_index][EQ_BAND_MID];
-	if (fabs(bass_adj_db) > 0.01f) {
-		eq[bus_index][EQ_BAND_BASS].render(samples_bus->data(), samples_bus->size() / 2,
-			bass_freq_hz * 2.0 * M_PI / OUTPUT_FREQUENCY, 0.5f, bass_adj_db / 40.0f);
-	}
+	apply_filter_fade(&eq[bus_index][EQ_BAND_BASS], samples_bus->data(), num_samples, bass_freq_hz, bass_db - mid_db, last_bass_db - last_mid_db);
+	apply_filter_fade(&eq[bus_index][EQ_BAND_TREBLE], samples_bus->data(), num_samples, treble_freq_hz, treble_db - mid_db, last_treble_db - last_mid_db);
 
-	float treble_adj_db = eq_level_db[bus_index][EQ_BAND_TREBLE] - eq_level_db[bus_index][EQ_BAND_MID];
-	if (fabs(treble_adj_db) > 0.01f) {
-		eq[bus_index][EQ_BAND_TREBLE].render(samples_bus->data(), samples_bus->size() / 2,
-			treble_freq_hz * 2.0 * M_PI / OUTPUT_FREQUENCY, 0.5f, treble_adj_db / 40.0f);
-	}
+	last_eq_level_db[bus_index][EQ_BAND_BASS] = bass_db;
+	last_eq_level_db[bus_index][EQ_BAND_MID] = mid_db;
+	last_eq_level_db[bus_index][EQ_BAND_TREBLE] = treble_db;
 }
 
 void AudioMixer::add_bus_to_master(unsigned bus_index, const vector<float> &samples_bus, vector<float> *samples_out)

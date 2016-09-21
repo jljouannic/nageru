@@ -343,6 +343,7 @@ private:
 	std::atomic<float> fader_volume_db[MAX_BUSES] {{ 0.0f }};
 	float last_fader_volume_db[MAX_BUSES] { 0.0f };  // Under audio_mutex.
 	std::atomic<float> eq_level_db[MAX_BUSES][NUM_EQ_BANDS] {{{ 0.0f }}};
+	float last_eq_level_db[MAX_BUSES][NUM_EQ_BANDS] {{ 0.0f }};
 
 	audio_level_callback_t audio_level_callback = nullptr;
 	state_changed_callback_t state_changed_callback = nullptr;
