@@ -149,8 +149,8 @@ private:
 	                                const std::string &address);
 
 	std::atomic<bool> should_quit{false};
-
 	std::thread inotify_thread;
+	std::atomic<int> retry_threads_running{0};
 
 	friend class ALSAInput;
 };

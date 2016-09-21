@@ -29,6 +29,10 @@ ALSAPool::~ALSAPool()
 	}
 	should_quit = true;
 	inotify_thread.join();
+
+	while (retry_threads_running > 0) {
+		this_thread::sleep_for(std::chrono::milliseconds(100));
+	}
 }
 
 std::vector<ALSAPool::Device> ALSAPool::get_devices()
@@ -104,6 +108,7 @@ void ALSAPool::probe_device_with_retry(unsigned card_index, unsigned dev_index)
 	// then start it ourselves.
 	fprintf(stderr, "Trying %s again in one second...\n", address);
 	add_device_tries_left[address] = num_retries;
+	++retry_threads_running;
 	thread(&ALSAPool::probe_device_retry_thread_func, this, card_index, dev_index).detach();
 }
 
@@ -117,11 +122,12 @@ void ALSAPool::probe_device_retry_thread_func(unsigned card_index, unsigned dev_
 
 		// See if there are any retries left.
 		lock_guard<mutex> lock(add_device_mutex);
-		if (!add_device_tries_left.count(address) ||
+		if (should_quit ||
+		    !add_device_tries_left.count(address) ||
 		    add_device_tries_left[address] == 0) {
 			add_device_tries_left.erase(address);
 			fprintf(stderr, "Giving up probe of %s.\n", address);
-			return;
+			break;
 		}
 
 		// Seemingly there were. Give it a try (we still hold the mutex).
@@ -129,11 +135,11 @@ void ALSAPool::probe_device_retry_thread_func(unsigned card_index, unsigned dev_
 		if (result == ProbeResult::SUCCESS) {
 			add_device_tries_left.erase(address);
 			fprintf(stderr, "Probe of %s succeeded.\n", address);
-			return;
+			break;
 		} else if (result == ProbeResult::FAILURE || --add_device_tries_left[address] == 0) {
 			add_device_tries_left.erase(address);
 			fprintf(stderr, "Giving up probe of %s.\n", address);
-			return;
+			break;
 		}
 
 		// Failed again.
@@ -141,6 +147,8 @@ void ALSAPool::probe_device_retry_thread_func(unsigned card_index, unsigned dev_
 		fprintf(stderr, "Trying %s again in one second (%d tries left)...\n",
 			address, add_device_tries_left[address]);
 	}
+
+	--retry_threads_running;
 }
 
 ALSAPool::ProbeResult ALSAPool::probe_device_once(unsigned card_index, unsigned dev_index)
