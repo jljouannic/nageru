@@ -19,6 +19,7 @@
 #include <zita-resampler/resampler.h>
 
 #include "alsa_input.h"
+#include "alsa_pool.h"
 #include "bmusb/bmusb.h"
 #include "correlation_measurer.h"
 #include "db.h"
