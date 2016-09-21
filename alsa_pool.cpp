@@ -27,6 +27,8 @@ ALSAPool::~ALSAPool()
 			device.input->stop_capture_thread();
 		}
 	}
+	should_quit = true;
+	inotify_thread.join();
 }
 
 std::vector<ALSAPool::Device> ALSAPool::get_devices()
@@ -255,7 +257,7 @@ void ALSAPool::unplug_device(unsigned card_index, unsigned dev_index)
 
 void ALSAPool::init()
 {
-	thread(&ALSAPool::inotify_thread_func, this).detach();
+	inotify_thread = thread(&ALSAPool::inotify_thread_func, this);
 	enumerate_devices();
 }
 
@@ -278,8 +280,36 @@ void ALSAPool::inotify_thread_func()
 
 	int size = sizeof(inotify_event) + NAME_MAX + 1;
 	unique_ptr<char[]> buf(new char[size]);
-	for ( ;; ) {
-		int ret = read(inotify_fd, buf.get(), size);
+	while (!should_quit) {
+		pollfd fds;
+		fds.fd = inotify_fd;
+		fds.events = POLLIN;
+		fds.revents = 0;
+
+		int ret = poll(&fds, 1, 100);
+		if (ret == -1) {
+			if (errno == EINTR) {
+				continue;
+			} else {
+				perror("poll(inotify_fd)");
+				return;
+			}
+		}
+		if (ret == 0) {
+			continue;
+		}
+
+		ret = read(inotify_fd, buf.get(), size);
+		if (ret == -1) {
+			if (errno == EINTR) {
+				continue;
+			} else {
+				perror("read(inotify_fd)");
+				close(watch_fd);
+				close(inotify_fd);
+				return;
+			}
+		}
 		if (ret < int(sizeof(inotify_event))) {
 			fprintf(stderr, "inotify read unexpectedly returned %d, giving up hotplug of ALSA devices.\n",
 				int(ret));
@@ -310,6 +340,8 @@ void ALSAPool::inotify_thread_func()
 			}
 		}
 	}
+	close(watch_fd);
+	close(inotify_fd);
 }
 
 void ALSAPool::reset_device(unsigned index)

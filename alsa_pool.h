@@ -148,6 +148,10 @@ private:
 	                                unsigned num_channels,
 	                                const std::string &address);
 
+	std::atomic<bool> should_quit{false};
+
+	std::thread inotify_thread;
+
 	friend class ALSAInput;
 };
 
