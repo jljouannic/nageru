@@ -167,17 +167,13 @@ AudioMixer::AudioMixer(unsigned num_cards)
 
 	for (unsigned bus_index = 0; bus_index < MAX_BUSES; ++bus_index) {
 		locut[bus_index].init(FILTER_HPF, 2);
-		locut_enabled[bus_index] = global_flags.locut_enabled;
 		eq[bus_index][EQ_BAND_BASS].init(FILTER_LOW_SHELF, 1);
 		// Note: EQ_BAND_MID isn't used (see comments in apply_eq()).
 		eq[bus_index][EQ_BAND_TREBLE].init(FILTER_HIGH_SHELF, 1);
-
-		gain_staging_db[bus_index] = global_flags.initial_gain_staging_db;
 		compressor[bus_index].reset(new StereoCompressor(OUTPUT_FREQUENCY));
-		compressor_threshold_dbfs[bus_index] = ref_level_dbfs - 12.0f;  // -12 dB.
-		compressor_enabled[bus_index] = global_flags.compressor_enabled;
 		level_compressor[bus_index].reset(new StereoCompressor(OUTPUT_FREQUENCY));
-		level_compressor_enabled[bus_index] = global_flags.gain_staging_auto;
+
+		set_bus_settings(bus_index, get_default_bus_settings());
 	}
 	set_limiter_enabled(global_flags.limiter_enabled);
 	set_final_makeup_gain_auto(global_flags.final_makeup_gain_auto);
@@ -320,6 +316,51 @@ bool AudioMixer::silence_card(DeviceSpec device_spec, bool silence)
 	}
 	device->silenced = silence;
 	return true;
+}
+
+AudioMixer::BusSettings AudioMixer::get_default_bus_settings()
+{
+	BusSettings settings;
+	settings.fader_volume_db = 0.0f;
+	settings.locut_enabled = global_flags.locut_enabled;
+	for (unsigned band_index = 0; band_index < NUM_EQ_BANDS; ++band_index) {
+		settings.eq_level_db[band_index] = 0.0f;
+	}
+	settings.gain_staging_db = global_flags.initial_gain_staging_db;
+	settings.level_compressor_enabled = global_flags.gain_staging_auto;
+	settings.compressor_threshold_dbfs = ref_level_dbfs - 12.0f;  // -12 dB.
+	settings.compressor_enabled = global_flags.compressor_enabled;
+	return settings;
+}
+
+AudioMixer::BusSettings AudioMixer::get_bus_settings(unsigned bus_index) const
+{
+	lock_guard<timed_mutex> lock(audio_mutex);
+	BusSettings settings;
+	settings.fader_volume_db = fader_volume_db[bus_index];
+	settings.locut_enabled = locut_enabled[bus_index];
+	for (unsigned band_index = 0; band_index < NUM_EQ_BANDS; ++band_index) {
+		settings.eq_level_db[band_index] = eq_level_db[bus_index][band_index];
+	}
+	settings.gain_staging_db = gain_staging_db[bus_index];
+	settings.level_compressor_enabled = level_compressor_enabled[bus_index];
+	settings.compressor_threshold_dbfs = compressor_threshold_dbfs[bus_index];
+	settings.compressor_enabled = compressor_enabled[bus_index];
+	return settings;
+}
+
+void AudioMixer::set_bus_settings(unsigned bus_index, const AudioMixer::BusSettings &settings)
+{
+	lock_guard<timed_mutex> lock(audio_mutex);
+	fader_volume_db[bus_index] = settings.fader_volume_db;
+	locut_enabled[bus_index] = settings.locut_enabled;
+	for (unsigned band_index = 0; band_index < NUM_EQ_BANDS; ++band_index) {
+		eq_level_db[bus_index][band_index] = settings.eq_level_db[band_index];
+	}
+	gain_staging_db[bus_index] = settings.gain_staging_db;
+	level_compressor_enabled[bus_index] = settings.level_compressor_enabled;
+	compressor_threshold_dbfs[bus_index] = settings.compressor_threshold_dbfs;
+	compressor_enabled[bus_index] = settings.compressor_enabled;
 }
 
 AudioMixer::AudioDevice *AudioMixer::find_audio_device(DeviceSpec device)

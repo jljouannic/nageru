@@ -252,6 +252,22 @@ public:
 		}
 	}
 
+	// A combination of all settings for a bus. Useful if you want to get
+	// or store them as a whole without bothering to call all of the get_*
+	// or set_* functions for that bus.
+	struct BusSettings {
+		float fader_volume_db;
+		bool locut_enabled;
+		float eq_level_db[NUM_EQ_BANDS];
+		float gain_staging_db;
+		bool level_compressor_enabled;
+		float compressor_threshold_dbfs;
+		bool compressor_enabled;
+	};
+	static BusSettings get_default_bus_settings();
+	BusSettings get_bus_settings(unsigned bus_index) const;
+	void set_bus_settings(unsigned bus_index, const BusSettings &settings);
+
 private:
 	struct AudioDevice {
 		std::unique_ptr<ResamplingQueue> resampling_queue;

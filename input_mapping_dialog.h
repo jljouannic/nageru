@@ -47,6 +47,11 @@ private:
 	// held forever).
 	InputMapping old_mapping;
 
+	// One for each bus in the mapping. Edited along with the mapping,
+	// so that old volumes etc. are being kept in place for buses that
+	// existed before.
+	std::vector<AudioMixer::BusSettings> bus_settings;
+
 	std::map<DeviceSpec, DeviceInfo> devices;  // Needs no lock, accessed only on the UI thread.
 	AudioMixer::state_changed_callback_t saved_callback;
 };

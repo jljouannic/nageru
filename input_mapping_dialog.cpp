@@ -16,6 +16,10 @@ InputMappingDialog::InputMappingDialog()
 	  old_mapping(mapping),
 	  devices(global_audio_mixer->get_devices())
 {
+	for (unsigned bus_index = 0; bus_index < mapping.buses.size(); ++bus_index) {
+		bus_settings.push_back(global_audio_mixer->get_bus_settings(bus_index));
+	}
+
 	ui->setupUi(this);
 	ui->table->setSelectionBehavior(QAbstractItemView::SelectRows);
 	ui->table->setSelectionMode(QAbstractItemView::SingleSelection);  // Makes implementing moving easier for now.
@@ -149,6 +153,10 @@ void InputMappingDialog::ok_clicked()
 {
 	global_audio_mixer->set_state_changed_callback(saved_callback);
 	global_audio_mixer->set_input_mapping(mapping);
+	for (unsigned bus_index = 0; bus_index < mapping.buses.size(); ++bus_index) {
+		global_audio_mixer->set_bus_settings(bus_index, bus_settings[bus_index]);
+		global_audio_mixer->reset_peak(bus_index);
+	}
 	accept();
 }
 
@@ -189,6 +197,7 @@ void InputMappingDialog::add_clicked()
 	new_bus.name = "New input";
 	new_bus.device.type = InputSourceType::SILENCE;
 	mapping.buses.push_back(new_bus);
+	bus_settings.push_back(AudioMixer::get_default_bus_settings());
 	ui->table->setRowCount(mapping.buses.size());
 
 	unsigned row = mapping.buses.size() - 1;
@@ -214,6 +223,7 @@ void InputMappingDialog::remove_clicked()
 	for (int row : rows_to_delete) {
 		ui->table->removeRow(row);
 		mapping.buses.erase(mapping.buses.begin() + row);
+		bus_settings.erase(bus_settings.begin() + row);
 	}
 	update_button_state();
 }
@@ -226,6 +236,7 @@ void InputMappingDialog::updown_clicked(int direction)
 	int b_row = range.bottomRow() + direction;
 
 	swap(mapping.buses[a_row], mapping.buses[b_row]);
+	swap(bus_settings[a_row], bus_settings[b_row]);
 	fill_row_from_bus(a_row, mapping.buses[a_row]);
 	fill_row_from_bus(b_row, mapping.buses[b_row]);
 
@@ -262,6 +273,10 @@ void InputMappingDialog::load_clicked()
 	}
 
 	mapping = new_mapping;
+	bus_settings.clear();
+	for (unsigned bus_index = 0; bus_index < mapping.buses.size(); ++bus_index) {
+		bus_settings.push_back(global_audio_mixer->get_bus_settings(bus_index));
+	}
 	devices = global_audio_mixer->get_devices();  // New dead cards may have been made.
 	fill_ui_from_mapping(mapping);
 }
