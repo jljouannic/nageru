@@ -61,7 +61,7 @@ void ResamplingQueue::add_input_samples(double pts, const float *samples, ssize_
 	}
 }
 
-bool ResamplingQueue::get_output_samples(double pts, float *samples, ssize_t num_samples)
+bool ResamplingQueue::get_output_samples(double pts, float *samples, ssize_t num_samples, ResamplingQueue::RateAdjustmentPolicy rate_adjustment_policy)
 {
 	assert(num_samples > 0);
 	if (first_input) {
@@ -70,58 +70,63 @@ bool ResamplingQueue::get_output_samples(double pts, float *samples, ssize_t num
 		return true;
 	}
 
-	double last_output_len;
-	if (first_output) {
-		// Synthesize a fake length.
-		last_output_len = double(num_samples) / freq_out;
-	} else {
-		last_output_len = pts - last_output_pts;
-	}
-	last_output_pts = pts;
-
-	// Using the time point since just before the last call to add_input_samples() as a base,
-	// estimate actual delay based on activity since then, measured in number of input samples:
-	double actual_delay = 0.0;
-	assert(last_input_len != 0);
-	actual_delay += (k_a1 - k_a0) * last_output_len / last_input_len;    // Inserted samples since k_a0, rescaled for the different time periods.
-	actual_delay += k_a0 - total_consumed_samples;                       // Samples inserted before k_a0 but not consumed yet.
-	actual_delay += vresampler.inpdist();                                // Delay in the resampler itself.
-	double err = actual_delay - expected_delay;
-	if (first_output && err < 0.0) {
-		// Before the very first block, insert artificial delay based on our initial estimate,
-		// so that we don't need a long period to stabilize at the beginning.
-		int delay_samples_to_add = lrintf(-err);
-		for (ssize_t i = 0; i < delay_samples_to_add * num_channels; ++i) {
-			buffer.push_front(0.0f);
+	double rcorr = -1.0;
+	if (rate_adjustment_policy == ADJUST_RATE) {
+		double last_output_len;
+		if (first_output) {
+			// Synthesize a fake length.
+			last_output_len = double(num_samples) / freq_out;
+		} else {
+			last_output_len = pts - last_output_pts;
 		}
-		total_consumed_samples -= delay_samples_to_add;  // Equivalent to increasing k_a0 and k_a1.
-		err += delay_samples_to_add;
-	}
-	first_output = false;
+		last_output_pts = pts;
 
-	// Compute loop filter coefficients for the two filters. We need to compute them
-	// every time, since they depend on the number of samples the user asked for.
-	//
-	// The loop bandwidth is at 0.02 Hz; we trust the initial estimate quite well,
-	// and our jitter is pretty large since none of the threads involved run at
-	// real-time priority.
-	double loop_bandwidth_hz = 0.02;
+		// Using the time point since just before the last call to add_input_samples() as a base,
+		// estimate actual delay based on activity since then, measured in number of input samples:
+		double actual_delay = 0.0;
+		assert(last_input_len != 0);
+		actual_delay += (k_a1 - k_a0) * last_output_len / last_input_len;    // Inserted samples since k_a0, rescaled for the different time periods.
+		actual_delay += k_a0 - total_consumed_samples;                       // Samples inserted before k_a0 but not consumed yet.
+		actual_delay += vresampler.inpdist();                                // Delay in the resampler itself.
+		double err = actual_delay - expected_delay;
+		if (first_output && err < 0.0) {
+			// Before the very first block, insert artificial delay based on our initial estimate,
+			// so that we don't need a long period to stabilize at the beginning.
+			int delay_samples_to_add = lrintf(-err);
+			for (ssize_t i = 0; i < delay_samples_to_add * num_channels; ++i) {
+				buffer.push_front(0.0f);
+			}
+			total_consumed_samples -= delay_samples_to_add;  // Equivalent to increasing k_a0 and k_a1.
+			err += delay_samples_to_add;
+		}
+		first_output = false;
 
-	// Set filters. The first filter much wider than the first one (20x as wide).
-	double w = (2.0 * M_PI) * loop_bandwidth_hz * num_samples / freq_out;
-	double w0 = 1.0 - exp(-20.0 * w);
-	double w1 = w * 1.5 / num_samples / ratio;
-	double w2 = w / 1.5;
+		// Compute loop filter coefficients for the two filters. We need to compute them
+		// every time, since they depend on the number of samples the user asked for.
+		//
+		// The loop bandwidth is at 0.02 Hz; we trust the initial estimate quite well,
+		// and our jitter is pretty large since none of the threads involved run at
+		// real-time priority.
+		double loop_bandwidth_hz = 0.02;
 
-	// Filter <err> through the loop filter to find the correction ratio.
-	z1 += w0 * (w1 * err - z1);
-	z2 += w0 * (z1 - z2);
-	z3 += w2 * z2;
-	double rcorr = 1.0 - z2 - z3;
-	if (rcorr > 1.05) rcorr = 1.05;
-	if (rcorr < 0.95) rcorr = 0.95;
-	assert(!isnan(rcorr));
-	vresampler.set_rratio(rcorr);
+		// Set filters. The first filter much wider than the first one (20x as wide).
+		double w = (2.0 * M_PI) * loop_bandwidth_hz * num_samples / freq_out;
+		double w0 = 1.0 - exp(-20.0 * w);
+		double w1 = w * 1.5 / num_samples / ratio;
+		double w2 = w / 1.5;
+
+		// Filter <err> through the loop filter to find the correction ratio.
+		z1 += w0 * (w1 * err - z1);
+		z2 += w0 * (z1 - z2);
+		z3 += w2 * z2;
+		rcorr = 1.0 - z2 - z3;
+		if (rcorr > 1.05) rcorr = 1.05;
+		if (rcorr < 0.95) rcorr = 0.95;
+		assert(!isnan(rcorr));
+		vresampler.set_rratio(rcorr);
+	} else {
+		assert(rate_adjustment_policy == DO_NOT_ADJUST_RATE);
+	};
 
 	// Finally actually resample, consuming exactly <num_samples> output samples.
 	vresampler.out_data = samples;

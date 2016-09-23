@@ -418,7 +418,7 @@ private:
 	void render_one_frame(int64_t duration);
 	void send_audio_level_callback();
 	void audio_thread_func();
-	void process_audio_one_frame(int64_t frame_pts_int, int num_samples);
+	void process_audio_one_frame(int64_t frame_pts_int, int num_samples, bool adjust_rate);
 	void subsample_chroma(GLuint src_tex, GLuint dst_dst);
 	void release_display_frame(DisplayFrame *frame);
 	double pts() { return double(pts_int) / TIMEBASE; }
@@ -553,6 +553,7 @@ private:
 	struct AudioTask {
 		int64_t pts_int;
 		int num_samples;
+		bool adjust_rate;
 	};
 	std::mutex audio_mutex;
 	std::condition_variable audio_task_queue_changed;

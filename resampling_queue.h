@@ -52,9 +52,18 @@ public:
 	// card_num is for debugging outputs only.
 	ResamplingQueue(unsigned card_num, unsigned freq_in, unsigned freq_out, unsigned num_channels = 2);
 
+	// If policy is DO_NOT_ADJUST_RATE, the resampling rate will not be changed.
+	// This is primarily useful if you have an extraordinary situation, such as
+	// dropped frames.
+	enum RateAdjustmentPolicy {
+		DO_NOT_ADJUST_RATE,
+		ADJUST_RATE
+	};
+
 	// Note: pts is always in seconds.
 	void add_input_samples(double pts, const float *samples, ssize_t num_samples);
-	bool get_output_samples(double pts, float *samples, ssize_t num_samples);  // Returns false if underrun.
+	// Returns false if underrun.
+	bool get_output_samples(double pts, float *samples, ssize_t num_samples, RateAdjustmentPolicy rate_adjustment_policy);
 
 private:
 	void init_loop_filter(double bandwidth_hz);

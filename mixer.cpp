@@ -855,13 +855,27 @@ void Mixer::schedule_audio_resampling_tasks(unsigned dropped_frames, int num_sam
 	// Resample the audio as needed, including from previously dropped frames.
 	assert(num_cards > 0);
 	for (unsigned frame_num = 0; frame_num < dropped_frames + 1; ++frame_num) {
+		const bool dropped_frame = (frame_num != dropped_frames);
 		{
 			// Signal to the audio thread to process this frame.
+			// Note that if the frame is a dropped frame, we signal that
+			// we don't want to use this frame as base for adjusting
+			// the resampler rate. The reason for this is that the timing
+			// of these frames is often way too late; they typically don't
+			// “arrive” before we synthesize them. Thus, we could end up
+			// in a situation where we have inserted e.g. five audio frames
+			// into the queue before we then start pulling five of them
+			// back out. This makes ResamplingQueue overestimate the delay,
+			// causing undue resampler changes. (We _do_ use the last,
+			// non-dropped frame; perhaps we should just discard that as well,
+			// since dropped frames are expected to be rare, and it might be
+			// better to just wait until we have a slightly more normal situation).
 			unique_lock<mutex> lock(audio_mutex);
-			audio_task_queue.push(AudioTask{pts_int, num_samples_per_frame});
+			bool adjust_rate = !dropped_frame;
+			audio_task_queue.push(AudioTask{pts_int, num_samples_per_frame, adjust_rate});
 			audio_task_queue_changed.notify_one();
 		}
-		if (frame_num != dropped_frames) {
+		if (dropped_frame) {
 			// For dropped frames, increase the pts. Note that if the format changed
 			// in the meantime, we have no way of detecting that; we just have to
 			// assume the frame length is always the same.
@@ -961,11 +975,11 @@ void Mixer::audio_thread_func()
 			audio_task_queue.pop();
 		}
 
-		process_audio_one_frame(task.pts_int, task.num_samples);
+		process_audio_one_frame(task.pts_int, task.num_samples, task.adjust_rate);
 	}
 }
 
-void Mixer::process_audio_one_frame(int64_t frame_pts_int, int num_samples)
+void Mixer::process_audio_one_frame(int64_t frame_pts_int, int num_samples, bool adjust_rate)
 {
 	vector<float> samples_card;
 	vector<float> samples_out;
@@ -978,7 +992,13 @@ void Mixer::process_audio_one_frame(int64_t frame_pts_int, int num_samples)
 		samples_card.resize(num_samples * 2);
 		{
 			unique_lock<mutex> lock(cards[card_index].audio_mutex);
-			cards[card_index].resampling_queue->get_output_samples(double(frame_pts_int) / TIMEBASE, &samples_card[0], num_samples);
+			ResamplingQueue::RateAdjustmentPolicy rate_adjustment_policy =
+				adjust_rate ? ResamplingQueue::ADJUST_RATE : ResamplingQueue::DO_NOT_ADJUST_RATE;
+			cards[card_index].resampling_queue->get_output_samples(
+				double(frame_pts_int) / TIMEBASE,
+				&samples_card[0],
+				num_samples,
+				rate_adjustment_policy);
 		}
 		if (card_index == selected_audio_card) {
 			samples_out = move(samples_card);
