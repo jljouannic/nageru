@@ -189,6 +189,13 @@ MainWindow::MainWindow()
 	connect(ui->full_prev_page, &QAbstractButton::clicked, bind(&QStackedWidget::setCurrentIndex, ui->audio_views, 0));
 	connect(ui->full_next_page, &QAbstractButton::clicked, bind(&QStackedWidget::setCurrentIndex, ui->audio_views, 0));
 
+	// And bind the same to PgUp/PgDown.
+	auto switch_page = [this]{
+		ui->audio_views->setCurrentIndex(1 - ui->audio_views->currentIndex());
+	};
+	connect(new QShortcut(QKeySequence::MoveToNextPage, this), &QShortcut::activated, switch_page);
+	connect(new QShortcut(QKeySequence::MoveToPreviousPage, this), &QShortcut::activated, switch_page);
+
 	last_audio_level_callback = steady_clock::now() - seconds(1);
 }
 
