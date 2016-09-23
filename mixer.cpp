@@ -857,7 +857,10 @@ void Mixer::audio_thread_func()
 
 		ResamplingQueue::RateAdjustmentPolicy rate_adjustment_policy =
 			task.adjust_rate ? ResamplingQueue::ADJUST_RATE : ResamplingQueue::DO_NOT_ADJUST_RATE;
-		vector<float> samples_out = audio_mixer.get_output(double(task.pts_int) / TIMEBASE, task.num_samples, rate_adjustment_policy);
+		vector<float> samples_out = audio_mixer.get_output(
+			double(task.pts_int) / TIMEBASE,
+			task.num_samples,
+			rate_adjustment_policy);
 
 		// Send the samples to the sound card, then add them to the output.
 		if (alsa) {
