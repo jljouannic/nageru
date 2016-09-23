@@ -94,8 +94,7 @@ Mux::Mux(AVFormatContext *avctx, int width, int height, Codec video_codec, const
 Mux::~Mux()
 {
 	av_write_trailer(avctx);
-	av_free(avctx->pb->buffer);
-	av_free(avctx->pb);
+	avio_closep(&avctx->pb);
 	avformat_free_context(avctx);
 }
 
