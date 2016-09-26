@@ -20,7 +20,7 @@ public:
 		CODEC_NV12,  // Uncompressed 4:2:0.
 	};
 
-	// Takes ownership of avctx. <keyframe_signal_receiver> can be nullptr.
+	// Takes ownership of avctx.
 	Mux(AVFormatContext *avctx, int width, int height, Codec video_codec, const std::string &video_extradata, const AVCodecParameters *audio_codecpar, int time_base);
 	~Mux();
 	void add_packet(const AVPacket &pkt, int64_t pts, int64_t dts);
