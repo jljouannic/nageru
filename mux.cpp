@@ -94,7 +94,10 @@ Mux::Mux(AVFormatContext *avctx, int width, int height, Codec video_codec, const
 Mux::~Mux()
 {
 	av_write_trailer(avctx);
-	avio_closep(&avctx->pb);
+	if (!(avctx->oformat->flags & AVFMT_NOFILE) &&
+	    !(avctx->flags & AVFMT_FLAG_CUSTOM_IO)) {
+		avio_closep(&avctx->pb);
+	}
 	avformat_free_context(avctx);
 }
 
