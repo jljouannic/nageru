@@ -16,6 +16,7 @@
 #include "ref_counted_frame.h"
 #include "ref_counted_gl_sync.h"
 
+class DiskSpaceEstimator;
 class HTTPD;
 class QSurface;
 class QuickSyncEncoder;
@@ -27,7 +28,7 @@ class ResourcePool;
 
 class VideoEncoder {
 public:
-	VideoEncoder(movit::ResourcePool *resource_pool, QSurface *surface, const std::string &va_display, int width, int height, HTTPD *httpd);
+	VideoEncoder(movit::ResourcePool *resource_pool, QSurface *surface, const std::string &va_display, int width, int height, HTTPD *httpd, DiskSpaceEstimator *disk_space_estimator);
 	~VideoEncoder();
 
 	void add_audio(int64_t pts, std::vector<float> audio);
@@ -52,6 +53,7 @@ private:
 	std::string va_display;
 	int width, height;
 	HTTPD *httpd;
+	DiskSpaceEstimator *disk_space_estimator;
 
 	std::unique_ptr<Mux> stream_mux;  // To HTTP.
 	std::unique_ptr<AudioEncoder> stream_audio_encoder;

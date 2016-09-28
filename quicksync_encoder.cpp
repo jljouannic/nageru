@@ -21,6 +21,7 @@
 #include <condition_variable>
 #include <cstddef>
 #include <cstdint>
+#include <functional>
 #include <map>
 #include <memory>
 #include <mutex>
@@ -42,6 +43,7 @@ extern "C" {
 #include "audio_encoder.h"
 #include "context.h"
 #include "defs.h"
+#include "disk_space_estimator.h"
 #include "ffmpeg_raii.h"
 #include "flags.h"
 #include "mux.h"
@@ -50,6 +52,7 @@ extern "C" {
 #include "x264_encoder.h"
 
 using namespace std;
+using namespace std::placeholders;
 
 class QOpenGLContext;
 class QSurface;
@@ -206,7 +209,7 @@ FrameReorderer::Frame FrameReorderer::get_first_frame()
 
 class QuickSyncEncoderImpl {
 public:
-	QuickSyncEncoderImpl(const std::string &filename, movit::ResourcePool *resource_pool, QSurface *surface, const string &va_display, int width, int height, AVOutputFormat *oformat, X264Encoder *x264_encoder);
+	QuickSyncEncoderImpl(const std::string &filename, movit::ResourcePool *resource_pool, QSurface *surface, const string &va_display, int width, int height, AVOutputFormat *oformat, X264Encoder *x264_encoder, DiskSpaceEstimator *disk_space_estimator);
 	~QuickSyncEncoderImpl();
 	void add_audio(int64_t pts, vector<float> audio);
 	bool begin_frame(GLuint *y_tex, GLuint *cbcr_tex);
@@ -355,6 +358,8 @@ private:
 	int frame_height;
 	int frame_width_mbaligned;
 	int frame_height_mbaligned;
+
+	DiskSpaceEstimator *disk_space_estimator;
 };
 
 // Supposedly vaRenderPicture() is supposed to destroy the buffer implicitly,
@@ -1728,8 +1733,8 @@ int QuickSyncEncoderImpl::deinit_va()
     return 0;
 }
 
-QuickSyncEncoderImpl::QuickSyncEncoderImpl(const std::string &filename, movit::ResourcePool *resource_pool, QSurface *surface, const string &va_display, int width, int height, AVOutputFormat *oformat, X264Encoder *x264_encoder)
-	: current_storage_frame(0), resource_pool(resource_pool), surface(surface), x264_encoder(x264_encoder), frame_width(width), frame_height(height)
+QuickSyncEncoderImpl::QuickSyncEncoderImpl(const std::string &filename, movit::ResourcePool *resource_pool, QSurface *surface, const string &va_display, int width, int height, AVOutputFormat *oformat, X264Encoder *x264_encoder, DiskSpaceEstimator *disk_space_estimator)
+	: current_storage_frame(0), resource_pool(resource_pool), surface(surface), x264_encoder(x264_encoder), frame_width(width), frame_height(height), disk_space_estimator(disk_space_estimator)
 {
 	file_audio_encoder.reset(new AudioEncoder(AUDIO_OUTPUT_CODEC_NAME, DEFAULT_AUDIO_OUTPUT_BIT_RATE, oformat));
 	open_output_file(filename);
@@ -1951,7 +1956,8 @@ void QuickSyncEncoderImpl::open_output_file(const std::string &filename)
 
 	string video_extradata = "";  // FIXME: See other comment about global headers.
 	AVCodecParametersWithDeleter audio_codecpar = file_audio_encoder->get_codec_parameters();
-	file_mux.reset(new Mux(avctx, frame_width, frame_height, Mux::CODEC_H264, video_extradata, audio_codecpar.get(), TIMEBASE));
+	file_mux.reset(new Mux(avctx, frame_width, frame_height, Mux::CODEC_H264, video_extradata, audio_codecpar.get(), TIMEBASE,
+		std::bind(&DiskSpaceEstimator::report_write, disk_space_estimator, filename, _1)));
 }
 
 void QuickSyncEncoderImpl::encode_thread_func()
@@ -2156,8 +2162,8 @@ void QuickSyncEncoderImpl::encode_frame(QuickSyncEncoderImpl::PendingFrame frame
 }
 
 // Proxy object.
-QuickSyncEncoder::QuickSyncEncoder(const std::string &filename, movit::ResourcePool *resource_pool, QSurface *surface, const string &va_display, int width, int height, AVOutputFormat *oformat, X264Encoder *x264_encoder)
-	: impl(new QuickSyncEncoderImpl(filename, resource_pool, surface, va_display, width, height, oformat, x264_encoder)) {}
+QuickSyncEncoder::QuickSyncEncoder(const std::string &filename, movit::ResourcePool *resource_pool, QSurface *surface, const string &va_display, int width, int height, AVOutputFormat *oformat, X264Encoder *x264_encoder, DiskSpaceEstimator *disk_space_estimator)
+	: impl(new QuickSyncEncoderImpl(filename, resource_pool, surface, va_display, width, height, oformat, x264_encoder, disk_space_estimator)) {}
 
 // Must be defined here because unique_ptr<> destructor needs to know the impl.
 QuickSyncEncoder::~QuickSyncEncoder() {}

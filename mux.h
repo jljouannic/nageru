@@ -9,6 +9,7 @@ extern "C" {
 #include <libavformat/avio.h>
 }
 
+#include <functional>
 #include <mutex>
 #include <queue>
 #include <vector>
@@ -20,8 +21,10 @@ public:
 		CODEC_NV12,  // Uncompressed 4:2:0.
 	};
 
-	// Takes ownership of avctx.
-	Mux(AVFormatContext *avctx, int width, int height, Codec video_codec, const std::string &video_extradata, const AVCodecParameters *audio_codecpar, int time_base);
+	// Takes ownership of avctx. <write_callback> will be called every time
+	// a write has been made to the video stream (id 0), with the pts of
+	// the just-written frame. (write_callback can be nullptr.)
+	Mux(AVFormatContext *avctx, int width, int height, Codec video_codec, const std::string &video_extradata, const AVCodecParameters *audio_codecpar, int time_base, std::function<void(int64_t)> write_callback);
 	~Mux();
 	void add_packet(const AVPacket &pkt, int64_t pts, int64_t dts);
 
@@ -45,6 +48,8 @@ private:
 	std::vector<AVPacket *> plugged_packets;  // Protected by <mu>.
 
 	AVStream *avstream_video, *avstream_audio;
+
+	std::function<void(int64_t)> write_callback;
 };
 
 #endif  // !defined(_MUX_H)

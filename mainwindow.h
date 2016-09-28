@@ -17,6 +17,7 @@ class Display;
 class MainWindow;
 }  // namespace Ui
 
+class QLabel;
 class QPushButton;
 
 class MainWindow : public QMainWindow
@@ -55,11 +56,15 @@ private:
 	bool eventFilter(QObject *watched, QEvent *event) override;
 	void set_white_balance(int channel_number, int x, int y);
 
+	// Called from DiskSpaceEstimator.
+	void report_disk_space(off_t free_bytes, double estimated_seconds_left);
+
 	// Called from the mixer.
 	void audio_level_callback(float level_lufs, float peak_db, float global_level_lufs, float range_low_lufs, float range_high_lufs, float gain_staging_db, float final_makeup_gain_db, float correlation);
 	std::chrono::steady_clock::time_point last_audio_level_callback;
 
 	Ui::MainWindow *ui;
+	QLabel *disk_free_label;
 	QPushButton *transition_btn1, *transition_btn2, *transition_btn3;
 	std::vector<Ui::Display *> previews;
 	int current_wb_pick_display = -1;

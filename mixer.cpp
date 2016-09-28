@@ -37,6 +37,7 @@
 #include "context.h"
 #include "decklink_capture.h"
 #include "defs.h"
+#include "disk_space_estimator.h"
 #include "flags.h"
 #include "video_encoder.h"
 #include "pbo_frame_allocator.h"
@@ -165,7 +166,7 @@ Mixer::Mixer(const QSurfaceFormat &format, unsigned num_cards)
 	display_chain->set_dither_bits(0);  // Don't bother.
 	display_chain->finalize();
 
-	video_encoder.reset(new VideoEncoder(resource_pool.get(), h264_encoder_surface, global_flags.va_display, WIDTH, HEIGHT, &httpd));
+	video_encoder.reset(new VideoEncoder(resource_pool.get(), h264_encoder_surface, global_flags.va_display, WIDTH, HEIGHT, &httpd, global_disk_space_estimator));
 
 	// Start listening for clients only once VideoEncoder has written its header, if any.
 	httpd.start(9095);

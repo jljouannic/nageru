@@ -29,8 +29,8 @@ struct PacketBefore {
 	const AVFormatContext * const ctx;
 };
 
-Mux::Mux(AVFormatContext *avctx, int width, int height, Codec video_codec, const string &video_extradata, const AVCodecParameters *audio_codecpar, int time_base)
-	: avctx(avctx)
+Mux::Mux(AVFormatContext *avctx, int width, int height, Codec video_codec, const string &video_extradata, const AVCodecParameters *audio_codecpar, int time_base, std::function<void(int64_t)> write_callback)
+	: avctx(avctx), write_callback(write_callback)
 {
 	avstream_video = avformat_new_stream(avctx, nullptr);
 	if (avstream_video == nullptr) {
@@ -130,6 +130,14 @@ void Mux::add_packet(const AVPacket &pkt, int64_t pts, int64_t dts)
 	}
 
 	av_packet_unref(&pkt_copy);
+
+	// Note: This will be wrong in the case of plugged packets, but that only happens
+	// for network streams, not for files, and write callbacks are only really relevant
+	// for files. (We don't want to do this from write_packet_or_die, as it only has
+	// the rescaled pts, which is unsuitable for callback.)
+	if (pkt.stream_index == 0 && write_callback != nullptr) {
+		write_callback(pts);
+	}
 }
 
 void Mux::write_packet_or_die(const AVPacket &pkt)

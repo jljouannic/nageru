@@ -35,8 +35,8 @@ string generate_local_dump_filename(int frame)
 
 }  // namespace
 
-VideoEncoder::VideoEncoder(ResourcePool *resource_pool, QSurface *surface, const std::string &va_display, int width, int height, HTTPD *httpd)
-	: resource_pool(resource_pool), surface(surface), va_display(va_display), width(width), height(height), httpd(httpd)
+VideoEncoder::VideoEncoder(ResourcePool *resource_pool, QSurface *surface, const std::string &va_display, int width, int height, HTTPD *httpd, DiskSpaceEstimator *disk_space_estimator)
+	: resource_pool(resource_pool), surface(surface), va_display(va_display), width(width), height(height), httpd(httpd), disk_space_estimator(disk_space_estimator)
 {
 	oformat = av_guess_format(global_flags.stream_mux_name.c_str(), nullptr, nullptr);
 	assert(oformat != nullptr);
@@ -50,7 +50,7 @@ VideoEncoder::VideoEncoder(ResourcePool *resource_pool, QSurface *surface, const
 	}
 
 	string filename = generate_local_dump_filename(/*frame=*/0);
-	quicksync_encoder.reset(new QuickSyncEncoder(filename, resource_pool, surface, va_display, width, height, oformat, x264_encoder.get()));
+	quicksync_encoder.reset(new QuickSyncEncoder(filename, resource_pool, surface, va_display, width, height, oformat, x264_encoder.get(), disk_space_estimator));
 
 	open_output_stream();
 	stream_audio_encoder->add_mux(stream_mux.get());
@@ -92,7 +92,7 @@ void VideoEncoder::do_cut(int frame)
 		qs_needing_cleanup.emplace_back(old_encoder);
 	}).detach();
 
-	quicksync_encoder.reset(new QuickSyncEncoder(filename, resource_pool, surface, va_display, width, height, oformat, x264_encoder.get()));
+	quicksync_encoder.reset(new QuickSyncEncoder(filename, resource_pool, surface, va_display, width, height, oformat, x264_encoder.get(), disk_space_estimator));
 	quicksync_encoder->set_stream_mux(stream_mux.get());
 }
 
@@ -146,7 +146,8 @@ void VideoEncoder::open_output_stream()
 	}
 
 	int time_base = global_flags.stream_coarse_timebase ? COARSE_TIMEBASE : TIMEBASE;
-	stream_mux.reset(new Mux(avctx, width, height, video_codec, video_extradata, stream_audio_encoder->get_codec_parameters().get(), time_base));
+	stream_mux.reset(new Mux(avctx, width, height, video_codec, video_extradata, stream_audio_encoder->get_codec_parameters().get(), time_base,
+		/*write_callback=*/nullptr));
 }
 
 int VideoEncoder::write_packet2_thunk(void *opaque, uint8_t *buf, int buf_size, AVIODataMarkerType type, int64_t time)

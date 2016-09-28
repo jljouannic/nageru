@@ -30,6 +30,7 @@
 #include <stdbool.h>
 #include <stdint.h>
 #include <atomic>
+#include <functional>
 #include <memory>
 #include <string>
 #include <vector>
@@ -42,6 +43,7 @@ extern "C" {
 #include "ref_counted_gl_sync.h"
 
 class AudioEncoder;
+class DiskSpaceEstimator;
 class Mux;
 class QSurface;
 class QuickSyncEncoderImpl;
@@ -57,7 +59,7 @@ class ResourcePool;
 // .cpp file.
 class QuickSyncEncoder {
 public:
-        QuickSyncEncoder(const std::string &filename, movit::ResourcePool *resource_pool, QSurface *surface, const std::string &va_display, int width, int height, AVOutputFormat *oformat, X264Encoder *x264_encoder);
+        QuickSyncEncoder(const std::string &filename, movit::ResourcePool *resource_pool, QSurface *surface, const std::string &va_display, int width, int height, AVOutputFormat *oformat, X264Encoder *x264_encoder, DiskSpaceEstimator *disk_space_estimator);
         ~QuickSyncEncoder();
 
 	void set_stream_mux(Mux *mux);  // Does not take ownership. Must be called unless x264 is used for the stream.
