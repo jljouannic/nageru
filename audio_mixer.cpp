@@ -6,6 +6,7 @@
 #include <stdio.h>
 #include <endian.h>
 #include <cmath>
+#include <limits>
 #ifdef __SSE__
 #include <immintrin.h>
 #endif
@@ -179,8 +180,9 @@ AudioMixer::AudioMixer(unsigned num_cards)
 	set_final_makeup_gain_auto(global_flags.final_makeup_gain_auto);
 	alsa_pool.init();
 
-	InputMapping new_input_mapping;
 	if (!global_flags.input_mapping_filename.empty()) {
+		current_mapping_mode = MappingMode::MULTICHANNEL;
+		InputMapping new_input_mapping;
 		if (!load_input_mapping_from_file(get_devices(),
 		                                  global_flags.input_mapping_filename,
 		                                  &new_input_mapping)) {
@@ -188,18 +190,13 @@ AudioMixer::AudioMixer(unsigned num_cards)
 				global_flags.input_mapping_filename.c_str());
 			exit(1);
 		}
+		set_input_mapping(new_input_mapping);
 	} else {
-		// Generate a very simple, default input mapping.
-		InputMapping::Bus input;
-		input.name = "Main";
-		input.device.type = InputSourceType::CAPTURE_CARD;
-		input.device.index = 0;
-		input.source_channel[0] = 0;
-		input.source_channel[1] = 1;
-
-		new_input_mapping.buses.push_back(input);
+		set_simple_input(/*card_index=*/0);
+		if (global_flags.multichannel_mapping_mode) {
+			current_mapping_mode = MappingMode::MULTICHANNEL;
+		}
 	}
-	set_input_mapping(new_input_mapping);
 
 	r128.init(2, OUTPUT_FREQUENCY);
 	r128.integr_start();
@@ -888,10 +885,52 @@ void AudioMixer::serialize_device(DeviceSpec device_spec, DeviceSpecProto *devic
 	}
 }
 
+void AudioMixer::set_simple_input(unsigned card_index)
+{
+	InputMapping new_input_mapping;
+	InputMapping::Bus input;
+	input.name = "Main";
+	input.device.type = InputSourceType::CAPTURE_CARD;
+	input.device.index = card_index;
+	input.source_channel[0] = 0;
+	input.source_channel[1] = 1;
+
+	new_input_mapping.buses.push_back(input);
+
+	lock_guard<timed_mutex> lock(audio_mutex);
+	current_mapping_mode = MappingMode::SIMPLE;
+	set_input_mapping_lock_held(new_input_mapping);
+	fader_volume_db[0] = 0.0f;
+}
+
+unsigned AudioMixer::get_simple_input() const
+{
+	lock_guard<timed_mutex> lock(audio_mutex);
+	if (input_mapping.buses.size() == 1 &&
+	    input_mapping.buses[0].device.type == InputSourceType::CAPTURE_CARD &&
+	    input_mapping.buses[0].source_channel[0] == 0 &&
+	    input_mapping.buses[0].source_channel[1] == 1) {
+		return input_mapping.buses[0].device.index;
+	} else {
+		return numeric_limits<unsigned>::max();
+	}
+}
+
 void AudioMixer::set_input_mapping(const InputMapping &new_input_mapping)
 {
 	lock_guard<timed_mutex> lock(audio_mutex);
+	set_input_mapping_lock_held(new_input_mapping);
+	current_mapping_mode = MappingMode::MULTICHANNEL;
+}
 
+AudioMixer::MappingMode AudioMixer::get_mapping_mode() const
+{
+	lock_guard<timed_mutex> lock(audio_mutex);
+	return current_mapping_mode;
+}
+
+void AudioMixer::set_input_mapping_lock_held(const InputMapping &new_input_mapping)
+{
 	map<DeviceSpec, set<unsigned>> interesting_channels;
 	for (const InputMapping::Bus &bus : new_input_mapping.buses) {
 		if (bus.device.type == InputSourceType::CAPTURE_CARD ||

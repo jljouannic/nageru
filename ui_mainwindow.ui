@@ -539,62 +539,82 @@
            <number>0</number>
           </property>
           <item>
-           <layout class="QHBoxLayout" name="compact_header">
-            <property name="spacing">
-             <number>0</number>
+           <widget class="QWidget" name="compact_header" native="true">
+            <property name="sizePolicy">
+             <sizepolicy hsizetype="Preferred" vsizetype="Preferred">
+              <horstretch>8</horstretch>
+              <verstretch>0</verstretch>
+             </sizepolicy>
             </property>
-            <item>
-             <widget class="QLabel" name="compact_label">
-              <property name="text">
-               <string>Compact audio view  </string>
-              </property>
-              <property name="alignment">
-               <set>Qt::AlignRight|Qt::AlignTrailing|Qt::AlignVCenter</set>
-              </property>
-             </widget>
-            </item>
-            <item>
-             <widget class="QToolButton" name="compact_prev_page">
-              <property name="enabled">
-               <bool>true</bool>
-              </property>
-              <property name="maximumSize">
-               <size>
-                <width>15</width>
-                <height>15</height>
-               </size>
-              </property>
-              <property name="text">
-               <string>...</string>
-              </property>
-              <property name="autoRaise">
-               <bool>true</bool>
-              </property>
-              <property name="arrowType">
-               <enum>Qt::LeftArrow</enum>
-              </property>
-             </widget>
-            </item>
-            <item>
-             <widget class="QToolButton" name="compact_next_page">
-              <property name="maximumSize">
-               <size>
-                <width>15</width>
-                <height>15</height>
-               </size>
-              </property>
-              <property name="text">
-               <string>...</string>
-              </property>
-              <property name="autoRaise">
-               <bool>true</bool>
-              </property>
-              <property name="arrowType">
-               <enum>Qt::RightArrow</enum>
-              </property>
-             </widget>
-            </item>
-           </layout>
+            <layout class="QHBoxLayout" name="horizontalLayout_3">
+             <property name="spacing">
+              <number>0</number>
+             </property>
+             <property name="leftMargin">
+              <number>0</number>
+             </property>
+             <property name="topMargin">
+              <number>0</number>
+             </property>
+             <property name="rightMargin">
+              <number>0</number>
+             </property>
+             <property name="bottomMargin">
+              <number>0</number>
+             </property>
+             <item>
+              <widget class="QLabel" name="compact_label">
+               <property name="text">
+                <string>Compact audio view  </string>
+               </property>
+               <property name="alignment">
+                <set>Qt::AlignRight|Qt::AlignTrailing|Qt::AlignVCenter</set>
+               </property>
+              </widget>
+             </item>
+             <item>
+              <widget class="QToolButton" name="compact_prev_page">
+               <property name="enabled">
+                <bool>true</bool>
+               </property>
+               <property name="maximumSize">
+                <size>
+                 <width>15</width>
+                 <height>15</height>
+                </size>
+               </property>
+               <property name="text">
+                <string>...</string>
+               </property>
+               <property name="autoRaise">
+                <bool>true</bool>
+               </property>
+               <property name="arrowType">
+                <enum>Qt::LeftArrow</enum>
+               </property>
+              </widget>
+             </item>
+             <item>
+              <widget class="QToolButton" name="compact_next_page">
+               <property name="maximumSize">
+                <size>
+                 <width>15</width>
+                 <height>15</height>
+                </size>
+               </property>
+               <property name="text">
+                <string>...</string>
+               </property>
+               <property name="autoRaise">
+                <bool>true</bool>
+               </property>
+               <property name="arrowType">
+                <enum>Qt::RightArrow</enum>
+               </property>
+              </widget>
+             </item>
+            </layout>
+           </widget>
           </item>
           <item>
            <layout class="QHBoxLayout" name="audiostrip" stretch="0,1,0">
@@ -1311,6 +1331,9 @@
     <property name="title">
      <string>&amp;Audio</string>
     </property>
+    <addaction name="simple_audio_mode"/>
+    <addaction name="multichannel_audio_mode"/>
+    <addaction name="separator"/>
     <addaction name="input_mapping_action"/>
    </widget>
    <addaction name="menuWhat"/>
@@ -1340,6 +1363,25 @@
   <action name="input_mapping_action">
    <property name="text">
     <string>&amp;Input mapping…</string>
+   </property>
+  </action>
+  <action name="simple_audio_mode">
+   <property name="checkable">
+    <bool>true</bool>
+   </property>
+   <property name="checked">
+    <bool>true</bool>
+   </property>
+   <property name="text">
+    <string>Simple</string>
+   </property>
+  </action>
+  <action name="multichannel_audio_mode">
+   <property name="checkable">
+    <bool>true</bool>
+   </property>
+   <property name="text">
+    <string>Multichannel</string>
    </property>
   </action>
  </widget>

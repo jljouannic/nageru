@@ -13,7 +13,8 @@ Flags global_flags;
 
 // Long options that have no corresponding short option.
 enum LongOption {
-	OPTION_FAKE_CARDS_AUDIO = 1000,
+	OPTION_MULTICHANNEL = 1000,
+	OPTION_FAKE_CARDS_AUDIO,
 	OPTION_HTTP_UNCOMPRESSED_VIDEO,
 	OPTION_HTTP_X264_VIDEO,
 	OPTION_X264_PRESET,
@@ -55,7 +56,8 @@ void usage()
 	fprintf(stderr, "  -v, --va-display=SPEC           VA-API device for H.264 encoding\n");
 	fprintf(stderr, "                                    ($DISPLAY spec or /dev/dri/render* path)\n");
 	fprintf(stderr, "  -m, --map-signal=SIGNAL,CARD    set a default card mapping (can be given multiple times)\n");
-	fprintf(stderr, "  -M, --input-mapping=FILE        start with the given audio input mapping\n");
+	fprintf(stderr, "  -M, --input-mapping=FILE        start with the given audio input mapping (implies --multichannel)\n");
+	fprintf(stderr, "      --multichannel              start in multichannel audio mapping mode\n");
 	fprintf(stderr, "      --fake-cards-audio          make fake (disconnected) cards output a simple tone\n");
 	fprintf(stderr, "      --http-uncompressed-video   send uncompressed NV12 video to HTTP clients\n");
 	fprintf(stderr, "      --http-x264-video           send x264-compressed video to HTTP clients\n");
@@ -103,6 +105,7 @@ void parse_flags(int argc, char * const argv[])
 		{ "map-signal", required_argument, 0, 'm' },
 		{ "input-mapping", required_argument, 0, 'M' },
 		{ "va-display", required_argument, 0, 'v' },
+		{ "multichannel", no_argument, 0, OPTION_MULTICHANNEL },
 		{ "fake-cards-audio", no_argument, 0, OPTION_FAKE_CARDS_AUDIO },
 		{ "http-uncompressed-video", no_argument, 0, OPTION_HTTP_UNCOMPRESSED_VIDEO },
 		{ "http-x264-video", no_argument, 0, OPTION_HTTP_X264_VIDEO },
@@ -171,6 +174,9 @@ void parse_flags(int argc, char * const argv[])
 		}
 		case 'M':
 			global_flags.input_mapping_filename = optarg;
+			break;
+		case OPTION_MULTICHANNEL:
+			global_flags.multichannel_mapping_mode = true;
 			break;
 		case 'v':
 			global_flags.va_display = optarg;

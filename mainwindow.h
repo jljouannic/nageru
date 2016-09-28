@@ -40,6 +40,8 @@ public slots:
 	void x264_bitrate_triggered();
 	void exit_triggered();
 	void about_triggered();
+	void simple_audio_mode_triggered();
+	void multichannel_audio_mode_triggered();
 	void input_mapping_triggered();
 	void transition_clicked(int transition_number);
 	void channel_clicked(int channel_number);
@@ -58,6 +60,7 @@ public slots:
 	void relayout();
 
 private:
+	void reset_audio_mapping_ui();
 	void setup_audio_miniview();
 	void setup_audio_expanded_view();
 	bool eventFilter(QObject *watched, QEvent *event) override;

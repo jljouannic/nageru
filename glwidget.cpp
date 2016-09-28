@@ -14,6 +14,7 @@
 
 #include <stdio.h>
 #include <functional>
+#include <limits>
 #include <mutex>
 #include <movit/effect_chain.h>
 #include <movit/resource_pool.h>
@@ -224,13 +225,16 @@ void GLWidget::show_context_menu(unsigned signal_num, const QPoint &pos)
 	// --- End of card-dependent choices ---
 
 	// Add an audio source selector.
-	QAction *audio_source_action = new QAction("Use as audio source", &menu);
-	audio_source_action->setCheckable(true);
-	if (global_mixer->get_audio_source() == signal_num) {
-		audio_source_action->setChecked(true);
-		audio_source_action->setEnabled(false);
+	QAction *audio_source_action = nullptr;
+	if (global_audio_mixer->get_mapping_mode() == AudioMixer::MappingMode::SIMPLE) {
+		audio_source_action = new QAction("Use as audio source", &menu);
+		audio_source_action->setCheckable(true);
+		if (global_audio_mixer->get_simple_input() == signal_num) {
+			audio_source_action->setChecked(true);
+			audio_source_action->setEnabled(false);
+		}
+		menu.addAction(audio_source_action);
 	}
-	menu.addAction(audio_source_action);
 
 	// And a master clock selector.
 	QAction *master_clock_action = new QAction("Use as master clock", &menu);
@@ -243,8 +247,8 @@ void GLWidget::show_context_menu(unsigned signal_num, const QPoint &pos)
 
 	// Show the menu and look at the result.
 	QAction *selected_item = menu.exec(global_pos);
-	if (selected_item == audio_source_action) {
-		global_mixer->set_audio_source(signal_num);
+	if (audio_source_action != nullptr && selected_item == audio_source_action) {
+		global_audio_mixer->set_simple_input(signal_num);
 	} else if (selected_item == master_clock_action) {
 		global_mixer->set_master_clock(signal_num);
 	} else if (selected_item != nullptr) {

@@ -90,7 +90,28 @@ public:
 	// Note: The card should be held (currently this isn't enforced, though).
 	void serialize_device(DeviceSpec device_spec, DeviceSpecProto *device_spec_proto);
 
+	enum class MappingMode {
+		// A single bus, only from a video card (no ALSA devices),
+		// only channel 1 and 2, locked to +0 dB. Note that this is
+		// only an UI abstraction around exactly the same audio code
+		// as MULTICHANNEL; it's just less flexible.
+		SIMPLE,
+
+		// Full, arbitrary mappings.
+		MULTICHANNEL
+	};
+
+	// Automatically sets mapping mode to MappingMode::SIMPLE.
+	void set_simple_input(unsigned card_index);
+
+	// If mapping mode is not representable as a MappingMode::SIMPLE type
+	// mapping, returns numeric_limits<unsigned>::max().
+	unsigned get_simple_input() const;
+
+	// Implicitly sets mapping mode to MappingMode::MULTICHANNEL.
 	void set_input_mapping(const InputMapping &input_mapping);
+
+	MappingMode get_mapping_mode() const;
 	InputMapping get_input_mapping() const;
 
 	void set_locut_cutoff(float cutoff_hz)
@@ -296,6 +317,7 @@ private:
 	void measure_bus_levels(unsigned bus_index, const std::vector<float> &left, const std::vector<float> &right);
 	void send_audio_level_callback();
 	std::vector<DeviceSpec> get_active_devices() const;
+	void set_input_mapping_lock_held(const InputMapping &input_mapping);
 
 	unsigned num_cards;
 
@@ -339,6 +361,7 @@ private:
 	double final_makeup_gain = 1.0;  // Under compressor_mutex. Read/write by the user. Note: Not in dB, we want the numeric precision so that we can change it slowly.
 	bool final_makeup_gain_auto = true;  // Under compressor_mutex.
 
+	MappingMode current_mapping_mode;  // Under audio_mutex.
 	InputMapping input_mapping;  // Under audio_mutex.
 	std::atomic<float> fader_volume_db[MAX_BUSES] {{ 0.0f }};
 	float last_fader_volume_db[MAX_BUSES] { 0.0f };  // Under audio_mutex.

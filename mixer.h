@@ -199,16 +199,6 @@ public:
 		return theme->map_signal(channel);
 	}
 
-	unsigned get_audio_source() const
-	{
-		return audio_source_channel;
-	}
-
-	void set_audio_source(unsigned channel)
-	{
-		audio_source_channel = channel;
-	}
-
 	unsigned get_master_clock() const
 	{
 		return master_clock_channel;

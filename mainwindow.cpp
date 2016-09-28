@@ -11,6 +11,7 @@
 #include <QInputDialog>
 #include <QKeySequence>
 #include <QLabel>
+#include <QMessageBox>
 #include <QMetaType>
 #include <QPushButton>
 #include <QResizeEvent>
@@ -153,6 +154,10 @@ MainWindow::MainWindow()
 	disk_free_label->setStyleSheet("QLabel {padding-right: 5px;}");
 	ui->menuBar->setCornerWidget(disk_free_label);
 
+	QActionGroup *audio_mapping_group = new QActionGroup(this);
+	ui->simple_audio_mode->setActionGroup(audio_mapping_group);
+	ui->multichannel_audio_mode->setActionGroup(audio_mapping_group);
+
 	ui->me_live->set_output(Mixer::OUTPUT_LIVE);
 	ui->me_preview->set_output(Mixer::OUTPUT_PREVIEW);
 
@@ -160,6 +165,8 @@ MainWindow::MainWindow()
 	connect(ui->cut_action, &QAction::triggered, this, &MainWindow::cut_triggered);
 	connect(ui->exit_action, &QAction::triggered, this, &MainWindow::exit_triggered);
 	connect(ui->about_action, &QAction::triggered, this, &MainWindow::about_triggered);
+	connect(ui->simple_audio_mode, &QAction::triggered, this, &MainWindow::simple_audio_mode_triggered);
+	connect(ui->multichannel_audio_mode, &QAction::triggered, this, &MainWindow::multichannel_audio_mode_triggered);
 	connect(ui->input_mapping_action, &QAction::triggered, this, &MainWindow::input_mapping_triggered);
 
 	if (global_flags.x264_video_to_http) {
@@ -191,7 +198,9 @@ MainWindow::MainWindow()
 
 	// And bind the same to PgUp/PgDown.
 	auto switch_page = [this]{
-		ui->audio_views->setCurrentIndex(1 - ui->audio_views->currentIndex());
+		if (global_audio_mixer->get_mapping_mode() == AudioMixer::MappingMode::MULTICHANNEL) {
+			ui->audio_views->setCurrentIndex(1 - ui->audio_views->currentIndex());
+		}
 	};
 	connect(new QShortcut(QKeySequence::MoveToNextPage, this), &QShortcut::activated, switch_page);
 	connect(new QShortcut(QKeySequence::MoveToPreviousPage, this), &QShortcut::activated, switch_page);
@@ -240,8 +249,6 @@ void MainWindow::mixer_created(Mixer *mixer)
 		connect(ui_display->wb_button, &QPushButton::clicked, bind(&MainWindow::wb_button_clicked, this, i));
 	}
 
-	setup_audio_miniview();
-	setup_audio_expanded_view();
 	global_audio_mixer->set_state_changed_callback(bind(&MainWindow::audio_state_changed, this));
 
 	slave_knob(ui->locut_cutoff_knob, ui->locut_cutoff_knob_2);
@@ -250,42 +257,38 @@ void MainWindow::mixer_created(Mixer *mixer)
 	slave_checkbox(ui->makeup_gain_auto_checkbox, ui->makeup_gain_auto_checkbox_2);
 	slave_checkbox(ui->limiter_enabled, ui->limiter_enabled_2);
 
+	reset_audio_mapping_ui();
+
 	// TODO: Fetch all of the values these for completeness,
 	// not just the enable knobs implied by flags.
-#if 0
-	// TODO: Reenable for simple audio.
-	ui->locut_enabled->setChecked(global_audio_mixer->get_locut_enabled(0));
-	connect(ui->locut_enabled, &QCheckBox::stateChanged, [this](int state){
-		global_audio_mixer->set_locut_enabled(0, state == Qt::Checked);
-	});
-	ui->gainstaging_knob->setValue(global_audio_mixer->get_gain_staging_db());
-	ui->gainstaging_auto_checkbox->setChecked(global_audio_mixer->get_gain_staging_auto());
-	ui->compressor_enabled->setChecked(global_audio_mixer->get_compressor_enabled());
-	connect(ui->gainstaging_knob, &QAbstractSlider::valueChanged, this, &MainWindow::gain_staging_knob_changed);
-	connect(ui->gainstaging_auto_checkbox, &QCheckBox::stateChanged, [this](int state){
-		global_audio_mixer->set_gain_staging_auto(state == Qt::Checked);
-	});
-	ui->compressor_threshold_db_display->setText(
-		QString::fromStdString(format_db(mixer->get_audio_mixer()->get_compressor_threshold_dbfs(), DB_WITH_SIGN)));
-	ui->compressor_threshold_db_display->setText(buf);
-	connect(ui->compressor_threshold_knob, &QDial::valueChanged, this, &MainWindow::compressor_threshold_knob_changed);
-	connect(ui->compressor_enabled, &QCheckBox::stateChanged, [this](int state){
-		global_audio_mixer->set_compressor_enabled(state == Qt::Checked);
-	});
-#else
-	ui->locut_enabled->setVisible(false);
-	ui->gainstaging_label->setVisible(false);
-	ui->gainstaging_knob->setVisible(false);
-	ui->gainstaging_db_display->setVisible(false);
-	ui->gainstaging_auto_checkbox->setVisible(false);
-	ui->compressor_threshold_label->setVisible(false);
-	ui->compressor_threshold_knob->setVisible(false);
-	ui->compressor_threshold_db_display->setVisible(false);
-	ui->compressor_enabled->setVisible(false);
-#endif
 	ui->limiter_enabled->setChecked(global_audio_mixer->get_limiter_enabled());
 	ui->makeup_gain_auto_checkbox->setChecked(global_audio_mixer->get_final_makeup_gain_auto());
 
+	// Controls used only for simple audio fetch their state from the first bus.
+	constexpr unsigned simple_bus_index = 0;
+	if (global_audio_mixer->get_mapping_mode() == AudioMixer::MappingMode::SIMPLE) {
+		ui->locut_enabled->setChecked(global_audio_mixer->get_locut_enabled(simple_bus_index));
+		ui->gainstaging_knob->setValue(global_audio_mixer->get_gain_staging_db(simple_bus_index));
+		ui->gainstaging_auto_checkbox->setChecked(global_audio_mixer->get_gain_staging_auto(simple_bus_index));
+		ui->compressor_enabled->setChecked(global_audio_mixer->get_compressor_enabled(simple_bus_index));
+		ui->compressor_threshold_db_display->setText(
+			QString::fromStdString(format_db(mixer->get_audio_mixer()->get_compressor_threshold_dbfs(simple_bus_index), DB_WITH_SIGN)));
+	}
+	connect(ui->locut_enabled, &QCheckBox::stateChanged, [this](int state){
+		global_audio_mixer->set_locut_enabled(simple_bus_index, state == Qt::Checked);
+	});
+	connect(ui->gainstaging_knob, &QAbstractSlider::valueChanged,
+		bind(&MainWindow::gain_staging_knob_changed, this, simple_bus_index, _1));
+	connect(ui->gainstaging_auto_checkbox, &QCheckBox::stateChanged, [this, simple_bus_index](int state){
+		global_audio_mixer->set_gain_staging_auto(simple_bus_index, state == Qt::Checked);
+	});
+	connect(ui->compressor_threshold_knob, &QDial::valueChanged,
+		bind(&MainWindow::compressor_threshold_knob_changed, this, simple_bus_index, _1));
+	connect(ui->compressor_enabled, &QCheckBox::stateChanged, [this, simple_bus_index](int state){
+		global_audio_mixer->set_compressor_enabled(simple_bus_index, state == Qt::Checked);
+	});
+
+	// Global mastering controls.
 	QString limiter_threshold_label(
 		QString::fromStdString(format_db(mixer->get_audio_mixer()->get_limiter_threshold_dbfs(), DB_WITH_SIGN)));
 	ui->limiter_threshold_db_display->setText(limiter_threshold_label);
@@ -320,6 +323,33 @@ void MainWindow::mixer_created(Mixer *mixer)
 	sigaction(SIGUSR1, &act, nullptr);
 }
 
+void MainWindow::reset_audio_mapping_ui()
+{
+	bool simple = (global_audio_mixer->get_mapping_mode() == AudioMixer::MappingMode::SIMPLE);
+
+	ui->simple_audio_mode->setChecked(simple);
+	ui->multichannel_audio_mode->setChecked(!simple);
+	ui->input_mapping_action->setEnabled(!simple);
+
+	ui->locut_enabled->setVisible(simple);
+	ui->gainstaging_label->setVisible(simple);
+	ui->gainstaging_knob->setVisible(simple);
+	ui->gainstaging_db_display->setVisible(simple);
+	ui->gainstaging_auto_checkbox->setVisible(simple);
+	ui->compressor_threshold_label->setVisible(simple);
+	ui->compressor_threshold_knob->setVisible(simple);
+	ui->compressor_threshold_db_display->setVisible(simple);
+	ui->compressor_enabled->setVisible(simple);
+
+	setup_audio_miniview();
+	setup_audio_expanded_view();
+
+	if (simple) {
+		ui->audio_views->setCurrentIndex(0);
+	}
+	ui->compact_header->setVisible(!simple);
+}
+
 void MainWindow::setup_audio_miniview()
 {
 	// Remove any existing channels.
@@ -328,6 +358,10 @@ void MainWindow::setup_audio_miniview()
 		delete item;
 	}
 	audio_miniviews.clear();
+
+	if (global_audio_mixer->get_mapping_mode() == AudioMixer::MappingMode::SIMPLE) {
+		return;
+	}
 
 	// Set up brand new ones from the input mapping.
 	InputMapping mapping = global_audio_mixer->get_input_mapping();
@@ -367,6 +401,10 @@ void MainWindow::setup_audio_expanded_view()
 		delete item;
 	}
 	audio_expanded_views.clear();
+
+	if (global_audio_mixer->get_mapping_mode() == AudioMixer::MappingMode::SIMPLE) {
+		return;
+	}
 
 	// Set up brand new ones from the input mapping.
 	InputMapping mapping = global_audio_mixer->get_input_mapping();
@@ -466,6 +504,43 @@ void MainWindow::exit_triggered()
 void MainWindow::about_triggered()
 {
 	AboutDialog().exec();
+}
+
+void MainWindow::simple_audio_mode_triggered()
+{
+	if (global_audio_mixer->get_mapping_mode() == AudioMixer::MappingMode::SIMPLE) {
+		return;
+	}
+	unsigned card_index = global_audio_mixer->get_simple_input();
+	if (card_index == numeric_limits<unsigned>::max()) {
+		QMessageBox::StandardButton reply =
+			QMessageBox::question(this,
+				"Mapping too complex",
+				"The current audio mapping is too complicated to be representable in simple mode, "
+					"and will be discarded if you proceed. Really go to simple audio mode?",
+				QMessageBox::Yes | QMessageBox::No);
+		if (reply == QMessageBox::No) {
+			ui->simple_audio_mode->setChecked(false);
+			ui->multichannel_audio_mode->setChecked(true);
+			return;
+		}
+		card_index = 0;
+	}
+	global_audio_mixer->set_simple_input(/*card_index=*/card_index);
+	reset_audio_mapping_ui();
+}
+
+void MainWindow::multichannel_audio_mode_triggered()
+{
+	if (global_audio_mixer->get_mapping_mode() == AudioMixer::MappingMode::MULTICHANNEL) {
+		return;
+	}
+
+	// Take the generated input mapping from the simple input,
+	// and set it as a normal multichannel mapping, which causes
+	// the mode to go to multichannel.
+	global_audio_mixer->set_input_mapping(global_audio_mixer->get_input_mapping());
+	reset_audio_mapping_ui();
 }
 
 void MainWindow::input_mapping_triggered()
@@ -714,7 +789,7 @@ void MainWindow::relayout()
 	remaining_height -= ui->vertical_layout->spacing();
 
 	// The label above the audio strip.
-	double compact_label_height = ui->compact_label->geometry().height() +
+	double compact_label_height = ui->compact_label->minimumHeight() +
 		ui->compact_audio_layout->spacing();
 	remaining_height -= compact_label_height;
 
