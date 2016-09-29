@@ -336,6 +336,7 @@ private:
 	mutable std::mutex compressor_mutex;
 	std::unique_ptr<StereoCompressor> level_compressor[MAX_BUSES];  // Under compressor_mutex. Used to set/override gain_staging_db if <level_compressor_enabled>.
 	float gain_staging_db[MAX_BUSES];  // Under compressor_mutex.
+	float last_gain_staging_db[MAX_BUSES];  // Under compressor_mutex.
 	bool level_compressor_enabled[MAX_BUSES];  // Under compressor_mutex.
 
 	static constexpr float ref_level_dbfs = -14.0f;  // Chosen so that we end up around 0 LU in practice.

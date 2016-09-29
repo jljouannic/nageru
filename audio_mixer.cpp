@@ -355,6 +355,7 @@ void AudioMixer::set_bus_settings(unsigned bus_index, const AudioMixer::BusSetti
 		eq_level_db[bus_index][band_index] = settings.eq_level_db[band_index];
 	}
 	gain_staging_db[bus_index] = settings.gain_staging_db;
+	last_gain_staging_db[bus_index] = gain_staging_db[bus_index];
 	level_compressor_enabled[bus_index] = settings.level_compressor_enabled;
 	compressor_threshold_dbfs[bus_index] = settings.compressor_threshold_dbfs;
 	compressor_enabled[bus_index] = settings.compressor_enabled;
@@ -438,6 +439,31 @@ vector<DeviceSpec> AudioMixer::get_active_devices() const
 	return ret;
 }
 
+namespace {
+
+void apply_gain(float db, float last_db, vector<float> *samples)
+{
+	if (fabs(db - last_db) < 1e-3) {
+		// Constant over this frame.
+		const float gain = from_db(db);
+		for (size_t i = 0; i < samples->size(); ++i) {
+			(*samples)[i] *= gain;
+		}
+	} else {
+		// We need to do a fade.
+		unsigned num_samples = samples->size() / 2;
+		float gain = from_db(last_db);
+		const float gain_inc = pow(from_db(db - last_db), 1.0 / num_samples);
+		for (size_t i = 0; i < num_samples; ++i) {
+			(*samples)[i * 2 + 0] *= gain;
+			(*samples)[i * 2 + 1] *= gain;
+			gain *= gain_inc;
+		}
+	}
+}
+
+}  // namespace
+
 vector<float> AudioMixer::get_output(double pts, unsigned num_samples, ResamplingQueue::RateAdjustmentPolicy rate_adjustment_policy)
 {
 	map<DeviceSpec, vector<float>> samples_card;
@@ -486,11 +512,11 @@ vector<float> AudioMixer::get_output(double pts, unsigned num_samples, Resamplin
 				gain_staging_db[bus_index] = to_db(level_compressor[bus_index]->get_attenuation() * makeup_gain);
 			} else {
 				// Just apply the gain we already had.
-				float g = from_db(gain_staging_db[bus_index]);
-				for (size_t i = 0; i < samples_bus.size(); ++i) {
-					samples_bus[i] *= g;
-				}
+				float db = gain_staging_db[bus_index];
+				float last_db = last_gain_staging_db[bus_index];
+				apply_gain(db, last_db, &samples_bus);
 			}
+			last_gain_staging_db[bus_index] = gain_staging_db[bus_index];
 
 #if 0
 			printf("level=%f (%+5.2f dBFS) attenuation=%f (%+5.2f dB) end_result=%+5.2f dB\n",
@@ -642,22 +668,7 @@ void AudioMixer::apply_eq(unsigned bus_index, vector<float> *samples_bus)
 	assert(samples_bus->size() % 2 == 0);
 	const unsigned num_samples = samples_bus->size() / 2;
 
-	if (fabs(mid_db - last_mid_db) < 1e-3) {
-		// Constant over this frame.
-		const float gain = from_db(mid_db);
-		for (size_t i = 0; i < samples_bus->size(); ++i) {
-			(*samples_bus)[i] *= gain;
-		}
-	} else {
-		// We need to do a fade.
-		float gain = from_db(last_mid_db);
-		const float gain_inc = pow(from_db(mid_db - last_mid_db), 1.0 / num_samples);
-		for (size_t i = 0; i < num_samples; ++i) {
-			(*samples_bus)[i * 2 + 0] *= gain;
-			(*samples_bus)[i * 2 + 1] *= gain;
-			gain *= gain_inc;
-		}
-	}
+	apply_gain(mid_db, last_mid_db, samples_bus);
 
 	apply_filter_fade(&eq[bus_index][EQ_BAND_BASS], samples_bus->data(), num_samples, bass_freq_hz, bass_db - mid_db, last_bass_db - last_mid_db);
 	apply_filter_fade(&eq[bus_index][EQ_BAND_TREBLE], samples_bus->data(), num_samples, treble_freq_hz, treble_db - mid_db, last_treble_db - last_mid_db);
