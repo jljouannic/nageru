@@ -261,13 +261,16 @@
                 <item>
                  <widget class="NonLinearFader" name="fader">
                   <property name="minimum">
-                   <number>-390</number>
+                   <number>0</number>
                   </property>
                   <property name="maximum">
-                   <number>60</number>
+                   <number>1000</number>
+                  </property>
+                  <property name="singleStep">
+                   <number>10</number>
                   </property>
                   <property name="pageStep">
-                   <number>10</number>
+                   <number>100</number>
                   </property>
                   <property name="orientation">
                    <enum>Qt::Vertical</enum>

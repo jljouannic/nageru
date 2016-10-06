@@ -15,7 +15,6 @@ signals:
 
 protected:
 	void paintEvent(QPaintEvent *event) override;
-	void resizeEvent(QResizeEvent *event) override;
 	void sliderChange(SliderChange change) override;
 
 private:

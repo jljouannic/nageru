@@ -406,6 +406,15 @@
         <layout class="QHBoxLayout" name="fader_centerer">
          <item>
           <widget class="NonLinearFader" name="fader">
+           <property name="maximum">
+            <number>1000</number>
+           </property>
+           <property name="singleStep">
+            <number>10</number>
+           </property>
+           <property name="pageStep">
+            <number>100</number>
+           </property>
            <property name="orientation">
             <enum>Qt::Vertical</enum>
            </property>
