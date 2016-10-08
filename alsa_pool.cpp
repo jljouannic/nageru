@@ -6,6 +6,7 @@
 #include <assert.h>
 #include <limits.h>
 #include <stdio.h>
+#include <sys/eventfd.h>
 #include <sys/inotify.h>
 #include <unistd.h>
 #include <algorithm>
@@ -20,6 +21,12 @@
 using namespace std;
 using namespace std::placeholders;
 
+ALSAPool::ALSAPool()
+{
+	should_quit_fd = eventfd(/*initval=*/0, /*flags=*/0);
+	assert(should_quit_fd != -1);
+}
+
 ALSAPool::~ALSAPool()
 {
 	for (Device &device : devices) {
@@ -28,6 +35,8 @@ ALSAPool::~ALSAPool()
 		}
 	}
 	should_quit = true;
+	const uint64_t one = 1;
+	write(should_quit_fd, &one, sizeof(one));
 	inotify_thread.join();
 
 	while (retry_threads_running > 0) {
@@ -289,12 +298,15 @@ void ALSAPool::inotify_thread_func()
 	int size = sizeof(inotify_event) + NAME_MAX + 1;
 	unique_ptr<char[]> buf(new char[size]);
 	while (!should_quit) {
-		pollfd fds;
-		fds.fd = inotify_fd;
-		fds.events = POLLIN;
-		fds.revents = 0;
+		pollfd fds[2];
+		fds[0].fd = inotify_fd;
+		fds[0].events = POLLIN;
+		fds[0].revents = 0;
+		fds[1].fd = should_quit_fd;
+		fds[1].events = POLLIN;
+		fds[1].revents = 0;
 
-		int ret = poll(&fds, 1, 100);
+		int ret = poll(fds, 2, -1);
 		if (ret == -1) {
 			if (errno == EINTR) {
 				continue;
@@ -306,6 +318,8 @@ void ALSAPool::inotify_thread_func()
 		if (ret == 0) {
 			continue;
 		}
+
+		if (fds[1].revents) break;  // should_quit_fd asserted.
 
 		ret = read(inotify_fd, buf.get(), size);
 		if (ret == -1) {
@@ -350,6 +364,7 @@ void ALSAPool::inotify_thread_func()
 	}
 	close(watch_fd);
 	close(inotify_fd);
+	close(should_quit_fd);
 }
 
 void ALSAPool::reset_device(unsigned index)

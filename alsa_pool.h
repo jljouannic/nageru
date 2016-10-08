@@ -21,6 +21,7 @@ class DeviceSpecProto;
 // In particular, it deals with enumeration of cards, and hotplug of new ones.
 class ALSAPool {
 public:
+	ALSAPool();
 	~ALSAPool();
 
 	struct Device {
@@ -149,6 +150,7 @@ private:
 	                                const std::string &address);
 
 	std::atomic<bool> should_quit{false};
+	int should_quit_fd;
 	std::thread inotify_thread;
 	std::atomic<int> retry_threads_running{0};
 
