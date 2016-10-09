@@ -92,7 +92,6 @@ void MIDIMapper::start_thread()
 
 void MIDIMapper::thread_func()
 {
-	// TODO: Listen on any port, instead of hardcoding 24:0.
 	snd_seq_t *seq;
 	int err;
 
@@ -106,9 +105,29 @@ void MIDIMapper::thread_func()
 			SND_SEQ_PORT_TYPE_MIDI_GENERIC |
 			SND_SEQ_PORT_TYPE_APPLICATION));
 
-	snd_seq_addr_t addr;
-	RETURN_ON_ERROR("snd_seq_parse_address", snd_seq_parse_address(seq, &addr, "24:0"));
-	RETURN_ON_ERROR("snd_seq_connect_from", snd_seq_connect_from(seq, 0, addr.client, addr.port));
+	// Listen to the announce port (0:1), which will tell us about new ports.
+	RETURN_ON_ERROR("snd_seq_connect_from", snd_seq_connect_from(seq, 0, /*client=*/0, /*port=*/1));
+
+	// Now go through all ports and subscribe to them.
+	snd_seq_client_info_t *cinfo;
+	snd_seq_client_info_alloca(&cinfo);
+
+	snd_seq_client_info_set_client(cinfo, -1);
+	while (snd_seq_query_next_client(seq, cinfo) >= 0) {
+		int client = snd_seq_client_info_get_client(cinfo);
+
+		snd_seq_port_info_t *pinfo;
+		snd_seq_port_info_alloca(&pinfo);
+
+		snd_seq_port_info_set_client(pinfo, client);
+		snd_seq_port_info_set_port(pinfo, -1);
+		while (snd_seq_query_next_port(seq, pinfo) >= 0) {
+			constexpr int mask = SND_SEQ_PORT_CAP_READ | SND_SEQ_PORT_CAP_SUBS_READ;
+			if ((snd_seq_port_info_get_capability(pinfo) & mask) == mask) {
+				subscribe_to_port(seq, *snd_seq_port_info_get_addr(pinfo));
+			}
+		}
+	}
 
 	int num_alsa_fds = snd_seq_poll_descriptors_count(seq, POLLIN);
 	unique_ptr<pollfd[]> fds(new pollfd[num_alsa_fds + 1]);
@@ -233,11 +252,40 @@ void MIDIMapper::handle_event(snd_seq_t *seq, snd_seq_event_t *event)
 		match_button(note, MIDIMappingBusProto::kClearPeakFieldNumber, MIDIMappingProto::kClearPeakBankFieldNumber,
 			bind(&ControllerReceiver::clear_peak, receiver, _1));
 	}
+	case SND_SEQ_EVENT_PORT_START:
+		subscribe_to_port(seq, event->data.addr);
+		break;
+	case SND_SEQ_EVENT_PORT_EXIT:
+		printf("MIDI port %d:%d went away.\n", event->data.addr.client, event->data.addr.port);
+		break;
 	case SND_SEQ_EVENT_NOTEOFF:
-		// Ignore.
+	case SND_SEQ_EVENT_CLIENT_START:
+	case SND_SEQ_EVENT_CLIENT_EXIT:
+	case SND_SEQ_EVENT_CLIENT_CHANGE:
+	case SND_SEQ_EVENT_PORT_CHANGE:
+	case SND_SEQ_EVENT_PORT_SUBSCRIBED:
+	case SND_SEQ_EVENT_PORT_UNSUBSCRIBED:
 		break;
 	default:
 		printf("Ignoring MIDI event of unknown type %d.\n", event->type);
+	}
+}
+
+void MIDIMapper::subscribe_to_port(snd_seq_t *seq, const snd_seq_addr_t &addr)
+{
+	// Client 0 is basically the system; ignore it.
+	if (addr.client == 0) {
+		return;
+	}
+
+	int err = snd_seq_connect_from(seq, 0, addr.client, addr.port);
+	if (err < 0) {
+		// Just print out a warning (i.e., don't die); it could
+		// very well just be e.g. another application.
+		printf("Couldn't subscribe to MIDI port %d:%d (%s).\n",
+			addr.client, addr.port, snd_strerror(err));
+	} else {
+		printf("Subscribed to MIDI port %d:%d.\n", addr.client, addr.port);
 	}
 }
 

@@ -15,6 +15,7 @@
 #include <thread>
 
 class MIDIMappingProto;
+typedef struct snd_seq_addr snd_seq_addr_t;
 typedef struct snd_seq_event snd_seq_event_t;
 typedef struct _snd_seq snd_seq_t;
 
@@ -50,6 +51,7 @@ public:
 private:
 	void thread_func();
 	void handle_event(snd_seq_t *seq, snd_seq_event_t *event);
+	void subscribe_to_port(snd_seq_t *seq, const snd_seq_addr_t &addr);
 	void match_controller(int controller, int field_number, int bank_field_number, float value, std::function<void(unsigned, float)> func);
 	void match_button(int note, int field_number, int bank_field_number, std::function<void(unsigned)> func);
 	bool bank_mismatch(int bank_field_number);
