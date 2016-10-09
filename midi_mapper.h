@@ -15,6 +15,8 @@
 #include <thread>
 
 class MIDIMappingProto;
+typedef struct snd_seq_event snd_seq_event_t;
+typedef struct _snd_seq snd_seq_t;
 
 // Interface for receiving interpreted controller messages.
 class ControllerReceiver {
@@ -47,6 +49,7 @@ public:
 
 private:
 	void thread_func();
+	void handle_event(snd_seq_t *seq, snd_seq_event_t *event);
 	void match_controller(int controller, int field_number, int bank_field_number, float value, std::function<void(unsigned, float)> func);
 	void match_button(int note, int field_number, int bank_field_number, std::function<void(unsigned)> func);
 	bool bank_mismatch(int bank_field_number);

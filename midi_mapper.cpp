@@ -97,6 +97,7 @@ void MIDIMapper::thread_func()
 	int err;
 
 	RETURN_ON_ERROR("snd_seq_open", snd_seq_open(&seq, "default", SND_SEQ_OPEN_DUPLEX, 0));
+	RETURN_ON_ERROR("snd_seq_nonblock", snd_seq_nonblock(seq, 1));
 	RETURN_ON_ERROR("snd_seq_client_name", snd_seq_set_client_name(seq, "nageru"));
 	RETURN_ON_ERROR("snd_seq_create_simple_port",
 		snd_seq_create_simple_port(seq, "nageru",
@@ -131,88 +132,112 @@ void MIDIMapper::thread_func()
 			break;
 		}
 
-		snd_seq_event_t *event;
-		err = snd_seq_event_input(seq, &event);
-		if (event->type == SND_SEQ_EVENT_CONTROLLER) {
-			printf("Controller %d changed to %d\n", event->data.control.param, event->data.control.value);
-
-			const int controller = event->data.control.param;
-			const float value = map_controller_to_float(event->data.control.value);
-
-			match_controller(controller, MIDIMappingBusProto::kLocutFieldNumber, MIDIMappingProto::kLocutBankFieldNumber,
-				value, bind(&ControllerReceiver::set_locut, receiver, _2));
-			match_controller(controller, MIDIMappingBusProto::kLimiterThresholdFieldNumber, MIDIMappingProto::kLimiterThresholdBankFieldNumber,
-				value, bind(&ControllerReceiver::set_limiter_threshold, receiver, _2));
-			match_controller(controller, MIDIMappingBusProto::kMakeupGainFieldNumber, MIDIMappingProto::kMakeupGainBankFieldNumber,
-				value, bind(&ControllerReceiver::set_makeup_gain, receiver, _2));
-
-			match_controller(controller, MIDIMappingBusProto::kTrebleFieldNumber, MIDIMappingProto::kTrebleBankFieldNumber,
-				value, bind(&ControllerReceiver::set_treble, receiver, _1, _2));
-			match_controller(controller, MIDIMappingBusProto::kMidFieldNumber, MIDIMappingProto::kMidBankFieldNumber,
-				value, bind(&ControllerReceiver::set_mid, receiver, _1, _2));
-			match_controller(controller, MIDIMappingBusProto::kBassFieldNumber, MIDIMappingProto::kBassBankFieldNumber,
-				value, bind(&ControllerReceiver::set_bass, receiver, _1, _2));
-			match_controller(controller, MIDIMappingBusProto::kGainFieldNumber, MIDIMappingProto::kGainBankFieldNumber,
-				value, bind(&ControllerReceiver::set_gain, receiver, _1, _2));
-			match_controller(controller, MIDIMappingBusProto::kCompressorThresholdFieldNumber, MIDIMappingProto::kCompressorThresholdBankFieldNumber,
-				value, bind(&ControllerReceiver::set_compressor_threshold, receiver, _1, _2));
-			match_controller(controller, MIDIMappingBusProto::kFaderFieldNumber, MIDIMappingProto::kFaderBankFieldNumber,
-				value, bind(&ControllerReceiver::set_fader, receiver, _1, _2));
-		} else if (event->type == SND_SEQ_EVENT_NOTEON) {
-			const int note = event->data.note.note;
-
-			printf("Note: %d\n", note);
-
-			// Bank change commands. TODO: Highlight the bank change in the UI.
-			for (size_t bus_idx = 0; bus_idx < size_t(mapping_proto->bus_mapping_size()); ++bus_idx) {
-				const MIDIMappingBusProto &bus_mapping = mapping_proto->bus_mapping(bus_idx);
-				if (bus_mapping.has_prev_bank() &&
-				    bus_mapping.prev_bank().note_number() == note) {
-					current_controller_bank = (current_controller_bank + num_controller_banks - 1) % num_controller_banks;
-				}
-				if (bus_mapping.has_next_bank() &&
-				    bus_mapping.next_bank().note_number() == note) {
-					current_controller_bank = (current_controller_bank + 1) % num_controller_banks;
-				}
-				if (bus_mapping.has_select_bank_1() &&
-				    bus_mapping.select_bank_1().note_number() == note) {
-					current_controller_bank = 0;
-				}
-				if (bus_mapping.has_select_bank_2() &&
-				    bus_mapping.select_bank_2().note_number() == note &&
-				    num_controller_banks >= 2) {
-					current_controller_bank = 1;
-				}
-				if (bus_mapping.has_select_bank_3() &&
-				    bus_mapping.select_bank_3().note_number() == note &&
-				    num_controller_banks >= 3) {
-					current_controller_bank = 2;
-				}
-				if (bus_mapping.has_select_bank_4() &&
-				    bus_mapping.select_bank_4().note_number() == note &&
-				    num_controller_banks >= 4) {
-					current_controller_bank = 3;
-				}
-				if (bus_mapping.has_select_bank_5() &&
-				    bus_mapping.select_bank_5().note_number() == note &&
-				    num_controller_banks >= 5) {
-					current_controller_bank = 4;
-				}
+		// Seemingly we can get multiple events in a single poll,
+		// and if we don't handle them all, poll will _not_ alert us!
+		while (!should_quit) {
+			snd_seq_event_t *event;
+			err = snd_seq_event_input(seq, &event);
+			if (err < 0) {
+				if (err == -EINTR) continue;
+				if (err == -EAGAIN) break;
+				fprintf(stderr, "snd_seq_event_input: %s\n", snd_strerror(err));
+				return;
 			}
-
-			match_button(note, MIDIMappingBusProto::kToggleLocutFieldNumber, MIDIMappingProto::kToggleLocutBankFieldNumber,
-				bind(&ControllerReceiver::toggle_locut, receiver, _1));
-			match_button(note, MIDIMappingBusProto::kToggleAutoGainStagingFieldNumber, MIDIMappingProto::kToggleAutoGainStagingBankFieldNumber,
-				bind(&ControllerReceiver::toggle_auto_gain_staging, receiver, _1));
-			match_button(note, MIDIMappingBusProto::kToggleCompressorFieldNumber, MIDIMappingProto::kToggleCompressorBankFieldNumber,
-				bind(&ControllerReceiver::toggle_compressor, receiver, _1));
-			match_button(note, MIDIMappingBusProto::kClearPeakFieldNumber, MIDIMappingProto::kClearPeakBankFieldNumber,
-				bind(&ControllerReceiver::clear_peak, receiver, _1));
-		} else if (event->type == SND_SEQ_EVENT_NOTEOFF) {
-			// Ignore.
-		} else {
-			printf("Ignoring MIDI event of unknown type %d.\n", event->type);
+			if (event) {
+				handle_event(seq, event);
+			}
 		}
+	}
+}
+
+void MIDIMapper::handle_event(snd_seq_t *seq, snd_seq_event_t *event)
+{
+	switch (event->type) {
+	case SND_SEQ_EVENT_CONTROLLER: {
+		printf("Controller %d changed to %d\n", event->data.control.param, event->data.control.value);
+
+		const int controller = event->data.control.param;
+		const float value = map_controller_to_float(event->data.control.value);
+
+		// Global controllers.
+		match_controller(controller, MIDIMappingBusProto::kLocutFieldNumber, MIDIMappingProto::kLocutBankFieldNumber,
+			value, bind(&ControllerReceiver::set_locut, receiver, _2));
+		match_controller(controller, MIDIMappingBusProto::kLimiterThresholdFieldNumber, MIDIMappingProto::kLimiterThresholdBankFieldNumber,
+			value, bind(&ControllerReceiver::set_limiter_threshold, receiver, _2));
+		match_controller(controller, MIDIMappingBusProto::kMakeupGainFieldNumber, MIDIMappingProto::kMakeupGainBankFieldNumber,
+			value, bind(&ControllerReceiver::set_makeup_gain, receiver, _2));
+
+		// Bus controllers.
+		match_controller(controller, MIDIMappingBusProto::kTrebleFieldNumber, MIDIMappingProto::kTrebleBankFieldNumber,
+			value, bind(&ControllerReceiver::set_treble, receiver, _1, _2));
+		match_controller(controller, MIDIMappingBusProto::kMidFieldNumber, MIDIMappingProto::kMidBankFieldNumber,
+			value, bind(&ControllerReceiver::set_mid, receiver, _1, _2));
+		match_controller(controller, MIDIMappingBusProto::kBassFieldNumber, MIDIMappingProto::kBassBankFieldNumber,
+			value, bind(&ControllerReceiver::set_bass, receiver, _1, _2));
+		match_controller(controller, MIDIMappingBusProto::kGainFieldNumber, MIDIMappingProto::kGainBankFieldNumber,
+			value, bind(&ControllerReceiver::set_gain, receiver, _1, _2));
+		match_controller(controller, MIDIMappingBusProto::kCompressorThresholdFieldNumber, MIDIMappingProto::kCompressorThresholdBankFieldNumber,
+			value, bind(&ControllerReceiver::set_compressor_threshold, receiver, _1, _2));
+		match_controller(controller, MIDIMappingBusProto::kFaderFieldNumber, MIDIMappingProto::kFaderBankFieldNumber,
+			value, bind(&ControllerReceiver::set_fader, receiver, _1, _2));
+		break;
+	}
+	case SND_SEQ_EVENT_NOTEON: {
+		const int note = event->data.note.note;
+
+		printf("Note: %d\n", note);
+
+		// Bank change commands. TODO: Highlight the bank change in the UI.
+		for (size_t bus_idx = 0; bus_idx < size_t(mapping_proto->bus_mapping_size()); ++bus_idx) {
+			const MIDIMappingBusProto &bus_mapping = mapping_proto->bus_mapping(bus_idx);
+			if (bus_mapping.has_prev_bank() &&
+			    bus_mapping.prev_bank().note_number() == note) {
+				current_controller_bank = (current_controller_bank + num_controller_banks - 1) % num_controller_banks;
+			}
+			if (bus_mapping.has_next_bank() &&
+			    bus_mapping.next_bank().note_number() == note) {
+				current_controller_bank = (current_controller_bank + 1) % num_controller_banks;
+			}
+			if (bus_mapping.has_select_bank_1() &&
+			    bus_mapping.select_bank_1().note_number() == note) {
+				current_controller_bank = 0;
+			}
+			if (bus_mapping.has_select_bank_2() &&
+			    bus_mapping.select_bank_2().note_number() == note &&
+			    num_controller_banks >= 2) {
+				current_controller_bank = 1;
+			}
+			if (bus_mapping.has_select_bank_3() &&
+			    bus_mapping.select_bank_3().note_number() == note &&
+			    num_controller_banks >= 3) {
+				current_controller_bank = 2;
+			}
+			if (bus_mapping.has_select_bank_4() &&
+			    bus_mapping.select_bank_4().note_number() == note &&
+			    num_controller_banks >= 4) {
+				current_controller_bank = 3;
+			}
+			if (bus_mapping.has_select_bank_5() &&
+			    bus_mapping.select_bank_5().note_number() == note &&
+			    num_controller_banks >= 5) {
+				current_controller_bank = 4;
+			}
+		}
+
+		match_button(note, MIDIMappingBusProto::kToggleLocutFieldNumber, MIDIMappingProto::kToggleLocutBankFieldNumber,
+			bind(&ControllerReceiver::toggle_locut, receiver, _1));
+		match_button(note, MIDIMappingBusProto::kToggleAutoGainStagingFieldNumber, MIDIMappingProto::kToggleAutoGainStagingBankFieldNumber,
+			bind(&ControllerReceiver::toggle_auto_gain_staging, receiver, _1));
+		match_button(note, MIDIMappingBusProto::kToggleCompressorFieldNumber, MIDIMappingProto::kToggleCompressorBankFieldNumber,
+			bind(&ControllerReceiver::toggle_compressor, receiver, _1));
+		match_button(note, MIDIMappingBusProto::kClearPeakFieldNumber, MIDIMappingProto::kClearPeakBankFieldNumber,
+			bind(&ControllerReceiver::clear_peak, receiver, _1));
+	}
+	case SND_SEQ_EVENT_NOTEOFF:
+		// Ignore.
+		break;
+	default:
+		printf("Ignoring MIDI event of unknown type %d.\n", event->type);
 	}
 }
 
