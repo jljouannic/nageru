@@ -16,6 +16,7 @@ LDLIBS=$(shell pkg-config --libs $(PKG_MODULES)) -pthread -lva -lva-drm -lva-x11
 # Qt objects
 OBJS=glwidget.o main.o mainwindow.o vumeter.o lrameter.o vu_common.o correlation_meter.o aboutdialog.o input_mapping_dialog.o nonlinear_fader.o
 OBJS += glwidget.moc.o mainwindow.moc.o vumeter.moc.o lrameter.moc.o correlation_meter.moc.o aboutdialog.moc.o ellipsis_label.moc.o input_mapping_dialog.moc.o nonlinear_fader.moc.o clickable_label.moc.o
+OBJS += midi_mapper.o midi_mapping.pb.o
 
 # Mixer objects
 AUDIO_MIXER_OBJS = audio_mixer.o alsa_input.o alsa_pool.o ebu_r128_proc.o stereocompressor.o resampling_queue.o flags.o correlation_measurer.o filter.o input_mapping.o state.pb.o

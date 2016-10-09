@@ -25,6 +25,7 @@
 #include "glwidget.h"
 #include "input_mapping_dialog.h"
 #include "lrameter.h"
+#include "midi_mapping.pb.h"
 #include "mixer.h"
 #include "post_to_main_thread.h"
 #include "ui_audio_miniview.h"
@@ -144,7 +145,7 @@ void set_peak_label(QLabel *peak_label, float peak_db)
 }  // namespace
 
 MainWindow::MainWindow()
-	: ui(new Ui::MainWindow)
+	: ui(new Ui::MainWindow), midi_mapper(this)
 {
 	global_mainwindow = this;
 	ui->setupUi(this);
@@ -206,6 +207,17 @@ MainWindow::MainWindow()
 	connect(new QShortcut(QKeySequence::MoveToPreviousPage, this), &QShortcut::activated, switch_page);
 
 	last_audio_level_callback = steady_clock::now() - seconds(1);
+
+	if (!global_flags.midi_mapping_filename.empty()) {
+		MIDIMappingProto midi_mapping;
+		if (!load_midi_mapping_from_file(global_flags.midi_mapping_filename, &midi_mapping)) {
+			fprintf(stderr, "Couldn't load MIDI mapping '%s'; exiting.\n",
+				global_flags.midi_mapping_filename.c_str());
+			exit(1);
+		}
+		midi_mapper.set_midi_mapping(midi_mapping);
+	}
+	midi_mapper.start_thread();
 }
 
 void MainWindow::resizeEvent(QResizeEvent* event)
@@ -819,6 +831,99 @@ void MainWindow::relayout()
 	// The preview horizontal spacer.
 	double remaining_preview_width = preview_total_width - previews.size() * preview_width;
 	ui->preview_displays->setStretch(previews.size(), lrintf(remaining_preview_width));
+}
+
+void MainWindow::set_locut(float value)
+{
+	set_relative_value(ui->locut_cutoff_knob, value);
+}
+
+void MainWindow::set_limiter_threshold(float value)
+{
+	set_relative_value(ui->limiter_threshold_knob, value);
+}
+
+void MainWindow::set_makeup_gain(float value)
+{
+	set_relative_value(ui->makeup_gain_knob, value);
+}
+
+void MainWindow::set_treble(unsigned bus_idx, float value)
+{
+	set_relative_value_if_exists(bus_idx, &Ui::AudioExpandedView::treble_knob, value);
+}
+
+void MainWindow::set_mid(unsigned bus_idx, float value)
+{
+	set_relative_value_if_exists(bus_idx, &Ui::AudioExpandedView::mid_knob, value);
+}
+
+void MainWindow::set_bass(unsigned bus_idx, float value)
+{
+	set_relative_value_if_exists(bus_idx, &Ui::AudioExpandedView::bass_knob, value);
+}
+
+void MainWindow::set_gain(unsigned bus_idx, float value)
+{
+	set_relative_value_if_exists(bus_idx, &Ui::AudioExpandedView::gainstaging_knob, value);
+}
+
+void MainWindow::set_compressor_threshold(unsigned bus_idx, float value)
+{
+	set_relative_value_if_exists(bus_idx, &Ui::AudioExpandedView::compressor_threshold_knob, value);
+}
+
+void MainWindow::set_fader(unsigned bus_idx, float value)
+{
+	set_relative_value_if_exists(bus_idx, &Ui::AudioExpandedView::fader, value);
+}
+
+void MainWindow::toggle_locut(unsigned bus_idx)
+{
+	click_button_if_exists(bus_idx, &Ui::AudioExpandedView::locut_enabled);
+}
+
+void MainWindow::toggle_auto_gain_staging(unsigned bus_idx)
+{
+	click_button_if_exists(bus_idx, &Ui::AudioExpandedView::gainstaging_auto_checkbox);
+}
+
+void MainWindow::toggle_compressor(unsigned bus_idx)
+{
+	click_button_if_exists(bus_idx, &Ui::AudioExpandedView::compressor_enabled);
+}
+
+void MainWindow::clear_peak(unsigned bus_idx)
+{
+	if (global_audio_mixer->get_mapping_mode() == AudioMixer::MappingMode::MULTICHANNEL) {
+		global_audio_mixer->reset_peak(bus_idx);
+	}
+}
+
+template<class T>
+void MainWindow::set_relative_value(T *control, float value)
+{
+	post_to_main_thread([control, value]{
+		control->setValue(lrintf(control->minimum() + value * (control->maximum() - control->minimum())));
+	});
+}
+
+template<class T>
+void MainWindow::set_relative_value_if_exists(unsigned bus_idx, T *(Ui_AudioExpandedView::*control), float value)
+{
+	if (global_audio_mixer->get_mapping_mode() == AudioMixer::MappingMode::MULTICHANNEL &&
+	    bus_idx < audio_expanded_views.size()) {
+		set_relative_value(audio_expanded_views[bus_idx]->*control, value);
+	}
+}
+
+template<class T>
+void MainWindow::click_button_if_exists(unsigned bus_idx, T *(Ui_AudioExpandedView::*control))
+{
+	if (global_audio_mixer->get_mapping_mode() == AudioMixer::MappingMode::MULTICHANNEL &&
+	    bus_idx < audio_expanded_views.size()) {
+		(audio_expanded_views[bus_idx]->*control)->click();
+	}
 }
 
 void MainWindow::set_transition_names(vector<string> transition_names)

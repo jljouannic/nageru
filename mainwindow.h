@@ -7,9 +7,11 @@
 #include <vector>
 #include <sys/time.h>
 
+#include "midi_mapper.h"
 #include "mixer.h"
 
 class GLWidget;
+class Ui_AudioExpandedView;
 class QResizeEvent;
 
 namespace Ui {
@@ -19,10 +21,11 @@ class Display;
 class MainWindow;
 }  // namespace Ui
 
+class QDial;
 class QLabel;
 class QPushButton;
 
-class MainWindow : public QMainWindow
+class MainWindow : public QMainWindow, public ControllerReceiver
 {
 	Q_OBJECT
 
@@ -59,6 +62,23 @@ public slots:
 	void reset_meters_button_clicked();
 	void relayout();
 
+	// ControllerReceiver interface.
+	void set_locut(float value) override;
+	void set_limiter_threshold(float value) override;
+	void set_makeup_gain(float value) override;
+
+	void set_treble(unsigned bus_idx, float value) override;
+	void set_mid(unsigned bus_idx, float value) override;
+	void set_bass(unsigned bus_idx, float value) override;
+	void set_gain(unsigned bus_idx, float value) override;
+	void set_compressor_threshold(unsigned bus_idx, float value) override;
+	void set_fader(unsigned bus_idx, float value) override;
+
+	void toggle_locut(unsigned bus_idx) override;
+	void toggle_auto_gain_staging(unsigned bus_idx) override;
+	void toggle_compressor(unsigned bus_idx) override;
+	void clear_peak(unsigned bus_idx) override;
+
 private:
 	void reset_audio_mapping_ui();
 	void setup_audio_miniview();
@@ -77,6 +97,15 @@ private:
 
 	void audio_state_changed();
 
+	template<class T>
+	void set_relative_value(T *control, float value);
+
+	template<class T>
+	void set_relative_value_if_exists(unsigned bus_idx, T *Ui_AudioExpandedView::*control, float value);
+
+	template<class T>
+	void click_button_if_exists(unsigned bus_idx, T *Ui_AudioExpandedView::*control);
+
 	Ui::MainWindow *ui;
 	QLabel *disk_free_label;
 	QPushButton *transition_btn1, *transition_btn2, *transition_btn3;
@@ -84,6 +113,7 @@ private:
 	std::vector<Ui::AudioMiniView *> audio_miniviews;
 	std::vector<Ui::AudioExpandedView *> audio_expanded_views;
 	int current_wb_pick_display = -1;
+	MIDIMapper midi_mapper;
 };
 
 extern MainWindow *global_mainwindow;

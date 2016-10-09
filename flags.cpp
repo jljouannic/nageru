@@ -14,6 +14,7 @@ Flags global_flags;
 // Long options that have no corresponding short option.
 enum LongOption {
 	OPTION_MULTICHANNEL = 1000,
+	OPTION_MIDI_MAPPING,
 	OPTION_FAKE_CARDS_AUDIO,
 	OPTION_HTTP_UNCOMPRESSED_VIDEO,
 	OPTION_HTTP_X264_VIDEO,
@@ -58,6 +59,7 @@ void usage()
 	fprintf(stderr, "  -m, --map-signal=SIGNAL,CARD    set a default card mapping (can be given multiple times)\n");
 	fprintf(stderr, "  -M, --input-mapping=FILE        start with the given audio input mapping (implies --multichannel)\n");
 	fprintf(stderr, "      --multichannel              start in multichannel audio mapping mode\n");
+	fprintf(stderr, "      --midi-mapping=FILE         start with the given MIDI controller mapping (implies --multichannel)\n");
 	fprintf(stderr, "      --fake-cards-audio          make fake (disconnected) cards output a simple tone\n");
 	fprintf(stderr, "      --http-uncompressed-video   send uncompressed NV12 video to HTTP clients\n");
 	fprintf(stderr, "      --http-x264-video           send x264-compressed video to HTTP clients\n");
@@ -106,6 +108,7 @@ void parse_flags(int argc, char * const argv[])
 		{ "input-mapping", required_argument, 0, 'M' },
 		{ "va-display", required_argument, 0, 'v' },
 		{ "multichannel", no_argument, 0, OPTION_MULTICHANNEL },
+		{ "midi-mapping", required_argument, 0, OPTION_MIDI_MAPPING },
 		{ "fake-cards-audio", no_argument, 0, OPTION_FAKE_CARDS_AUDIO },
 		{ "http-uncompressed-video", no_argument, 0, OPTION_HTTP_UNCOMPRESSED_VIDEO },
 		{ "http-x264-video", no_argument, 0, OPTION_HTTP_X264_VIDEO },
@@ -180,6 +183,10 @@ void parse_flags(int argc, char * const argv[])
 			break;
 		case 'v':
 			global_flags.va_display = optarg;
+			break;
+		case OPTION_MIDI_MAPPING:
+			global_flags.midi_mapping_filename = optarg;
+			global_flags.multichannel_mapping_mode = true;
 			break;
 		case OPTION_FAKE_CARDS_AUDIO:
 			global_flags.fake_cards_audio = true;

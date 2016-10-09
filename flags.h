@@ -38,6 +38,7 @@ struct Flags {
 	std::map<int, int> default_stream_mapping;
 	bool multichannel_mapping_mode = false;  // Implicitly true if input_mapping_filename is nonempty.
 	std::string input_mapping_filename;  // Empty for none.
+	std::string midi_mapping_filename;  // Empty for none.
 };
 extern Flags global_flags;
 

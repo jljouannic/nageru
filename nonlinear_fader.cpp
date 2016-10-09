@@ -17,8 +17,11 @@ namespace {
 
 vector<pair<double, double>> fader_control_points = {
 	// The main area is from +6 to -12 dB (18 dB), and we use half the slider range for it.
+	// Adjust slightly so that the MIDI controller value of 106 becomes exactly 0.0 dB
+	// (cf. map_controller_to_float()); otherwise, we'd miss ever so slightly, which is
+	// really frustrating.
 	{ 6.0, 1.0 },
-	{ -12.0, 0.5 },
+	{ -12.0, 1.0 - (1.0 - 106.5/127.0) * 3.0 },  // About 0.492.
 
 	// -12 to -21 is half the range (9 dB). Halve.
 	{ -21.0, 0.325 },
