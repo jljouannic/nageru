@@ -66,6 +66,7 @@ bool load_midi_mapping_from_file(const string &filename, MIDIMappingProto *new_m
 
 void MIDIMapper::set_midi_mapping(const MIDIMappingProto &new_mapping)
 {
+	lock_guard<mutex> lock(mapping_mu);
 	if (mapping_proto) {
 		mapping_proto->CopyFrom(new_mapping);
 	} else {
@@ -79,6 +80,12 @@ void MIDIMapper::set_midi_mapping(const MIDIMappingProto &new_mapping)
 void MIDIMapper::start_thread()
 {
 	midi_thread = thread(&MIDIMapper::thread_func, this);
+}
+
+const MIDIMappingProto &MIDIMapper::get_current_mapping() const
+{
+	lock_guard<mutex> lock(mapping_mu);
+	return *mapping_proto;
 }
 
 #define RETURN_ON_ERROR(msg, expr) do {                            \
@@ -171,6 +178,7 @@ void MIDIMapper::thread_func()
 
 void MIDIMapper::handle_event(snd_seq_t *seq, snd_seq_event_t *event)
 {
+	lock_guard<mutex> lock(mapping_mu);
 	switch (event->type) {
 	case SND_SEQ_EVENT_CONTROLLER: {
 		printf("Controller %d changed to %d\n", event->data.control.param, event->data.control.value);

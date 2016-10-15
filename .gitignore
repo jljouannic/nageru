@@ -9,5 +9,6 @@ ui_audio_miniview.h
 ui_display.h
 ui_input_mapping.h
 ui_mainwindow.h
+ui_midi_mapping.h
 nageru
 benchmark_audio_mixer

@@ -1,0 +1,256 @@
+#include "midi_mapping_dialog.h"
+
+#include "midi_mapper.h"
+#include "midi_mapping.pb.h"
+#include "post_to_main_thread.h"
+#include "ui_midi_mapping.h"
+
+#include <QComboBox>
+#include <QFileDialog>
+#include <QMessageBox>
+#include <QSpinBox>
+
+#include <string>
+
+using namespace google::protobuf;
+using namespace std;
+
+vector<MIDIMappingDialog::Control> per_bus_controllers = {
+	{ "Treble",                   MIDIMappingBusProto::kTrebleFieldNumber, MIDIMappingProto::kTrebleBankFieldNumber },
+	{ "Mid",                      MIDIMappingBusProto::kMidFieldNumber,    MIDIMappingProto::kMidBankFieldNumber },
+	{ "Bass",                     MIDIMappingBusProto::kBassFieldNumber,   MIDIMappingProto::kBassBankFieldNumber },
+	{ "Gain",                     MIDIMappingBusProto::kGainFieldNumber,   MIDIMappingProto::kGainBankFieldNumber },
+	{ "Compressor threshold",     MIDIMappingBusProto::kCompressorThresholdFieldNumber,
+	                              MIDIMappingProto::kCompressorThresholdBankFieldNumber},
+	{ "Fader",                    MIDIMappingBusProto::kFaderFieldNumber,  MIDIMappingProto::kFaderBankFieldNumber }
+};
+vector<MIDIMappingDialog::Control> per_bus_buttons = {
+	{ "Toggle locut",             MIDIMappingBusProto::kToggleLocutFieldNumber,
+	                              MIDIMappingProto::kToggleLocutBankFieldNumber },
+	{ "Togle auto gain staging",  MIDIMappingBusProto::kToggleAutoGainStagingFieldNumber,
+	                              MIDIMappingProto::kToggleAutoGainStagingBankFieldNumber },
+	{ "Togle compressor",         MIDIMappingBusProto::kToggleCompressorFieldNumber,
+	                              MIDIMappingProto::kToggleCompressorBankFieldNumber },
+	{ "Clear peak",               MIDIMappingBusProto::kClearPeakFieldNumber,
+	                              MIDIMappingProto::kClearPeakBankFieldNumber }
+};
+vector<MIDIMappingDialog::Control> global_controllers = {
+	{ "Locut cutoff",             MIDIMappingBusProto::kLocutFieldNumber,  MIDIMappingProto::kLocutBankFieldNumber },
+	{ "Limiter threshold",        MIDIMappingBusProto::kLimiterThresholdFieldNumber,
+	                              MIDIMappingProto::kLimiterThresholdBankFieldNumber },
+	{ "Makeup gain",              MIDIMappingBusProto::kMakeupGainFieldNumber,
+	                              MIDIMappingProto::kMakeupGainBankFieldNumber }
+};
+vector<MIDIMappingDialog::Control> global_buttons = {
+	{ "Previous bank",            MIDIMappingBusProto::kPrevBankFieldNumber, 0 },
+	{ "Next bank",                MIDIMappingBusProto::kNextBankFieldNumber, 0 },
+	{ "Select bank 1",            MIDIMappingBusProto::kSelectBank1FieldNumber, 0 },
+	{ "Select bank 2",            MIDIMappingBusProto::kSelectBank2FieldNumber, 0 },
+	{ "Select bank 3",            MIDIMappingBusProto::kSelectBank3FieldNumber, 0 },
+	{ "Select bank 4",            MIDIMappingBusProto::kSelectBank4FieldNumber, 0 },
+	{ "Select bank 5",            MIDIMappingBusProto::kSelectBank5FieldNumber, 0 }
+};
+
+namespace {
+
+int get_bank(const MIDIMappingProto &mapping_proto, int bank_field_number, int default_value)
+{
+	const FieldDescriptor *bank_descriptor = mapping_proto.GetDescriptor()->FindFieldByNumber(bank_field_number);
+	const Reflection *reflection = mapping_proto.GetReflection();
+	if (!reflection->HasField(mapping_proto, bank_descriptor)) {
+		return default_value;
+	}
+	return reflection->GetInt32(mapping_proto, bank_descriptor);
+}
+
+int get_controller_mapping(const MIDIMappingProto &mapping_proto, size_t bus_idx, int field_number, int default_value)
+{
+	if (bus_idx >= size_t(mapping_proto.bus_mapping_size())) {
+		return default_value;
+	}
+
+	const MIDIMappingBusProto &bus_mapping = mapping_proto.bus_mapping(bus_idx);
+	const FieldDescriptor *descriptor = bus_mapping.GetDescriptor()->FindFieldByNumber(field_number);
+	const Reflection *bus_reflection = bus_mapping.GetReflection();
+	if (!bus_reflection->HasField(bus_mapping, descriptor)) {
+		return default_value;
+	}
+	const MIDIControllerProto &controller_proto = 
+		static_cast<const MIDIControllerProto &>(bus_reflection->GetMessage(bus_mapping, descriptor));
+	return controller_proto.controller_number();
+}
+
+int get_button_mapping(const MIDIMappingProto &mapping_proto, size_t bus_idx, int field_number, int default_value)
+{
+	if (bus_idx >= size_t(mapping_proto.bus_mapping_size())) {
+		return default_value;
+	}
+
+	const MIDIMappingBusProto &bus_mapping = mapping_proto.bus_mapping(bus_idx);
+	const FieldDescriptor *descriptor = bus_mapping.GetDescriptor()->FindFieldByNumber(field_number);
+	const Reflection *bus_reflection = bus_mapping.GetReflection();
+	if (!bus_reflection->HasField(bus_mapping, descriptor)) {
+		return default_value;
+	}
+	const MIDIButtonProto &bus_proto = 
+		static_cast<const MIDIButtonProto &>(bus_reflection->GetMessage(bus_mapping, descriptor));
+	return bus_proto.note_number();
+}
+
+}  // namespace
+
+MIDIMappingDialog::MIDIMappingDialog(MIDIMapper *mapper)
+	: ui(new Ui::MIDIMappingDialog),
+          mapper(mapper)
+{
+	ui->setupUi(this);
+
+	const MIDIMappingProto mapping_proto = mapper->get_current_mapping();  // Take a copy.
+
+	QStringList labels;
+	labels << "";
+	labels << "Controller bank";
+	for (unsigned bus_idx = 0; bus_idx < num_buses; ++bus_idx) {
+		char buf[256];
+		snprintf(buf, sizeof(buf), "Bus %d", bus_idx + 1);
+		labels << buf;
+	}
+	labels << "";
+	ui->treeWidget->setColumnCount(num_buses + 3);
+	ui->treeWidget->setHeaderLabels(labels);
+
+	add_controls("Per-bus controllers", ControlType::CONTROLLER, mapping_proto, per_bus_controllers);
+	add_controls("Per-bus buttons", ControlType::BUTTON, mapping_proto, per_bus_buttons);
+	add_controls("Global controllers", ControlType::CONTROLLER, mapping_proto, global_controllers);
+	add_controls("Global buttons", ControlType::BUTTON, mapping_proto, global_buttons);
+
+	// Auto-resize every column but the last.
+	for (unsigned column_idx = 0; column_idx < num_buses + 3; ++column_idx) {
+		ui->treeWidget->resizeColumnToContents(column_idx);
+	}
+
+	connect(ui->ok_cancel_buttons, &QDialogButtonBox::accepted, this, &MIDIMappingDialog::ok_clicked);
+	connect(ui->ok_cancel_buttons, &QDialogButtonBox::rejected, this, &MIDIMappingDialog::cancel_clicked);
+}
+
+MIDIMappingDialog::~MIDIMappingDialog()
+{
+}
+
+void MIDIMappingDialog::ok_clicked()
+{
+	unique_ptr<MIDIMappingProto> new_mapping = construct_mapping_proto_from_ui();
+	mapper->set_midi_mapping(*new_mapping);
+	accept();
+}
+
+void MIDIMappingDialog::cancel_clicked()
+{
+	reject();
+}
+
+namespace {
+
+template<class T>
+T *get_mutable_bus_message(MIDIMappingProto *mapping_proto, unsigned bus_idx, int field_number)
+{
+	while (size_t(mapping_proto->bus_mapping_size()) <= bus_idx) {
+		mapping_proto->add_bus_mapping();
+	}
+
+	MIDIMappingBusProto *bus_mapping = mapping_proto->mutable_bus_mapping(bus_idx);
+	const FieldDescriptor *descriptor = bus_mapping->GetDescriptor()->FindFieldByNumber(field_number);
+	const Reflection *bus_reflection = bus_mapping->GetReflection();
+	return static_cast<T *>(bus_reflection->MutableMessage(bus_mapping, descriptor));
+}
+
+}  // namespace
+
+unique_ptr<MIDIMappingProto> MIDIMappingDialog::construct_mapping_proto_from_ui()
+{
+	unique_ptr<MIDIMappingProto> mapping_proto(new MIDIMappingProto);
+	for (const InstantiatedSpinner &is : controller_spinners) {
+		const int val = is.spinner->value();
+		if (val == 0) {
+			continue;
+		}
+
+		MIDIControllerProto *controller_proto =
+			get_mutable_bus_message<MIDIControllerProto>(mapping_proto.get(), is.bus_idx, is.field_number);
+		controller_proto->set_controller_number(val);
+	}
+	for (const InstantiatedSpinner &is : button_spinners) {
+		const int val = is.spinner->value();
+		if (val == 0) {
+			continue;
+		}
+
+		MIDIButtonProto *button_proto =
+			get_mutable_bus_message<MIDIButtonProto>(mapping_proto.get(), is.bus_idx, is.field_number);
+		button_proto->set_note_number(val);
+	}
+	int highest_bank_used = 0;  // 1-indexed.
+	for (const InstantiatedComboBox &ic : bank_combo_boxes) {
+		const int val = ic.combo_box->currentIndex();
+		highest_bank_used = std::max(highest_bank_used, val);
+		if (val == 0) {
+			continue;
+		}
+
+		const FieldDescriptor *descriptor = mapping_proto->GetDescriptor()->FindFieldByNumber(ic.field_number);
+		const Reflection *bus_reflection = mapping_proto->GetReflection();
+		bus_reflection->SetInt32(mapping_proto.get(), descriptor, val - 1);
+	}
+	mapping_proto->set_num_controller_banks(highest_bank_used);
+	return mapping_proto;
+}
+
+void MIDIMappingDialog::add_bank_selector(QTreeWidgetItem *item, const MIDIMappingProto &mapping_proto, int bank_field_number)
+{
+	if (bank_field_number == 0) {
+		return;
+	}
+	QComboBox *bank_selector = new QComboBox(this);
+	bank_selector->addItems(QStringList() << "" << "Bank 1" << "Bank 2" << "Bank 3" << "Bank 4" << "Bank 5");
+	bank_selector->setAutoFillBackground(true);
+	bank_selector->setCurrentIndex(get_bank(mapping_proto, bank_field_number, -1) + 1);
+
+	bank_combo_boxes.push_back(InstantiatedComboBox{ bank_selector, bank_field_number });
+
+	ui->treeWidget->setItemWidget(item, 1, bank_selector);
+}
+
+void MIDIMappingDialog::add_controls(const string &heading,
+                                     MIDIMappingDialog::ControlType control_type,
+                                     const MIDIMappingProto &mapping_proto,
+                                     const vector<MIDIMappingDialog::Control> &controls)
+{
+	QTreeWidgetItem *heading_item = new QTreeWidgetItem(ui->treeWidget);
+	heading_item->setText(0, QString::fromStdString(heading));
+	heading_item->setFirstColumnSpanned(true);
+	heading_item->setExpanded(true);
+	for (const Control &control : controls) {
+		QTreeWidgetItem *item = new QTreeWidgetItem(heading_item);
+		heading_item->addChild(item);
+		add_bank_selector(item, mapping_proto, control.bank_field_number);
+		item->setText(0, QString::fromStdString(control.label + "   "));
+
+		for (unsigned bus_idx = 0; bus_idx < num_buses; ++bus_idx) {
+			QSpinBox *spinner = new QSpinBox(this);
+			spinner->setRange(0, 127);
+			spinner->setAutoFillBackground(true);
+			spinner->setSpecialValueText("\u200d");  // Zero-width joiner (ie., empty).
+			ui->treeWidget->setItemWidget(item, bus_idx + 2, spinner);
+
+			if (control_type == ControlType::CONTROLLER) {
+				spinner->setValue(get_controller_mapping(mapping_proto, bus_idx, control.field_number, 0));
+				controller_spinners.push_back(InstantiatedSpinner{ spinner, bus_idx, control.field_number });
+			} else {
+				assert(control_type == ControlType::BUTTON);
+				spinner->setValue(get_button_mapping(mapping_proto, bus_idx, control.field_number, 0));
+				button_spinners.push_back(InstantiatedSpinner{ spinner, bus_idx, control.field_number });
+			}
+		}
+	}
+	ui->treeWidget->addTopLevelItem(heading_item);
+}

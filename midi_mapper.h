@@ -11,6 +11,7 @@
 #include <atomic>
 #include <functional>
 #include <memory>
+#include <mutex>
 #include <string>
 #include <thread>
 
@@ -46,7 +47,7 @@ public:
 	virtual ~MIDIMapper();
 	void set_midi_mapping(const MIDIMappingProto &new_mapping);
 	void start_thread();
-	const MIDIMappingProto &get_current_mapping() const { return *mapping_proto; }
+	const MIDIMappingProto &get_current_mapping() const;
 
 private:
 	void thread_func();
@@ -60,9 +61,10 @@ private:
 	std::atomic<bool> should_quit{false};
 	int should_quit_fd;
 
-	std::unique_ptr<MIDIMappingProto> mapping_proto;
-	int num_controller_banks;
-	int current_controller_bank = 0;
+	mutable std::mutex mapping_mu;
+	std::unique_ptr<MIDIMappingProto> mapping_proto;  // Under <mapping_mu>.
+	int num_controller_banks;  // Under <mapping_mu>.
+	std::atomic<int> current_controller_bank{0};
 
 	std::thread midi_thread;
 };

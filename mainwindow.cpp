@@ -26,6 +26,7 @@
 #include "input_mapping_dialog.h"
 #include "lrameter.h"
 #include "midi_mapping.pb.h"
+#include "midi_mapping_dialog.h"
 #include "mixer.h"
 #include "post_to_main_thread.h"
 #include "ui_audio_miniview.h"
@@ -169,6 +170,7 @@ MainWindow::MainWindow()
 	connect(ui->simple_audio_mode, &QAction::triggered, this, &MainWindow::simple_audio_mode_triggered);
 	connect(ui->multichannel_audio_mode, &QAction::triggered, this, &MainWindow::multichannel_audio_mode_triggered);
 	connect(ui->input_mapping_action, &QAction::triggered, this, &MainWindow::input_mapping_triggered);
+	connect(ui->midi_mapping_action, &QAction::triggered, this, &MainWindow::midi_mapping_triggered);
 
 	if (global_flags.x264_video_to_http) {
 		connect(ui->x264_bitrate_action, &QAction::triggered, this, &MainWindow::x264_bitrate_triggered);
@@ -342,6 +344,7 @@ void MainWindow::reset_audio_mapping_ui()
 	ui->simple_audio_mode->setChecked(simple);
 	ui->multichannel_audio_mode->setChecked(!simple);
 	ui->input_mapping_action->setEnabled(!simple);
+	ui->midi_mapping_action->setEnabled(!simple);
 
 	ui->locut_enabled->setVisible(simple);
 	ui->gainstaging_label->setVisible(simple);
@@ -561,6 +564,11 @@ void MainWindow::input_mapping_triggered()
 		setup_audio_miniview();
 		setup_audio_expanded_view();
 	}
+}
+
+void MainWindow::midi_mapping_triggered()
+{
+	MIDIMappingDialog(&midi_mapper).exec();
 }
 
 void MainWindow::gain_staging_knob_changed(unsigned bus_index, int value)
