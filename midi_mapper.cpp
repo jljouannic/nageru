@@ -108,6 +108,13 @@ const MIDIMappingProto &MIDIMapper::get_current_mapping() const
 	return *mapping_proto;
 }
 
+ControllerReceiver *MIDIMapper::set_receiver(ControllerReceiver *new_receiver)
+{
+	lock_guard<mutex> lock(mapping_mu);
+	swap(receiver, new_receiver);
+	return new_receiver;  // Now old receiver.
+}
+
 #define RETURN_ON_ERROR(msg, expr) do {                            \
 	int err = (expr);                                          \
 	if (err < 0) {                                             \
@@ -206,6 +213,8 @@ void MIDIMapper::handle_event(snd_seq_t *seq, snd_seq_event_t *event)
 		const int controller = event->data.control.param;
 		const float value = map_controller_to_float(event->data.control.value);
 
+		receiver->controller_changed(controller);
+
 		// Global controllers.
 		match_controller(controller, MIDIMappingBusProto::kLocutFieldNumber, MIDIMappingProto::kLocutBankFieldNumber,
 			value, bind(&ControllerReceiver::set_locut, receiver, _2));
@@ -231,6 +240,8 @@ void MIDIMapper::handle_event(snd_seq_t *seq, snd_seq_event_t *event)
 	}
 	case SND_SEQ_EVENT_NOTEON: {
 		const int note = event->data.note.note;
+
+		receiver->note_on(note);
 
 		printf("Note: %d\n", note);
 

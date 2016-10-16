@@ -106,6 +106,7 @@ MIDIMappingDialog::MIDIMappingDialog(MIDIMapper *mapper)
 	ui->setupUi(this);
 
 	const MIDIMappingProto mapping_proto = mapper->get_current_mapping();  // Take a copy.
+	old_receiver = mapper->set_receiver(this);
 
 	QStringList labels;
 	labels << "";
@@ -138,17 +139,20 @@ MIDIMappingDialog::MIDIMappingDialog(MIDIMapper *mapper)
 
 MIDIMappingDialog::~MIDIMappingDialog()
 {
+	mapper->set_receiver(old_receiver);
 }
 
 void MIDIMappingDialog::ok_clicked()
 {
 	unique_ptr<MIDIMappingProto> new_mapping = construct_mapping_proto_from_ui();
 	mapper->set_midi_mapping(*new_mapping);
+	mapper->set_receiver(old_receiver);
 	accept();
 }
 
 void MIDIMappingDialog::cancel_clicked()
 {
+	mapper->set_receiver(old_receiver);
 	reject();
 }
 
@@ -295,5 +299,25 @@ void MIDIMappingDialog::fill_controls_from_mapping(const MIDIMappingProto &mappi
 	}
 	for (const InstantiatedComboBox &ic : bank_combo_boxes) {
 		ic.combo_box->setCurrentIndex(get_bank(mapping_proto, ic.field_number, -1) + 1);
+	}
+}
+
+void MIDIMappingDialog::controller_changed(unsigned controller)
+{
+	for (const InstantiatedSpinner &is : controller_spinners) {
+		if (is.spinner->hasFocus()) {
+			is.spinner->setValue(controller);
+			is.spinner->selectAll();
+		}
+	}
+}
+
+void MIDIMappingDialog::note_on(unsigned note)
+{
+	for (const InstantiatedSpinner &is : button_spinners) {
+		if (is.spinner->hasFocus()) {
+			is.spinner->setValue(note);
+			is.spinner->selectAll();
+		}
 	}
 }

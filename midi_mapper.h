@@ -39,6 +39,10 @@ public:
 	virtual void toggle_auto_gain_staging(unsigned bus_idx) = 0;
 	virtual void toggle_compressor(unsigned bus_idx) = 0;
 	virtual void clear_peak(unsigned bus_idx) = 0;
+
+	// Raw events; used for the editor dialog only.
+	virtual void controller_changed(unsigned controller) = 0;
+	virtual void note_on(unsigned note) = 0;
 };
 
 class MIDIMapper {
@@ -49,6 +53,9 @@ public:
 	void start_thread();
 	const MIDIMappingProto &get_current_mapping() const;
 
+	// Overwrites and returns the previous value.
+	ControllerReceiver *set_receiver(ControllerReceiver *new_receiver);
+
 private:
 	void thread_func();
 	void handle_event(snd_seq_t *seq, snd_seq_event_t *event);
@@ -57,11 +64,11 @@ private:
 	void match_button(int note, int field_number, int bank_field_number, std::function<void(unsigned)> func);
 	bool bank_mismatch(int bank_field_number);
 
-	ControllerReceiver *receiver;
 	std::atomic<bool> should_quit{false};
 	int should_quit_fd;
 
 	mutable std::mutex mapping_mu;
+	ControllerReceiver *receiver;  // Under <mapping_mu>.
 	std::unique_ptr<MIDIMappingProto> mapping_proto;  // Under <mapping_mu>.
 	int num_controller_banks;  // Under <mapping_mu>.
 	std::atomic<int> current_controller_bank{0};

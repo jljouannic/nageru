@@ -80,6 +80,10 @@ public slots:
 	void toggle_compressor(unsigned bus_idx) override;
 	void clear_peak(unsigned bus_idx) override;
 
+	// Raw receivers are not used.
+	void controller_changed(unsigned controller) override {}
+	void note_on(unsigned note) override {}
+
 private:
 	void reset_audio_mapping_ui();
 	void setup_audio_miniview();

@@ -7,6 +7,7 @@
 #include <sys/time.h>
 
 #include "audio_mixer.h"
+#include "midi_mapper.h"
 #include "mixer.h"
 
 namespace Ui {
@@ -19,7 +20,7 @@ class QComboBox;
 class QSpinBox;
 class QTreeWidgetItem;
 
-class MIDIMappingDialog : public QDialog
+class MIDIMappingDialog : public QDialog, public ControllerReceiver
 {
 	Q_OBJECT
 
@@ -33,6 +34,28 @@ public:
 		int field_number;  // In MIDIMappingBusProto.
 		int bank_field_number;  // In MIDIMappingProto.
 	};
+
+	// ControllerReceiver interface. We only implement the raw events.
+	// All values are [0.0, 1.0].
+	void set_locut(float value) override {}
+	void set_limiter_threshold(float value) override {}
+	void set_makeup_gain(float value) override {}
+
+	void set_treble(unsigned bus_idx, float value) override {}
+	void set_mid(unsigned bus_idx, float value) override {}
+	void set_bass(unsigned bus_idx, float value) override {}
+	void set_gain(unsigned bus_idx, float value) override {}
+	void set_compressor_threshold(unsigned bus_idx, float value) override {}
+	void set_fader(unsigned bus_idx, float value) override {}
+
+	void toggle_locut(unsigned bus_idx) override {}
+	void toggle_auto_gain_staging(unsigned bus_idx) override {}
+	void toggle_compressor(unsigned bus_idx) override {}
+	void clear_peak(unsigned bus_idx) override {}
+
+	// Raw events; used for the editor dialog only.
+	void controller_changed(unsigned controller) override;
+	void note_on(unsigned note) override;
 
 public slots:
 	void ok_clicked();
@@ -52,9 +75,9 @@ private:
 
 	std::unique_ptr<MIDIMappingProto> construct_mapping_proto_from_ui();
 
-
 	Ui::MIDIMappingDialog *ui;
 	MIDIMapper *mapper;
+	ControllerReceiver *old_receiver;
 
 	// All controllers actually laid out on the grid (we need to store them
 	// so that we can move values back and forth between the controls and
