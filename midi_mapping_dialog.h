@@ -3,6 +3,7 @@
 
 #include <QDialog>
 #include <string>
+#include <utility>
 #include <vector>
 #include <sys/time.h>
 
@@ -27,6 +28,8 @@ class MIDIMappingDialog : public QDialog, public ControllerReceiver
 public:
 	MIDIMappingDialog(MIDIMapper *mapper);
 	~MIDIMappingDialog();
+
+	bool eventFilter(QObject *obj, QEvent *event) override;
 
 	// For use in midi_mapping_dialog.cpp only.
 	struct Control {
@@ -58,6 +61,7 @@ public:
 	void note_on(unsigned note) override;
 
 public slots:
+	void guess_clicked();
 	void ok_clicked();
 	void cancel_clicked();
 	void save_clicked();
@@ -73,11 +77,22 @@ private:
 	                  const MIDIMappingProto &mapping_proto, const std::vector<Control> &controls);
 	void fill_controls_from_mapping(const MIDIMappingProto &mapping_proto);
 
+	// Tries to find a source bus and an offset to it that would give
+	// a consistent offset for the rest of the mappings in this bus.
+	// Returns -1 for the bus (the first element) if no consistent offset
+	// can be found.
+	std::pair<int, int> guess_offset(unsigned bus_idx);
+	bool bus_is_empty(unsigned bus_idx);
+
+	void update_guess_button_state();
+	int find_focus_bus();
+
 	std::unique_ptr<MIDIMappingProto> construct_mapping_proto_from_ui();
 
 	Ui::MIDIMappingDialog *ui;
 	MIDIMapper *mapper;
 	ControllerReceiver *old_receiver;
+	int last_focus_bus_idx{-1};
 
 	// All controllers actually laid out on the grid (we need to store them
 	// so that we can move values back and forth between the controls and
@@ -94,6 +109,9 @@ private:
 	std::vector<InstantiatedSpinner> controller_spinners;
 	std::vector<InstantiatedSpinner> button_spinners;
 	std::vector<InstantiatedComboBox> bank_combo_boxes;
+
+	// Keyed on bus index, then field number.
+	std::map<unsigned, std::map<unsigned, QSpinBox *>> spinners;
 };
 
 #endif  // !defined(_MIDI_MAPPING_DIALOG_H)
