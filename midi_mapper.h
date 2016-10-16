@@ -70,5 +70,6 @@ private:
 };
 
 bool load_midi_mapping_from_file(const std::string &filename, MIDIMappingProto *new_mapping);
+bool save_midi_mapping_to_file(const MIDIMappingProto &mapping_proto, const std::string &filename);
 
 #endif  // !defined(_MIDI_MAPPER_H)

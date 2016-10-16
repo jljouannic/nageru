@@ -123,6 +123,7 @@ MIDIMappingDialog::MIDIMappingDialog(MIDIMapper *mapper)
 	add_controls("Per-bus buttons", ControlType::BUTTON, mapping_proto, per_bus_buttons);
 	add_controls("Global controllers", ControlType::CONTROLLER, mapping_proto, global_controllers);
 	add_controls("Global buttons", ControlType::BUTTON, mapping_proto, global_buttons);
+	fill_controls_from_mapping(mapping_proto);
 
 	// Auto-resize every column but the last.
 	for (unsigned column_idx = 0; column_idx < num_buses + 3; ++column_idx) {
@@ -131,6 +132,8 @@ MIDIMappingDialog::MIDIMappingDialog(MIDIMapper *mapper)
 
 	connect(ui->ok_cancel_buttons, &QDialogButtonBox::accepted, this, &MIDIMappingDialog::ok_clicked);
 	connect(ui->ok_cancel_buttons, &QDialogButtonBox::rejected, this, &MIDIMappingDialog::cancel_clicked);
+	connect(ui->save_button, &QPushButton::clicked, this, &MIDIMappingDialog::save_clicked);
+	connect(ui->load_button, &QPushButton::clicked, this, &MIDIMappingDialog::load_clicked);
 }
 
 MIDIMappingDialog::~MIDIMappingDialog()
@@ -147,6 +150,36 @@ void MIDIMappingDialog::ok_clicked()
 void MIDIMappingDialog::cancel_clicked()
 {
 	reject();
+}
+
+void MIDIMappingDialog::save_clicked()
+{
+	unique_ptr<MIDIMappingProto> new_mapping = construct_mapping_proto_from_ui();
+	QString filename = QFileDialog::getSaveFileName(this,
+		"Save MIDI mapping", QString(), tr("Mapping files (*.midimapping)"));
+	if (!filename.endsWith(".midimapping")) {
+		filename += ".midimapping";
+	}
+	if (!save_midi_mapping_to_file(*new_mapping, filename.toStdString())) {
+		QMessageBox box;
+		box.setText("Could not save mapping to '" + filename + "'. Check that you have the right permissions and try again.");
+		box.exec();
+	}
+}
+
+void MIDIMappingDialog::load_clicked()
+{
+	QString filename = QFileDialog::getOpenFileName(this,
+		"Load MIDI mapping", QString(), tr("Mapping files (*.midimapping)"));
+	MIDIMappingProto new_mapping;
+	if (!load_midi_mapping_from_file(filename.toStdString(), &new_mapping)) {
+		QMessageBox box;
+		box.setText("Could not load mapping from '" + filename + "'. Check that the file exists, has the right permissions and is valid.");
+		box.exec();
+		return;
+	}
+
+	fill_controls_from_mapping(new_mapping);
 }
 
 namespace {
@@ -213,7 +246,6 @@ void MIDIMappingDialog::add_bank_selector(QTreeWidgetItem *item, const MIDIMappi
 	QComboBox *bank_selector = new QComboBox(this);
 	bank_selector->addItems(QStringList() << "" << "Bank 1" << "Bank 2" << "Bank 3" << "Bank 4" << "Bank 5");
 	bank_selector->setAutoFillBackground(true);
-	bank_selector->setCurrentIndex(get_bank(mapping_proto, bank_field_number, -1) + 1);
 
 	bank_combo_boxes.push_back(InstantiatedComboBox{ bank_selector, bank_field_number });
 
@@ -243,14 +275,25 @@ void MIDIMappingDialog::add_controls(const string &heading,
 			ui->treeWidget->setItemWidget(item, bus_idx + 2, spinner);
 
 			if (control_type == ControlType::CONTROLLER) {
-				spinner->setValue(get_controller_mapping(mapping_proto, bus_idx, control.field_number, 0));
 				controller_spinners.push_back(InstantiatedSpinner{ spinner, bus_idx, control.field_number });
 			} else {
 				assert(control_type == ControlType::BUTTON);
-				spinner->setValue(get_button_mapping(mapping_proto, bus_idx, control.field_number, 0));
 				button_spinners.push_back(InstantiatedSpinner{ spinner, bus_idx, control.field_number });
 			}
 		}
 	}
 	ui->treeWidget->addTopLevelItem(heading_item);
+}
+
+void MIDIMappingDialog::fill_controls_from_mapping(const MIDIMappingProto &mapping_proto)
+{
+	for (const InstantiatedSpinner &is : controller_spinners) {
+		is.spinner->setValue(get_controller_mapping(mapping_proto, is.bus_idx, is.field_number, 0));
+	}
+	for (const InstantiatedSpinner &is : button_spinners) {
+		is.spinner->setValue(get_button_mapping(mapping_proto, is.bus_idx, is.field_number, 0));
+	}
+	for (const InstantiatedComboBox &ic : bank_combo_boxes) {
+		ic.combo_box->setCurrentIndex(get_bank(mapping_proto, ic.field_number, -1) + 1);
+	}
 }

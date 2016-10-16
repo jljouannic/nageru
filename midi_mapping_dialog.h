@@ -37,6 +37,8 @@ public:
 public slots:
 	void ok_clicked();
 	void cancel_clicked();
+	void save_clicked();
+	void load_clicked();
 
 private:
 	static constexpr unsigned num_buses = 8;
@@ -46,6 +48,7 @@ private:
 	enum class ControlType { CONTROLLER, BUTTON };
 	void add_controls(const std::string &heading, ControlType control_type,
 	                  const MIDIMappingProto &mapping_proto, const std::vector<Control> &controls);
+	void fill_controls_from_mapping(const MIDIMappingProto &mapping_proto);
 
 	std::unique_ptr<MIDIMappingProto> construct_mapping_proto_from_ui();
 
@@ -54,7 +57,8 @@ private:
 	MIDIMapper *mapper;
 
 	// All controllers actually laid out on the grid (we need to store them
-	// so that we can read its values back into the new protobuf).
+	// so that we can move values back and forth between the controls and
+	// the protobuf on save/load).
 	struct InstantiatedSpinner {
 		QSpinBox *spinner;
 		unsigned bus_idx;

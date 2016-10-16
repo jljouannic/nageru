@@ -64,6 +64,26 @@ bool load_midi_mapping_from_file(const string &filename, MIDIMappingProto *new_m
 	return true;
 }
 
+bool save_midi_mapping_to_file(const MIDIMappingProto &mapping_proto, const string &filename)
+{
+	// Save to disk. We use the text format because it's friendlier
+	// for a user to look at and edit.
+	int fd = open(filename.c_str(), O_WRONLY | O_TRUNC | O_CREAT, 0666);
+	if (fd == -1) {
+		perror(filename.c_str());
+		return false;
+	}
+	io::FileOutputStream output(fd);  // Takes ownership of fd.
+	if (!TextFormat::Print(mapping_proto, &output)) {
+		// TODO: Don't overwrite the old file (if any) on error.
+		output.Close();
+		return false;
+	}
+
+	output.Close();
+	return true;
+}
+
 void MIDIMapper::set_midi_mapping(const MIDIMappingProto &new_mapping)
 {
 	lock_guard<mutex> lock(mapping_mu);
