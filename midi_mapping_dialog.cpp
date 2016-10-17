@@ -400,22 +400,29 @@ pair<int, int> MIDIMappingDialog::guess_offset(unsigned bus_idx, MIDIMappingDial
 	// See if we can find a consistent offset.
 	bool found_offset = false;
 	int offset = 0;
+	int minimum_allowed_offset = numeric_limits<int>::min();
+	int maximum_allowed_offset = numeric_limits<int>::max();
 	for (const auto &field_number_and_spinner : spinners[bus_idx]) {
 		int field_number = field_number_and_spinner.first;
 		QSpinBox *spinner = field_number_and_spinner.second.spinner;
 		SpinnerGroup this_spinner_group = field_number_and_spinner.second.group;
+		assert(spinners[source_bus_idx].count(field_number));
+		QSpinBox *source_spinner = spinners[source_bus_idx][field_number].spinner;
+		assert(spinners[source_bus_idx][field_number].group == this_spinner_group);
 
-		if (spinner->value() == 0) {
-			continue;
-		}
 		if (spinner_group != SpinnerGroup::ALL_GROUPS &&
 		    spinner_group != this_spinner_group) {
 			continue;
 		}
-
-		assert(spinners[source_bus_idx].count(field_number));
-		QSpinBox *source_spinner = spinners[source_bus_idx][field_number].spinner;
-		assert(spinners[source_bus_idx][field_number].group == this_spinner_group);
+		if (spinner->value() == 0) {
+			if (source_spinner->value() != 0) {
+				// If the source value is e.g. 3, offset can't be less than -2 or larger than 124.
+				// Otherwise, we'd extrapolate values outside [1..127].
+				minimum_allowed_offset = max(minimum_allowed_offset, 1 - source_spinner->value());
+				maximum_allowed_offset = min(maximum_allowed_offset, 127 - source_spinner->value());
+			}
+			continue;
+		}
 		if (source_spinner->value() == 0) {
 			// The bus has a controller set that the source bus doesn't set.
 			return not_found;
@@ -433,6 +440,10 @@ pair<int, int> MIDIMappingDialog::guess_offset(unsigned bus_idx, MIDIMappingDial
 	if (!found_offset) {
 		// Given that the bus wasn't empty, this shouldn't happen.
 		assert(false);
+		return not_found;
+	}
+
+	if (offset < minimum_allowed_offset || offset > maximum_allowed_offset) {
 		return not_found;
 	}
 	return make_pair(source_bus_idx, offset);
