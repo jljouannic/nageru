@@ -323,6 +323,8 @@ void MainWindow::mixer_created(Mixer *mixer)
 	connect(ui->reset_meters_button, &QPushButton::clicked, this, &MainWindow::reset_meters_button_clicked);
 	mixer->get_audio_mixer()->set_audio_level_callback(bind(&MainWindow::audio_level_callback, this, _1, _2, _3, _4, _5, _6, _7, _8));
 
+	midi_mapper.refresh_highlights();
+
 	struct sigaction act;
 	memset(&act, 0, sizeof(act));
 	act.sa_handler = schedule_cut_signal;
@@ -363,6 +365,8 @@ void MainWindow::reset_audio_mapping_ui()
 		ui->audio_views->setCurrentIndex(0);
 	}
 	ui->compact_header->setVisible(!simple);
+
+	midi_mapper.refresh_highlights();
 }
 
 void MainWindow::setup_audio_miniview()
@@ -564,6 +568,7 @@ void MainWindow::input_mapping_triggered()
 		setup_audio_miniview();
 		setup_audio_expanded_view();
 	}
+	midi_mapper.refresh_highlights();
 }
 
 void MainWindow::midi_mapping_triggered()
@@ -908,6 +913,95 @@ void MainWindow::clear_peak(unsigned bus_idx)
 	}
 }
 
+void MainWindow::clear_all_highlights()
+{
+	post_to_main_thread([this]{
+		highlight_locut(false);
+		highlight_limiter_threshold(false);
+		highlight_makeup_gain(false);
+		for (unsigned bus_idx = 0; bus_idx < audio_expanded_views.size(); ++bus_idx) {
+			highlight_treble(bus_idx, false);
+			highlight_mid(bus_idx, false);
+			highlight_bass(bus_idx, false);
+			highlight_gain(bus_idx, false);
+			highlight_compressor_threshold(bus_idx, false);
+			highlight_fader(bus_idx, false);
+			highlight_toggle_locut(bus_idx, false);
+			highlight_toggle_auto_gain_staging(bus_idx, false);
+			highlight_toggle_compressor(bus_idx, false);
+		}
+	});
+}
+
+void MainWindow::highlight_locut(bool highlight)
+{
+	post_to_main_thread([this, highlight]{
+		highlight_control(ui->locut_cutoff_knob, highlight);
+		highlight_control(ui->locut_cutoff_knob_2, highlight);
+	});
+}
+
+void MainWindow::highlight_limiter_threshold(bool highlight)
+{
+	post_to_main_thread([this, highlight]{
+		highlight_control(ui->limiter_threshold_knob, highlight);
+		highlight_control(ui->limiter_threshold_knob_2, highlight);
+	});
+}
+
+void MainWindow::highlight_makeup_gain(bool highlight)
+{
+	post_to_main_thread([this, highlight]{
+		highlight_control(ui->makeup_gain_knob, highlight);
+		highlight_control(ui->makeup_gain_knob_2, highlight);
+	});
+}
+
+void MainWindow::highlight_treble(unsigned bus_idx, bool highlight)
+{
+	highlight_control_if_exists(bus_idx, &Ui::AudioExpandedView::treble_knob, highlight);
+}
+
+void MainWindow::highlight_mid(unsigned bus_idx, bool highlight)
+{
+	highlight_control_if_exists(bus_idx, &Ui::AudioExpandedView::mid_knob, highlight);
+}
+
+void MainWindow::highlight_bass(unsigned bus_idx, bool highlight)
+{
+	highlight_control_if_exists(bus_idx, &Ui::AudioExpandedView::bass_knob, highlight);
+}
+
+void MainWindow::highlight_gain(unsigned bus_idx, bool highlight)
+{
+	highlight_control_if_exists(bus_idx, &Ui::AudioExpandedView::gainstaging_knob, highlight);
+}
+
+void MainWindow::highlight_compressor_threshold(unsigned bus_idx, bool highlight)
+{
+	highlight_control_if_exists(bus_idx, &Ui::AudioExpandedView::compressor_threshold_knob, highlight);
+}
+
+void MainWindow::highlight_fader(unsigned bus_idx, bool highlight)
+{
+	highlight_control_if_exists(bus_idx, &Ui::AudioExpandedView::fader, highlight);
+}
+
+void MainWindow::highlight_toggle_locut(unsigned bus_idx, bool highlight)
+{
+	highlight_control_if_exists(bus_idx, &Ui::AudioExpandedView::locut_enabled, highlight);
+}
+
+void MainWindow::highlight_toggle_auto_gain_staging(unsigned bus_idx, bool highlight)
+{
+	highlight_control_if_exists(bus_idx, &Ui::AudioExpandedView::gainstaging_auto_checkbox, highlight);
+}
+
+void MainWindow::highlight_toggle_compressor(unsigned bus_idx, bool highlight)
+{
+	highlight_control_if_exists(bus_idx, &Ui::AudioExpandedView::compressor_enabled, highlight);
+}
+
 template<class T>
 void MainWindow::set_relative_value(T *control, float value)
 {
@@ -932,6 +1026,33 @@ void MainWindow::click_button_if_exists(unsigned bus_idx, T *(Ui_AudioExpandedVi
 	    bus_idx < audio_expanded_views.size()) {
 		(audio_expanded_views[bus_idx]->*control)->click();
 	}
+}
+
+template<class T>
+void MainWindow::highlight_control(T *control, bool highlight)
+{
+	if (control == nullptr) {
+		return;
+	}
+	if (global_audio_mixer == nullptr ||
+	    global_audio_mixer->get_mapping_mode() != AudioMixer::MappingMode::MULTICHANNEL) {
+		highlight = false;
+	}
+	if (highlight) {
+		control->setStyleSheet("background: rgb(0,255,0,80)");
+	} else {
+		control->setStyleSheet("");
+	}
+}
+
+template<class T>
+void MainWindow::highlight_control_if_exists(unsigned bus_idx, T *(Ui_AudioExpandedView::*control), bool highlight)
+{
+	post_to_main_thread([this, bus_idx, control, highlight]{
+		if (bus_idx < audio_expanded_views.size()) {
+			highlight_control(audio_expanded_views[bus_idx]->*control, highlight);
+		}
+	});
 }
 
 void MainWindow::set_transition_names(vector<string> transition_names)

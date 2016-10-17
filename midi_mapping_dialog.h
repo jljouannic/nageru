@@ -56,6 +56,24 @@ public:
 	void toggle_compressor(unsigned bus_idx) override {}
 	void clear_peak(unsigned bus_idx) override {}
 
+	void clear_all_highlights() override {}
+
+	void highlight_locut(bool highlight) override {}
+	void highlight_limiter_threshold(bool highlight) override {}
+	void highlight_makeup_gain(bool highlight) override {}
+
+	void highlight_treble(unsigned bus_idx, bool highlight) override {}
+	void highlight_mid(unsigned bus_idx, bool highlight) override {}
+	void highlight_bass(unsigned bus_idx, bool highlight) override {}
+	void highlight_gain(unsigned bus_idx, bool highlight) override {}
+	void highlight_compressor_threshold(unsigned bus_idx, bool highlight) override {}
+	void highlight_fader(unsigned bus_idx, bool highlight) override {}
+
+	void highlight_toggle_locut(unsigned bus_idx, bool highlight) override {}
+	void highlight_toggle_auto_gain_staging(unsigned bus_idx, bool highlight) override {}
+	void highlight_toggle_compressor(unsigned bus_idx, bool highlight) override {}
+	void highlight_clear_peak(unsigned bus_idx, bool highlight) override {}
+
 	// Raw events; used for the editor dialog only.
 	void controller_changed(unsigned controller) override;
 	void note_on(unsigned note) override;

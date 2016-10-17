@@ -80,6 +80,24 @@ public slots:
 	void toggle_compressor(unsigned bus_idx) override;
 	void clear_peak(unsigned bus_idx) override;
 
+	void clear_all_highlights() override;
+
+	void highlight_locut(bool highlight) override;
+	void highlight_limiter_threshold(bool highlight) override;
+	void highlight_makeup_gain(bool highlight) override;
+
+	void highlight_treble(unsigned bus_idx, bool highlight) override;
+	void highlight_mid(unsigned bus_idx, bool highlight) override;
+	void highlight_bass(unsigned bus_idx, bool highlight) override;
+	void highlight_gain(unsigned bus_idx, bool highlight) override;
+	void highlight_compressor_threshold(unsigned bus_idx, bool highlight) override;
+	void highlight_fader(unsigned bus_idx, bool highlight) override;
+
+	void highlight_toggle_locut(unsigned bus_idx, bool highlight) override;
+	void highlight_toggle_auto_gain_staging(unsigned bus_idx, bool highlight) override;
+	void highlight_toggle_compressor(unsigned bus_idx, bool highlight) override;
+	void highlight_clear_peak(unsigned bus_idx, bool highlight) override {}  // We don't mark this currently.
+
 	// Raw receivers are not used.
 	void controller_changed(unsigned controller) override {}
 	void note_on(unsigned note) override {}
@@ -110,6 +128,12 @@ private:
 
 	template<class T>
 	void click_button_if_exists(unsigned bus_idx, T *Ui_AudioExpandedView::*control);
+
+	template<class T>
+	void highlight_control(T *control, bool highlight);
+
+	template<class T>
+	void highlight_control_if_exists(unsigned bus_idx, T *(Ui_AudioExpandedView::*control), bool highlight);
 
 	Ui::MainWindow *ui;
 	QLabel *disk_free_label;

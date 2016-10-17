@@ -36,6 +36,7 @@ MIDIMapper::MIDIMapper(ControllerReceiver *receiver)
 {
 	should_quit_fd = eventfd(/*initval=*/0, /*flags=*/0);
 	assert(should_quit_fd != -1);
+	refresh_highlights();
 }
 
 MIDIMapper::~MIDIMapper()
@@ -95,6 +96,9 @@ void MIDIMapper::set_midi_mapping(const MIDIMappingProto &new_mapping)
 
 	num_controller_banks = min(max(mapping_proto->num_controller_banks(), 1), 5);
         current_controller_bank = 0;
+
+	receiver->clear_all_highlights();
+	update_highlights();
 }
 
 void MIDIMapper::start_thread()
@@ -245,40 +249,46 @@ void MIDIMapper::handle_event(snd_seq_t *seq, snd_seq_event_t *event)
 
 		printf("Note: %d\n", note);
 
-		// Bank change commands. TODO: Highlight the bank change in the UI.
 		for (size_t bus_idx = 0; bus_idx < size_t(mapping_proto->bus_mapping_size()); ++bus_idx) {
 			const MIDIMappingBusProto &bus_mapping = mapping_proto->bus_mapping(bus_idx);
 			if (bus_mapping.has_prev_bank() &&
 			    bus_mapping.prev_bank().note_number() == note) {
 				current_controller_bank = (current_controller_bank + num_controller_banks - 1) % num_controller_banks;
+				update_highlights();
 			}
 			if (bus_mapping.has_next_bank() &&
 			    bus_mapping.next_bank().note_number() == note) {
 				current_controller_bank = (current_controller_bank + 1) % num_controller_banks;
+				update_highlights();
 			}
 			if (bus_mapping.has_select_bank_1() &&
 			    bus_mapping.select_bank_1().note_number() == note) {
 				current_controller_bank = 0;
+				update_highlights();
 			}
 			if (bus_mapping.has_select_bank_2() &&
 			    bus_mapping.select_bank_2().note_number() == note &&
 			    num_controller_banks >= 2) {
 				current_controller_bank = 1;
+				update_highlights();
 			}
 			if (bus_mapping.has_select_bank_3() &&
 			    bus_mapping.select_bank_3().note_number() == note &&
 			    num_controller_banks >= 3) {
 				current_controller_bank = 2;
+				update_highlights();
 			}
 			if (bus_mapping.has_select_bank_4() &&
 			    bus_mapping.select_bank_4().note_number() == note &&
 			    num_controller_banks >= 4) {
 				current_controller_bank = 3;
+				update_highlights();
 			}
 			if (bus_mapping.has_select_bank_5() &&
 			    bus_mapping.select_bank_5().note_number() == note &&
 			    num_controller_banks >= 5) {
 				current_controller_bank = 4;
+				update_highlights();
 			}
 		}
 
@@ -372,10 +382,75 @@ void MIDIMapper::match_button(int note, int field_number, int bank_field_number,
 	}
 }
 
+bool MIDIMapper::has_active_controller(unsigned bus_idx, int field_number, int bank_field_number)
+{
+	if (bank_mismatch(bank_field_number)) {
+		return false;
+	}
+
+	const MIDIMappingBusProto &bus_mapping = mapping_proto->bus_mapping(bus_idx);
+	const FieldDescriptor *descriptor = bus_mapping.GetDescriptor()->FindFieldByNumber(field_number);
+	const Reflection *bus_reflection = bus_mapping.GetReflection();
+	return bus_reflection->HasField(bus_mapping, descriptor);
+}
+
 bool MIDIMapper::bank_mismatch(int bank_field_number)
 {
 	const FieldDescriptor *bank_descriptor = mapping_proto->GetDescriptor()->FindFieldByNumber(bank_field_number);
 	const Reflection *reflection = mapping_proto->GetReflection();
 	return (reflection->HasField(*mapping_proto, bank_descriptor) &&
  	        reflection->GetInt32(*mapping_proto, bank_descriptor) != current_controller_bank);
+}
+
+void MIDIMapper::refresh_highlights()
+{
+	receiver->clear_all_highlights();
+	update_highlights();
+}
+
+void MIDIMapper::update_highlights()
+{
+	// Global controllers.
+	bool highlight_locut = false;
+	bool highlight_limiter_threshold = false;
+	bool highlight_makeup_gain = false;
+	for (size_t bus_idx = 0; bus_idx < size_t(mapping_proto->bus_mapping_size()); ++bus_idx) {
+		if (has_active_controller(
+			bus_idx, MIDIMappingBusProto::kLocutFieldNumber, MIDIMappingProto::kLocutBankFieldNumber)) {
+			highlight_locut = true;
+		}
+		if (has_active_controller(
+			bus_idx, MIDIMappingBusProto::kLimiterThresholdFieldNumber, MIDIMappingProto::kLimiterThresholdBankFieldNumber)) {
+			highlight_limiter_threshold = true;
+		}
+		if (has_active_controller(
+			bus_idx, MIDIMappingBusProto::kMakeupGainFieldNumber, MIDIMappingProto::kMakeupGainBankFieldNumber)) {
+			highlight_makeup_gain = true;
+		}
+	}
+	receiver->highlight_locut(highlight_locut);
+	receiver->highlight_limiter_threshold(highlight_limiter_threshold);
+	receiver->highlight_makeup_gain(highlight_makeup_gain);
+
+	// Per-bus controllers.
+	for (size_t bus_idx = 0; bus_idx < size_t(mapping_proto->bus_mapping_size()); ++bus_idx) {
+		receiver->highlight_treble(bus_idx, has_active_controller(
+			bus_idx, MIDIMappingBusProto::kTrebleFieldNumber, MIDIMappingProto::kTrebleBankFieldNumber));
+		receiver->highlight_mid(bus_idx, has_active_controller(
+			bus_idx, MIDIMappingBusProto::kMidFieldNumber, MIDIMappingProto::kMidBankFieldNumber));
+		receiver->highlight_bass(bus_idx, has_active_controller(
+			bus_idx, MIDIMappingBusProto::kBassFieldNumber, MIDIMappingProto::kBassBankFieldNumber));
+		receiver->highlight_gain(bus_idx, has_active_controller(
+			bus_idx, MIDIMappingBusProto::kGainFieldNumber, MIDIMappingProto::kGainBankFieldNumber));
+		receiver->highlight_compressor_threshold(bus_idx, has_active_controller(
+			bus_idx, MIDIMappingBusProto::kCompressorThresholdFieldNumber, MIDIMappingProto::kCompressorThresholdBankFieldNumber));
+		receiver->highlight_fader(bus_idx, has_active_controller(
+			bus_idx, MIDIMappingBusProto::kFaderFieldNumber, MIDIMappingProto::kFaderBankFieldNumber));
+		receiver->highlight_toggle_locut(bus_idx, has_active_controller(
+			bus_idx, MIDIMappingBusProto::kToggleLocutFieldNumber, MIDIMappingProto::kToggleLocutBankFieldNumber));
+		receiver->highlight_toggle_auto_gain_staging(bus_idx, has_active_controller(
+			bus_idx, MIDIMappingBusProto::kToggleAutoGainStagingFieldNumber, MIDIMappingProto::kToggleAutoGainStagingBankFieldNumber));
+		receiver->highlight_toggle_compressor(bus_idx, has_active_controller(
+			bus_idx, MIDIMappingBusProto::kToggleCompressorFieldNumber, MIDIMappingProto::kToggleCompressorBankFieldNumber));
+	}
 }

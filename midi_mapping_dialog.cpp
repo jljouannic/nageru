@@ -147,6 +147,7 @@ MIDIMappingDialog::MIDIMappingDialog(MIDIMapper *mapper)
 MIDIMappingDialog::~MIDIMappingDialog()
 {
 	mapper->set_receiver(old_receiver);
+	mapper->refresh_highlights();
 }
 
 bool MIDIMappingDialog::eventFilter(QObject *obj, QEvent *event)

@@ -40,6 +40,26 @@ public:
 	virtual void toggle_compressor(unsigned bus_idx) = 0;
 	virtual void clear_peak(unsigned bus_idx) = 0;
 
+	// Signals to highlight controls to mark them to the user
+	// as MIDI-controllable (or not).
+	virtual void clear_all_highlights() = 0;
+
+	virtual void highlight_locut(bool highlight) = 0;
+	virtual void highlight_limiter_threshold(bool highlight) = 0;
+	virtual void highlight_makeup_gain(bool highlight) = 0;
+
+	virtual void highlight_treble(unsigned bus_idx, bool highlight) = 0;
+	virtual void highlight_mid(unsigned bus_idx, bool highlight) = 0;
+	virtual void highlight_bass(unsigned bus_idx, bool highlight) = 0;
+	virtual void highlight_gain(unsigned bus_idx, bool highlight) = 0;
+	virtual void highlight_compressor_threshold(unsigned bus_idx, bool highlight) = 0;
+	virtual void highlight_fader(unsigned bus_idx, bool highlight) = 0;
+
+	virtual void highlight_toggle_locut(unsigned bus_idx, bool highlight) = 0;
+	virtual void highlight_toggle_auto_gain_staging(unsigned bus_idx, bool highlight) = 0;
+	virtual void highlight_toggle_compressor(unsigned bus_idx, bool highlight) = 0;
+	virtual void highlight_clear_peak(unsigned bus_idx, bool highlight) = 0;
+
 	// Raw events; used for the editor dialog only.
 	virtual void controller_changed(unsigned controller) = 0;
 	virtual void note_on(unsigned note) = 0;
@@ -56,13 +76,18 @@ public:
 	// Overwrites and returns the previous value.
 	ControllerReceiver *set_receiver(ControllerReceiver *new_receiver);
 
+	void refresh_highlights();
+
 private:
 	void thread_func();
 	void handle_event(snd_seq_t *seq, snd_seq_event_t *event);
 	void subscribe_to_port(snd_seq_t *seq, const snd_seq_addr_t &addr);
 	void match_controller(int controller, int field_number, int bank_field_number, float value, std::function<void(unsigned, float)> func);
 	void match_button(int note, int field_number, int bank_field_number, std::function<void(unsigned)> func);
+	bool has_active_controller(unsigned bus_idx, int field_number, int bank_field_number);  // Also works for buttons.
 	bool bank_mismatch(int bank_field_number);
+
+	void update_highlights();
 
 	std::atomic<bool> should_quit{false};
 	int should_quit_fd;
