@@ -31,11 +31,18 @@
     </widget>
    </item>
    <item>
-    <layout class="QHBoxLayout" name="horizontalLayout_2" stretch="0,1,0,0,1,0">
+    <layout class="QHBoxLayout" name="horizontalLayout_2" stretch="0,0,1,0,0,1,0">
      <item>
-      <widget class="QPushButton" name="guess_button">
+      <widget class="QPushButton" name="guess_bus_button">
        <property name="text">
         <string>Guess &amp;bus</string>
+       </property>
+      </widget>
+     </item>
+     <item>
+      <widget class="QPushButton" name="guess_group_button">
+       <property name="text">
+        <string>Guess &amp;group</string>
        </property>
       </widget>
      </item>

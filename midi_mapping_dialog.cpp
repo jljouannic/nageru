@@ -121,10 +121,10 @@ MIDIMappingDialog::MIDIMappingDialog(MIDIMapper *mapper)
 	ui->treeWidget->setColumnCount(num_buses + 3);
 	ui->treeWidget->setHeaderLabels(labels);
 
-	add_controls("Per-bus controllers", ControlType::CONTROLLER, mapping_proto, per_bus_controllers);
-	add_controls("Per-bus buttons", ControlType::BUTTON, mapping_proto, per_bus_buttons);
-	add_controls("Global controllers", ControlType::CONTROLLER, mapping_proto, global_controllers);
-	add_controls("Global buttons", ControlType::BUTTON, mapping_proto, global_buttons);
+	add_controls("Per-bus controllers", ControlType::CONTROLLER, SpinnerGroup::PER_BUS_CONTROLLERS, mapping_proto, per_bus_controllers);
+	add_controls("Per-bus buttons", ControlType::BUTTON, SpinnerGroup::PER_BUS_BUTTONS, mapping_proto, per_bus_buttons);
+	add_controls("Global controllers", ControlType::CONTROLLER, SpinnerGroup::GLOBAL_CONTROLLERS, mapping_proto, global_controllers);
+	add_controls("Global buttons", ControlType::BUTTON, SpinnerGroup::GLOBAL_BUTTONS, mapping_proto, global_buttons);
 	fill_controls_from_mapping(mapping_proto);
 
 	// Auto-resize every column but the last.
@@ -132,7 +132,10 @@ MIDIMappingDialog::MIDIMappingDialog(MIDIMapper *mapper)
 		ui->treeWidget->resizeColumnToContents(column_idx);
 	}
 
-	connect(ui->guess_button, &QPushButton::clicked, this, &MIDIMappingDialog::guess_clicked);
+	connect(ui->guess_bus_button, &QPushButton::clicked,
+	        bind(&MIDIMappingDialog::guess_clicked, this, false));
+	connect(ui->guess_group_button, &QPushButton::clicked,
+	        bind(&MIDIMappingDialog::guess_clicked, this, true));
 	connect(ui->ok_cancel_buttons, &QDialogButtonBox::accepted, this, &MIDIMappingDialog::ok_clicked);
 	connect(ui->ok_cancel_buttons, &QDialogButtonBox::rejected, this, &MIDIMappingDialog::cancel_clicked);
 	connect(ui->save_button, &QPushButton::clicked, this, &MIDIMappingDialog::save_clicked);
@@ -150,34 +153,40 @@ bool MIDIMappingDialog::eventFilter(QObject *obj, QEvent *event)
 {
 	if (event->type() == QEvent::FocusIn ||
 	    event->type() == QEvent::FocusOut) {
-		// We ignore the guess button itself; it should be allowed
-		// to navigate from a spinner to focus on the button (to click it).
-		if (obj != ui->guess_button) {
+		// We ignore the guess buttons themselves; it should be allowed
+		// to navigate from a spinner to focus on a button (to click it).
+		if (obj != ui->guess_bus_button && obj != ui->guess_group_button) {
 			update_guess_button_state();
 		}
 	}
 	return false;
 }
 
-void MIDIMappingDialog::guess_clicked()
+void MIDIMappingDialog::guess_clicked(bool limit_to_group)
 {
-	int focus_bus_idx = find_focus_bus();
-	if (focus_bus_idx == -1) {
+	FocusInfo focus = find_focus();
+	if (focus.bus_idx == -1) {
 		// The guess button probably took the focus away from us.
-		focus_bus_idx = last_focus_bus_idx;
+		focus = last_focus;
 	}
-	assert(focus_bus_idx != -1);  // The button should have been disabled.
-	pair<int, int> bus_and_offset = guess_offset(focus_bus_idx);
+	assert(focus.bus_idx != -1);  // The button should have been disabled.
+	pair<int, int> bus_and_offset = guess_offset(focus.bus_idx, limit_to_group ? focus.spinner_group : SpinnerGroup::ALL_GROUPS);
 	const int source_bus_idx = bus_and_offset.first;
 	const int offset = bus_and_offset.second;
 	assert(source_bus_idx != -1);  // The button should have been disabled.
 
-	for (const auto &field_number_and_spinner : spinners[focus_bus_idx]) {
+	for (const auto &field_number_and_spinner : spinners[focus.bus_idx]) {
 		int field_number = field_number_and_spinner.first;
-		QSpinBox *spinner = field_number_and_spinner.second;
+		QSpinBox *spinner = field_number_and_spinner.second.spinner;
+		SpinnerGroup this_spinner_group = field_number_and_spinner.second.group;
+
+		if (limit_to_group && this_spinner_group != focus.spinner_group) {
+			continue;
+		}
 
 		assert(spinners[source_bus_idx].count(field_number));
-		QSpinBox *source_spinner = spinners[source_bus_idx][field_number];
+		QSpinBox *source_spinner = spinners[source_bus_idx][field_number].spinner;
+		assert(spinners[source_bus_idx][field_number].group == this_spinner_group);
 
 		if (source_spinner->value() != 0) {
 			spinner->setValue(source_spinner->value() + offset);
@@ -301,6 +310,7 @@ void MIDIMappingDialog::add_bank_selector(QTreeWidgetItem *item, const MIDIMappi
 
 void MIDIMappingDialog::add_controls(const string &heading,
                                      MIDIMappingDialog::ControlType control_type,
+                                     MIDIMappingDialog::SpinnerGroup spinner_group,
                                      const MIDIMappingProto &mapping_proto,
                                      const vector<MIDIMappingDialog::Control> &controls)
 {
@@ -323,12 +333,12 @@ void MIDIMappingDialog::add_controls(const string &heading,
 			ui->treeWidget->setItemWidget(item, bus_idx + 2, spinner);
 
 			if (control_type == ControlType::CONTROLLER) {
-				controller_spinners.push_back(InstantiatedSpinner{ spinner, bus_idx, control.field_number });
+				controller_spinners.push_back(InstantiatedSpinner{ spinner, bus_idx, spinner_group, control.field_number });
 			} else {
 				assert(control_type == ControlType::BUTTON);
-				button_spinners.push_back(InstantiatedSpinner{ spinner, bus_idx, control.field_number });
+				button_spinners.push_back(InstantiatedSpinner{ spinner, bus_idx, spinner_group, control.field_number });
 			}
-			spinners[bus_idx][control.field_number] = spinner;
+			spinners[bus_idx][control.field_number] = SpinnerAndGroup{ spinner, spinner_group };
 			connect(spinner, static_cast<void(QSpinBox::*)(int)>(&QSpinBox::valueChanged),
 				bind(&MIDIMappingDialog::update_guess_button_state, this));
 		}
@@ -369,19 +379,19 @@ void MIDIMappingDialog::note_on(unsigned note)
 	}
 }
 
-pair<int, int> MIDIMappingDialog::guess_offset(unsigned bus_idx)
+pair<int, int> MIDIMappingDialog::guess_offset(unsigned bus_idx, MIDIMappingDialog::SpinnerGroup spinner_group)
 {
 	constexpr pair<int, int> not_found(-1, 0);
 
-	if (bus_is_empty(bus_idx)) {
+	if (bus_is_empty(bus_idx, spinner_group)) {
 		return not_found;
 	}
 
 	// See if we can find a non-empty bus to source from (prefer from the left).
 	unsigned source_bus_idx;
-	if (bus_idx > 0 && !bus_is_empty(bus_idx - 1)) {
+	if (bus_idx > 0 && !bus_is_empty(bus_idx - 1, spinner_group)) {
 		source_bus_idx = bus_idx - 1;
-	} else if (bus_idx < num_buses - 1 && !bus_is_empty(bus_idx + 1)) {
+	} else if (bus_idx < num_buses - 1 && !bus_is_empty(bus_idx + 1, spinner_group)) {
 		source_bus_idx = bus_idx + 1;
 	} else {
 		return not_found;
@@ -392,14 +402,20 @@ pair<int, int> MIDIMappingDialog::guess_offset(unsigned bus_idx)
 	int offset = 0;
 	for (const auto &field_number_and_spinner : spinners[bus_idx]) {
 		int field_number = field_number_and_spinner.first;
-		QSpinBox *spinner = field_number_and_spinner.second;
+		QSpinBox *spinner = field_number_and_spinner.second.spinner;
+		SpinnerGroup this_spinner_group = field_number_and_spinner.second.group;
 
 		if (spinner->value() == 0) {
 			continue;
 		}
+		if (spinner_group != SpinnerGroup::ALL_GROUPS &&
+		    spinner_group != this_spinner_group) {
+			continue;
+		}
 
 		assert(spinners[source_bus_idx].count(field_number));
-		QSpinBox *source_spinner = spinners[source_bus_idx][field_number];
+		QSpinBox *source_spinner = spinners[source_bus_idx][field_number].spinner;
+		assert(spinners[source_bus_idx][field_number].group == this_spinner_group);
 		if (source_spinner->value() == 0) {
 			// The bus has a controller set that the source bus doesn't set.
 			return not_found;
@@ -422,10 +438,15 @@ pair<int, int> MIDIMappingDialog::guess_offset(unsigned bus_idx)
 	return make_pair(source_bus_idx, offset);
 }
 
-bool MIDIMappingDialog::bus_is_empty(unsigned bus_idx)
+bool MIDIMappingDialog::bus_is_empty(unsigned bus_idx, SpinnerGroup spinner_group)
 {
 	for (const auto &field_number_and_spinner : spinners[bus_idx]) {
-		QSpinBox *spinner = field_number_and_spinner.second;
+		QSpinBox *spinner = field_number_and_spinner.second.spinner;
+		SpinnerGroup this_spinner_group = field_number_and_spinner.second.group;
+		if (spinner_group != SpinnerGroup::ALL_GROUPS &&
+		    spinner_group != this_spinner_group) {
+			continue;
+		}
 		if (spinner->value() != 0) {
 			return false;
 		}
@@ -435,26 +456,32 @@ bool MIDIMappingDialog::bus_is_empty(unsigned bus_idx)
 
 void MIDIMappingDialog::update_guess_button_state()
 {
-	int focus_bus_idx = find_focus_bus();
-	if (focus_bus_idx < 0) {
+	FocusInfo focus = find_focus();
+	if (focus.bus_idx < 0) {
 		return;
 	}
-	pair<int, int> bus_and_offset = guess_offset(focus_bus_idx);
-	ui->guess_button->setEnabled(bus_and_offset.first != -1);
-	last_focus_bus_idx = focus_bus_idx;
+	{
+		pair<int, int> bus_and_offset = guess_offset(focus.bus_idx, SpinnerGroup::ALL_GROUPS);
+		ui->guess_bus_button->setEnabled(bus_and_offset.first != -1);
+	}
+	{
+		pair<int, int> bus_and_offset = guess_offset(focus.bus_idx, focus.spinner_group);
+		ui->guess_group_button->setEnabled(bus_and_offset.first != -1);
+	}
+	last_focus = focus;
 }
 
-int MIDIMappingDialog::find_focus_bus()
+MIDIMappingDialog::FocusInfo MIDIMappingDialog::find_focus() const
 {
 	for (const InstantiatedSpinner &is : controller_spinners) {
 		if (is.spinner->hasFocus()) {
-			return is.bus_idx;
+			return FocusInfo{ int(is.bus_idx), is.spinner_group };
 		}
 	}
 	for (const InstantiatedSpinner &is : button_spinners) {
 		if (is.spinner->hasFocus()) {
-			return is.bus_idx;
+			return FocusInfo{ int(is.bus_idx), is.spinner_group };
 		}
 	}
-	return -1;
+	return FocusInfo{ -1, SpinnerGroup::ALL_GROUPS };
 }

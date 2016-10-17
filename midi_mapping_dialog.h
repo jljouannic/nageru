@@ -61,7 +61,7 @@ public:
 	void note_on(unsigned note) override;
 
 public slots:
-	void guess_clicked();
+	void guess_clicked(bool limit_to_group);
 	void ok_clicked();
 	void cancel_clicked();
 	void save_clicked();
@@ -70,29 +70,44 @@ public slots:
 private:
 	static constexpr unsigned num_buses = 8;
 
+	// Each spinner belongs to exactly one group, corresponding to the
+	// subheadings in the UI. This is so that we can extrapolate data
+	// across only single groups if need be.
+	enum class SpinnerGroup {
+		ALL_GROUPS = -1,
+		PER_BUS_CONTROLLERS,
+		PER_BUS_BUTTONS,
+		GLOBAL_CONTROLLERS,
+		GLOBAL_BUTTONS
+	};
+
 	void add_bank_selector(QTreeWidgetItem *item, const MIDIMappingProto &mapping_proto, int bank_field_number);
 	
 	enum class ControlType { CONTROLLER, BUTTON };
 	void add_controls(const std::string &heading, ControlType control_type,
+	                  SpinnerGroup spinner_group,
 	                  const MIDIMappingProto &mapping_proto, const std::vector<Control> &controls);
 	void fill_controls_from_mapping(const MIDIMappingProto &mapping_proto);
 
 	// Tries to find a source bus and an offset to it that would give
 	// a consistent offset for the rest of the mappings in this bus.
-	// Returns -1 for the bus (the first element) if no consistent offset
-	// can be found.
-	std::pair<int, int> guess_offset(unsigned bus_idx);
-	bool bus_is_empty(unsigned bus_idx);
+	// Returns -1 for the bus if no consistent offset can be found.
+	std::pair<int, int> guess_offset(unsigned bus_idx, SpinnerGroup spinner_group);
+	bool bus_is_empty(unsigned bus_idx, SpinnerGroup spinner_group);
 
 	void update_guess_button_state();
-	int find_focus_bus();
+	struct FocusInfo {
+		int bus_idx;  // -1 for none.
+		SpinnerGroup spinner_group;
+	};
+	FocusInfo find_focus() const;
 
 	std::unique_ptr<MIDIMappingProto> construct_mapping_proto_from_ui();
 
 	Ui::MIDIMappingDialog *ui;
 	MIDIMapper *mapper;
 	ControllerReceiver *old_receiver;
-	int last_focus_bus_idx{-1};
+	FocusInfo last_focus{-1, SpinnerGroup::ALL_GROUPS};
 
 	// All controllers actually laid out on the grid (we need to store them
 	// so that we can move values back and forth between the controls and
@@ -100,6 +115,7 @@ private:
 	struct InstantiatedSpinner {
 		QSpinBox *spinner;
 		unsigned bus_idx;
+		SpinnerGroup spinner_group;
 		int field_number;  // In MIDIMappingBusProto.
 	};
 	struct InstantiatedComboBox {
@@ -111,7 +127,11 @@ private:
 	std::vector<InstantiatedComboBox> bank_combo_boxes;
 
 	// Keyed on bus index, then field number.
-	std::map<unsigned, std::map<unsigned, QSpinBox *>> spinners;
+	struct SpinnerAndGroup {
+		QSpinBox *spinner;
+		SpinnerGroup group;
+	};
+	std::map<unsigned, std::map<unsigned, SpinnerAndGroup>> spinners;
 };
 
 #endif  // !defined(_MIDI_MAPPING_DIALOG_H)
