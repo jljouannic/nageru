@@ -49,7 +49,9 @@ vector<MIDIMappingDialog::Control> global_buttons = {
 	{ "Select bank 2",            MIDIMappingBusProto::kSelectBank2FieldNumber, 0 },
 	{ "Select bank 3",            MIDIMappingBusProto::kSelectBank3FieldNumber, 0 },
 	{ "Select bank 4",            MIDIMappingBusProto::kSelectBank4FieldNumber, 0 },
-	{ "Select bank 5",            MIDIMappingBusProto::kSelectBank5FieldNumber, 0 }
+	{ "Select bank 5",            MIDIMappingBusProto::kSelectBank5FieldNumber, 0 },
+	{ "Toggle limiter",           MIDIMappingBusProto::kToggleLimiterFieldNumber, MIDIMappingProto::kToggleLimiterBankFieldNumber },
+	{ "Toggle auto makeup gain",  MIDIMappingBusProto::kToggleAutoMakeupGainFieldNumber, MIDIMappingProto::kToggleAutoMakeupGainBankFieldNumber }
 };
 
 namespace {

@@ -919,6 +919,8 @@ void MainWindow::clear_all_highlights()
 		highlight_locut(false);
 		highlight_limiter_threshold(false);
 		highlight_makeup_gain(false);
+		highlight_toggle_limiter(false);
+		highlight_toggle_auto_makeup_gain(false);
 		for (unsigned bus_idx = 0; bus_idx < audio_expanded_views.size(); ++bus_idx) {
 			highlight_treble(bus_idx, false);
 			highlight_mid(bus_idx, false);
@@ -931,6 +933,20 @@ void MainWindow::clear_all_highlights()
 			highlight_toggle_compressor(bus_idx, false);
 		}
 	});
+}
+
+void MainWindow::toggle_limiter()
+{
+	if (global_audio_mixer->get_mapping_mode() == AudioMixer::MappingMode::MULTICHANNEL) {
+		ui->limiter_enabled->click();
+	}
+}
+
+void MainWindow::toggle_auto_makeup_gain()
+{
+	if (global_audio_mixer->get_mapping_mode() == AudioMixer::MappingMode::MULTICHANNEL) {
+		ui->makeup_gain_auto_checkbox->click();
+	}
 }
 
 void MainWindow::highlight_locut(bool highlight)
@@ -1000,6 +1016,22 @@ void MainWindow::highlight_toggle_auto_gain_staging(unsigned bus_idx, bool highl
 void MainWindow::highlight_toggle_compressor(unsigned bus_idx, bool highlight)
 {
 	highlight_control_if_exists(bus_idx, &Ui::AudioExpandedView::compressor_enabled, highlight);
+}
+
+void MainWindow::highlight_toggle_limiter(bool highlight)
+{
+	post_to_main_thread([this, highlight]{
+		highlight_control(ui->limiter_enabled, highlight);
+		highlight_control(ui->limiter_enabled_2, highlight);
+	});
+}
+
+void MainWindow::highlight_toggle_auto_makeup_gain(bool highlight)
+{
+	post_to_main_thread([this, highlight]{
+		highlight_control(ui->makeup_gain_auto_checkbox, highlight);
+		highlight_control(ui->makeup_gain_auto_checkbox_2, highlight);
+	});
 }
 
 template<class T>

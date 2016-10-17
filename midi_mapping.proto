@@ -45,15 +45,17 @@ message MIDIMappingBusProto {
 	optional MIDIButtonProto select_bank_3 = 16;
 	optional MIDIButtonProto select_bank_4 = 17;
 	optional MIDIButtonProto select_bank_5 = 18;
+	optional MIDIButtonProto toggle_limiter = 19;
+	optional MIDIButtonProto toggle_auto_makeup_gain = 20;
 
 	// These are also global (they belong to the master bus), and unlike
 	// the bank change commands, one would usually have only one of each,
 	// but there's no reason to limit them to one each, and the editor UI
 	// becomes simpler if they are the treated the same way as the bank
 	// commands.
-	optional MIDIControllerProto locut = 19;
-	optional MIDIControllerProto limiter_threshold = 20;
-	optional MIDIControllerProto makeup_gain = 21;
+	optional MIDIControllerProto locut = 21;
+	optional MIDIControllerProto limiter_threshold = 22;
+	optional MIDIControllerProto makeup_gain = 23;
 }
 
 // The top-level protobuf, containing all the bus mappings, as well as
@@ -87,5 +89,9 @@ message MIDIMappingProto {
 	optional int32 limiter_threshold_bank = 13;
 	optional int32 makeup_gain_bank = 14;
 
-	repeated MIDIMappingBusProto bus_mapping = 15;
+	// Global buttons.
+	optional int32 toggle_limiter_bank = 15;
+	optional int32 toggle_auto_makeup_gain_bank = 16;
+
+	repeated MIDIMappingBusProto bus_mapping = 17;
 }

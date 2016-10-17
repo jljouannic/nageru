@@ -300,6 +300,10 @@ void MIDIMapper::handle_event(snd_seq_t *seq, snd_seq_event_t *event)
 			bind(&ControllerReceiver::toggle_compressor, receiver, _1));
 		match_button(note, MIDIMappingBusProto::kClearPeakFieldNumber, MIDIMappingProto::kClearPeakBankFieldNumber,
 			bind(&ControllerReceiver::clear_peak, receiver, _1));
+		match_button(note, MIDIMappingBusProto::kToggleLimiterFieldNumber, MIDIMappingProto::kToggleLimiterBankFieldNumber,
+			bind(&ControllerReceiver::toggle_limiter, receiver));
+		match_button(note, MIDIMappingBusProto::kToggleAutoMakeupGainFieldNumber, MIDIMappingProto::kToggleAutoMakeupGainBankFieldNumber,
+			bind(&ControllerReceiver::toggle_auto_makeup_gain, receiver));
 	}
 	case SND_SEQ_EVENT_PORT_START:
 		subscribe_to_port(seq, event->data.addr);
@@ -414,6 +418,8 @@ void MIDIMapper::update_highlights()
 	bool highlight_locut = false;
 	bool highlight_limiter_threshold = false;
 	bool highlight_makeup_gain = false;
+	bool highlight_toggle_limiter = false;
+	bool highlight_toggle_auto_makeup_gain = false;
 	for (size_t bus_idx = 0; bus_idx < size_t(mapping_proto->bus_mapping_size()); ++bus_idx) {
 		if (has_active_controller(
 			bus_idx, MIDIMappingBusProto::kLocutFieldNumber, MIDIMappingProto::kLocutBankFieldNumber)) {
@@ -427,10 +433,20 @@ void MIDIMapper::update_highlights()
 			bus_idx, MIDIMappingBusProto::kMakeupGainFieldNumber, MIDIMappingProto::kMakeupGainBankFieldNumber)) {
 			highlight_makeup_gain = true;
 		}
+		if (has_active_controller(
+			bus_idx, MIDIMappingBusProto::kToggleLimiterFieldNumber, MIDIMappingProto::kToggleLimiterBankFieldNumber)) {
+			highlight_toggle_limiter = true;
+		}
+		if (has_active_controller(
+			bus_idx, MIDIMappingBusProto::kToggleAutoMakeupGainFieldNumber, MIDIMappingProto::kToggleAutoMakeupGainBankFieldNumber)) {
+			highlight_toggle_auto_makeup_gain = true;
+		}
 	}
 	receiver->highlight_locut(highlight_locut);
 	receiver->highlight_limiter_threshold(highlight_limiter_threshold);
 	receiver->highlight_makeup_gain(highlight_makeup_gain);
+	receiver->highlight_toggle_limiter(highlight_toggle_limiter);
+	receiver->highlight_toggle_auto_makeup_gain(highlight_toggle_auto_makeup_gain);
 
 	// Per-bus controllers.
 	for (size_t bus_idx = 0; bus_idx < size_t(mapping_proto->bus_mapping_size()); ++bus_idx) {

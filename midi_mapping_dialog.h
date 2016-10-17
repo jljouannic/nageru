@@ -55,6 +55,8 @@ public:
 	void toggle_auto_gain_staging(unsigned bus_idx) override {}
 	void toggle_compressor(unsigned bus_idx) override {}
 	void clear_peak(unsigned bus_idx) override {}
+	void toggle_limiter() override {}
+	void toggle_auto_makeup_gain() override {}
 
 	void clear_all_highlights() override {}
 
@@ -73,6 +75,8 @@ public:
 	void highlight_toggle_auto_gain_staging(unsigned bus_idx, bool highlight) override {}
 	void highlight_toggle_compressor(unsigned bus_idx, bool highlight) override {}
 	void highlight_clear_peak(unsigned bus_idx, bool highlight) override {}
+	void highlight_toggle_limiter(bool highlight) override {}
+	void highlight_toggle_auto_makeup_gain(bool highlight) override {}
 
 	// Raw events; used for the editor dialog only.
 	void controller_changed(unsigned controller) override;

@@ -39,6 +39,8 @@ public:
 	virtual void toggle_auto_gain_staging(unsigned bus_idx) = 0;
 	virtual void toggle_compressor(unsigned bus_idx) = 0;
 	virtual void clear_peak(unsigned bus_idx) = 0;
+	virtual void toggle_limiter() = 0;
+	virtual void toggle_auto_makeup_gain() = 0;
 
 	// Signals to highlight controls to mark them to the user
 	// as MIDI-controllable (or not).
@@ -59,6 +61,8 @@ public:
 	virtual void highlight_toggle_auto_gain_staging(unsigned bus_idx, bool highlight) = 0;
 	virtual void highlight_toggle_compressor(unsigned bus_idx, bool highlight) = 0;
 	virtual void highlight_clear_peak(unsigned bus_idx, bool highlight) = 0;
+	virtual void highlight_toggle_limiter(bool highlight) = 0;
+	virtual void highlight_toggle_auto_makeup_gain(bool highlight) = 0;
 
 	// Raw events; used for the editor dialog only.
 	virtual void controller_changed(unsigned controller) = 0;
