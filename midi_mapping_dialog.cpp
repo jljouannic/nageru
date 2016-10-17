@@ -192,6 +192,19 @@ void MIDIMappingDialog::guess_clicked(bool limit_to_group)
 			spinner->setValue(source_spinner->value() + offset);
 		}
 	}
+
+	// See if we can find a “next” bus to move the focus to.
+	const int next_bus_idx = focus.bus_idx + (focus.bus_idx - source_bus_idx);  // Note: Could become e.g. -1.
+	for (const InstantiatedSpinner &is : controller_spinners) {
+		if (int(is.bus_idx) == next_bus_idx && is.field_number == focus.field_number) {
+			is.spinner->setFocus();
+		}
+	}
+	for (const InstantiatedSpinner &is : button_spinners) {
+		if (int(is.bus_idx) == next_bus_idx && is.field_number == focus.field_number) {
+			is.spinner->setFocus();
+		}
+	}
 }
 
 void MIDIMappingDialog::ok_clicked()
@@ -486,13 +499,18 @@ MIDIMappingDialog::FocusInfo MIDIMappingDialog::find_focus() const
 {
 	for (const InstantiatedSpinner &is : controller_spinners) {
 		if (is.spinner->hasFocus()) {
-			return FocusInfo{ int(is.bus_idx), is.spinner_group };
+			return FocusInfo{ int(is.bus_idx), is.spinner_group, is.field_number };
 		}
 	}
 	for (const InstantiatedSpinner &is : button_spinners) {
 		if (is.spinner->hasFocus()) {
-			return FocusInfo{ int(is.bus_idx), is.spinner_group };
+			return FocusInfo{ int(is.bus_idx), is.spinner_group, is.field_number };
 		}
 	}
-	return FocusInfo{ -1, SpinnerGroup::ALL_GROUPS };
+	for (const InstantiatedSpinner &is : light_spinners) {
+		if (is.spinner->hasFocus()) {
+			return FocusInfo{ int(is.bus_idx), is.spinner_group, is.field_number };
+		}
+	}
+	return FocusInfo{ -1, SpinnerGroup::ALL_GROUPS, -1 };
 }

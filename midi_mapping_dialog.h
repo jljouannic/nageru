@@ -99,6 +99,7 @@ private:
 	struct FocusInfo {
 		int bus_idx;  // -1 for none.
 		SpinnerGroup spinner_group;
+		int field_number;
 	};
 	FocusInfo find_focus() const;
 
@@ -107,7 +108,7 @@ private:
 	Ui::MIDIMappingDialog *ui;
 	MIDIMapper *mapper;
 	ControllerReceiver *old_receiver;
-	FocusInfo last_focus{-1, SpinnerGroup::ALL_GROUPS};
+	FocusInfo last_focus{-1, SpinnerGroup::ALL_GROUPS, -1};
 
 	// All controllers actually laid out on the grid (we need to store them
 	// so that we can move values back and forth between the controls and
