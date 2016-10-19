@@ -72,14 +72,10 @@ with:
     libavcodec-dev libavformat-dev libswscale-dev libavresample-dev \
     libmovit-dev libegl1-mesa-dev libasound2-dev libx264-dev libbmusb-dev
 
-Exceptions as of July 2016:
+Exceptions as of October 2016:
 
   - libusb 1.0.21-rc1 is not yet in stretch or sid; you need to fetch it
     from experimental.
-
-  - libbmusb-dev is still in unstable only, not testing. You can get a recent
-    copy using “git submodule update --init” and building with
-    “make EMBEDDED_BMUSB=yes”.
 
 
 The patches/ directory contains a patch that helps zita-resampler performance.
