@@ -10,10 +10,14 @@
 
 #include <atomic>
 #include <functional>
+#include <map>
 #include <memory>
 #include <mutex>
+#include <set>
 #include <string>
 #include <thread>
+
+#include "defs.h"
 
 class MIDIMappingProto;
 typedef struct snd_seq_addr snd_seq_addr_t;
@@ -81,11 +85,17 @@ public:
 	ControllerReceiver *set_receiver(ControllerReceiver *new_receiver);
 
 	void refresh_highlights();
+	void refresh_lights();
+
+	void set_has_peaked(unsigned bus_idx, bool has_peaked)
+	{
+		this->has_peaked[bus_idx] = has_peaked;
+	}
 
 private:
 	void thread_func();
 	void handle_event(snd_seq_t *seq, snd_seq_event_t *event);
-	void subscribe_to_port(snd_seq_t *seq, const snd_seq_addr_t &addr);
+	void subscribe_to_port_lock_held(snd_seq_t *seq, const snd_seq_addr_t &addr);
 	void match_controller(int controller, int field_number, int bank_field_number, float value, std::function<void(unsigned, float)> func);
 	void match_button(int note, int field_number, int bank_field_number, std::function<void(unsigned)> func);
 	bool has_active_controller(unsigned bus_idx, int field_number, int bank_field_number);  // Also works for buttons.
@@ -93,16 +103,25 @@ private:
 
 	void update_highlights();
 
+	void update_lights_lock_held();
+	void activate_lights(unsigned bus_idx, int field_number, std::set<unsigned> *active_lights);
+	void activate_lights_all_buses(int field_number, std::set<unsigned> *active_lights);
+
 	std::atomic<bool> should_quit{false};
 	int should_quit_fd;
 
-	mutable std::mutex mapping_mu;
-	ControllerReceiver *receiver;  // Under <mapping_mu>.
-	std::unique_ptr<MIDIMappingProto> mapping_proto;  // Under <mapping_mu>.
-	int num_controller_banks;  // Under <mapping_mu>.
+	std::atomic<bool> has_peaked[MAX_BUSES] {{ false }};
+
+	mutable std::mutex mu;
+	ControllerReceiver *receiver;  // Under <mu>.
+	std::unique_ptr<MIDIMappingProto> mapping_proto;  // Under <mu>.
+	int num_controller_banks;  // Under <mu>.
 	std::atomic<int> current_controller_bank{0};
 
 	std::thread midi_thread;
+	std::map<unsigned, bool> current_light_status;  // Keyed by note number. Under <mu>.
+	snd_seq_t *alsa_seq{nullptr};  // Under <mu>.
+	int alsa_queue_id{-1};  // Under <mu>.
 };
 
 bool load_midi_mapping_from_file(const std::string &filename, MIDIMappingProto *new_mapping);

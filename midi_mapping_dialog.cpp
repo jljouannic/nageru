@@ -35,6 +35,12 @@ vector<MIDIMappingDialog::Control> per_bus_buttons = {
 	{ "Clear peak",               MIDIMappingBusProto::kClearPeakFieldNumber,
 	                              MIDIMappingProto::kClearPeakBankFieldNumber }
 };
+vector<MIDIMappingDialog::Control> per_bus_lights = {
+	{ "Locut is on",              MIDIMappingBusProto::kLocutIsOnFieldNumber, 0 },
+	{ "Auto gain staging is on",  MIDIMappingBusProto::kAutoGainStagingIsOnFieldNumber, 0 },
+	{ "Compressor is on",         MIDIMappingBusProto::kCompressorIsOnFieldNumber, 0 },
+	{ "Bus has peaked",           MIDIMappingBusProto::kHasPeakedFieldNumber, 0 }
+};
 vector<MIDIMappingDialog::Control> global_controllers = {
 	{ "Locut cutoff",             MIDIMappingBusProto::kLocutFieldNumber,  MIDIMappingProto::kLocutBankFieldNumber },
 	{ "Limiter threshold",        MIDIMappingBusProto::kLimiterThresholdFieldNumber,
@@ -52,6 +58,15 @@ vector<MIDIMappingDialog::Control> global_buttons = {
 	{ "Select bank 5",            MIDIMappingBusProto::kSelectBank5FieldNumber, 0 },
 	{ "Toggle limiter",           MIDIMappingBusProto::kToggleLimiterFieldNumber, MIDIMappingProto::kToggleLimiterBankFieldNumber },
 	{ "Toggle auto makeup gain",  MIDIMappingBusProto::kToggleAutoMakeupGainFieldNumber, MIDIMappingProto::kToggleAutoMakeupGainBankFieldNumber }
+};
+vector<MIDIMappingDialog::Control> global_lights = {
+	{ "Bank 1 is selected",       MIDIMappingBusProto::kBank1IsSelectedFieldNumber, 0 },
+	{ "Bank 2 is selected",       MIDIMappingBusProto::kBank2IsSelectedFieldNumber, 0 },
+	{ "Bank 3 is selected",       MIDIMappingBusProto::kBank3IsSelectedFieldNumber, 0 },
+	{ "Bank 4 is selected",       MIDIMappingBusProto::kBank4IsSelectedFieldNumber, 0 },
+	{ "Bank 5 is selected",       MIDIMappingBusProto::kBank5IsSelectedFieldNumber, 0 },
+	{ "Limiter is on",            MIDIMappingBusProto::kLimiterIsOnFieldNumber, 0 },
+	{ "Auto makeup gain is on",   MIDIMappingBusProto::kAutoMakeupGainIsOnFieldNumber, 0 },
 };
 
 namespace {
@@ -78,7 +93,7 @@ int get_controller_mapping(const MIDIMappingProto &mapping_proto, size_t bus_idx
 	if (!bus_reflection->HasField(bus_mapping, descriptor)) {
 		return default_value;
 	}
-	const MIDIControllerProto &controller_proto = 
+	const MIDIControllerProto &controller_proto =
 		static_cast<const MIDIControllerProto &>(bus_reflection->GetMessage(bus_mapping, descriptor));
 	return controller_proto.controller_number();
 }
@@ -95,8 +110,25 @@ int get_button_mapping(const MIDIMappingProto &mapping_proto, size_t bus_idx, in
 	if (!bus_reflection->HasField(bus_mapping, descriptor)) {
 		return default_value;
 	}
-	const MIDIButtonProto &bus_proto = 
+	const MIDIButtonProto &bus_proto =
 		static_cast<const MIDIButtonProto &>(bus_reflection->GetMessage(bus_mapping, descriptor));
+	return bus_proto.note_number();
+}
+
+int get_light_mapping(const MIDIMappingProto &mapping_proto, size_t bus_idx, int field_number, int default_value)
+{
+	if (bus_idx >= size_t(mapping_proto.bus_mapping_size())) {
+		return default_value;
+	}
+
+	const MIDIMappingBusProto &bus_mapping = mapping_proto.bus_mapping(bus_idx);
+	const FieldDescriptor *descriptor = bus_mapping.GetDescriptor()->FindFieldByNumber(field_number);
+	const Reflection *bus_reflection = bus_mapping.GetReflection();
+	if (!bus_reflection->HasField(bus_mapping, descriptor)) {
+		return default_value;
+	}
+	const MIDILightProto &bus_proto =
+		static_cast<const MIDILightProto &>(bus_reflection->GetMessage(bus_mapping, descriptor));
 	return bus_proto.note_number();
 }
 
@@ -125,8 +157,10 @@ MIDIMappingDialog::MIDIMappingDialog(MIDIMapper *mapper)
 
 	add_controls("Per-bus controllers", ControlType::CONTROLLER, SpinnerGroup::PER_BUS_CONTROLLERS, mapping_proto, per_bus_controllers);
 	add_controls("Per-bus buttons", ControlType::BUTTON, SpinnerGroup::PER_BUS_BUTTONS, mapping_proto, per_bus_buttons);
+	add_controls("Per-bus lights", ControlType::LIGHT, SpinnerGroup::PER_BUS_LIGHTS, mapping_proto, per_bus_lights);
 	add_controls("Global controllers", ControlType::CONTROLLER, SpinnerGroup::GLOBAL_CONTROLLERS, mapping_proto, global_controllers);
 	add_controls("Global buttons", ControlType::BUTTON, SpinnerGroup::GLOBAL_BUTTONS, mapping_proto, global_buttons);
+	add_controls("Global lights", ControlType::LIGHT, SpinnerGroup::GLOBAL_LIGHTS, mapping_proto, global_lights);
 	fill_controls_from_mapping(mapping_proto);
 
 	// Auto-resize every column but the last.
@@ -204,6 +238,11 @@ void MIDIMappingDialog::guess_clicked(bool limit_to_group)
 		}
 	}
 	for (const InstantiatedSpinner &is : button_spinners) {
+		if (int(is.bus_idx) == next_bus_idx && is.field_number == focus.field_number) {
+			is.spinner->setFocus();
+		}
+	}
+	for (const InstantiatedSpinner &is : light_spinners) {
 		if (int(is.bus_idx) == next_bus_idx && is.field_number == focus.field_number) {
 			is.spinner->setFocus();
 		}
@@ -294,6 +333,16 @@ unique_ptr<MIDIMappingProto> MIDIMappingDialog::construct_mapping_proto_from_ui(
 			get_mutable_bus_message<MIDIButtonProto>(mapping_proto.get(), is.bus_idx, is.field_number);
 		button_proto->set_note_number(val);
 	}
+	for (const InstantiatedSpinner &is : light_spinners) {
+		const int val = is.spinner->value();
+		if (val == 0) {
+			continue;
+		}
+
+		MIDILightProto *light_proto =
+			get_mutable_bus_message<MIDILightProto>(mapping_proto.get(), is.bus_idx, is.field_number);
+		light_proto->set_note_number(val);
+	}
 	int highest_bank_used = 0;  // 1-indexed.
 	for (const InstantiatedComboBox &ic : bank_combo_boxes) {
 		const int val = ic.combo_box->currentIndex();
@@ -350,9 +399,11 @@ void MIDIMappingDialog::add_controls(const string &heading,
 
 			if (control_type == ControlType::CONTROLLER) {
 				controller_spinners.push_back(InstantiatedSpinner{ spinner, bus_idx, spinner_group, control.field_number });
-			} else {
-				assert(control_type == ControlType::BUTTON);
+			} else if (control_type == ControlType::BUTTON) {
 				button_spinners.push_back(InstantiatedSpinner{ spinner, bus_idx, spinner_group, control.field_number });
+			} else {
+				assert(control_type == ControlType::LIGHT);
+				light_spinners.push_back(InstantiatedSpinner{ spinner, bus_idx, spinner_group, control.field_number });
 			}
 			spinners[bus_idx][control.field_number] = SpinnerAndGroup{ spinner, spinner_group };
 			connect(spinner, static_cast<void(QSpinBox::*)(int)>(&QSpinBox::valueChanged),
@@ -369,6 +420,9 @@ void MIDIMappingDialog::fill_controls_from_mapping(const MIDIMappingProto &mappi
 	}
 	for (const InstantiatedSpinner &is : button_spinners) {
 		is.spinner->setValue(get_button_mapping(mapping_proto, is.bus_idx, is.field_number, 0));
+	}
+	for (const InstantiatedSpinner &is : light_spinners) {
+		is.spinner->setValue(get_light_mapping(mapping_proto, is.bus_idx, is.field_number, 0));
 	}
 	for (const InstantiatedComboBox &ic : bank_combo_boxes) {
 		ic.combo_box->setCurrentIndex(get_bank(mapping_proto, ic.field_number, -1) + 1);
@@ -388,6 +442,12 @@ void MIDIMappingDialog::controller_changed(unsigned controller)
 void MIDIMappingDialog::note_on(unsigned note)
 {
 	for (const InstantiatedSpinner &is : button_spinners) {
+		if (is.spinner->hasFocus()) {
+			is.spinner->setValue(note);
+			is.spinner->selectAll();
+		}
+	}
+	for (const InstantiatedSpinner &is : light_spinners) {
 		if (is.spinner->hasFocus()) {
 			is.spinner->setValue(note);
 			is.spinner->selectAll();

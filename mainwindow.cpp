@@ -46,6 +46,10 @@ Q_DECLARE_METATYPE(std::vector<std::string>);
 
 MainWindow *global_mainwindow = nullptr;
 
+// -0.1 dBFS is EBU peak limit. We use it consistently, even for the bus meters
+// (which don't calculate interpolate peak, and in general don't follow EBU recommendations).
+constexpr float peak_limit_dbfs = -0.1f;
+
 namespace {
 
 void schedule_cut_signal(int ignored)
@@ -134,9 +138,7 @@ void set_peak_label(QLabel *peak_label, float peak_db)
 {
 	peak_label->setText(QString::fromStdString(format_db(peak_db, DB_BARE)));
 
-	// -0.1 dBFS is EBU peak limit. We use it consistently, even for the bus meters
-	// (which don't calculate interpolate peak, and in general don't follow EBU recommendations).
-	if (peak_db > -0.1f) {
+	if (peak_db > peak_limit_dbfs) {
 		peak_label->setStyleSheet("QLabel { background-color: red; color: white; }");
 	} else {
 		peak_label->setStyleSheet("");
@@ -290,16 +292,19 @@ void MainWindow::mixer_created(Mixer *mixer)
 	}
 	connect(ui->locut_enabled, &QCheckBox::stateChanged, [this](int state){
 		global_audio_mixer->set_locut_enabled(simple_bus_index, state == Qt::Checked);
+		midi_mapper.refresh_lights();
 	});
 	connect(ui->gainstaging_knob, &QAbstractSlider::valueChanged,
 		bind(&MainWindow::gain_staging_knob_changed, this, simple_bus_index, _1));
 	connect(ui->gainstaging_auto_checkbox, &QCheckBox::stateChanged, [this, simple_bus_index](int state){
 		global_audio_mixer->set_gain_staging_auto(simple_bus_index, state == Qt::Checked);
+		midi_mapper.refresh_lights();
 	});
 	connect(ui->compressor_threshold_knob, &QDial::valueChanged,
 		bind(&MainWindow::compressor_threshold_knob_changed, this, simple_bus_index, _1));
 	connect(ui->compressor_enabled, &QCheckBox::stateChanged, [this, simple_bus_index](int state){
 		global_audio_mixer->set_compressor_enabled(simple_bus_index, state == Qt::Checked);
+		midi_mapper.refresh_lights();
 	});
 
 	// Global mastering controls.
@@ -314,16 +319,19 @@ void MainWindow::mixer_created(Mixer *mixer)
 	connect(ui->makeup_gain_knob, &QAbstractSlider::valueChanged, this, &MainWindow::final_makeup_gain_knob_changed);
 	connect(ui->makeup_gain_auto_checkbox, &QCheckBox::stateChanged, [this](int state){
 		global_audio_mixer->set_final_makeup_gain_auto(state == Qt::Checked);
+		midi_mapper.refresh_lights();
 	});
 
 	connect(ui->limiter_threshold_knob, &QDial::valueChanged, this, &MainWindow::limiter_threshold_knob_changed);
 	connect(ui->limiter_enabled, &QCheckBox::stateChanged, [this](int state){
 		global_audio_mixer->set_limiter_enabled(state == Qt::Checked);
+		midi_mapper.refresh_lights();
 	});
 	connect(ui->reset_meters_button, &QPushButton::clicked, this, &MainWindow::reset_meters_button_clicked);
 	mixer->get_audio_mixer()->set_audio_level_callback(bind(&MainWindow::audio_level_callback, this, _1, _2, _3, _4, _5, _6, _7, _8));
 
 	midi_mapper.refresh_highlights();
+	midi_mapper.refresh_lights();
 
 	struct sigaction act;
 	memset(&act, 0, sizeof(act));
@@ -367,6 +375,7 @@ void MainWindow::reset_audio_mapping_ui()
 	ui->compact_header->setVisible(!simple);
 
 	midi_mapper.refresh_highlights();
+	midi_mapper.refresh_lights();
 }
 
 void MainWindow::setup_audio_miniview()
@@ -444,6 +453,7 @@ void MainWindow::setup_audio_expanded_view()
 		ui_audio_expanded_view->locut_enabled->setChecked(global_audio_mixer->get_locut_enabled(bus_index));
 		connect(ui_audio_expanded_view->locut_enabled, &QCheckBox::stateChanged, [this, bus_index](int state){
 			global_audio_mixer->set_locut_enabled(bus_index, state == Qt::Checked);
+			midi_mapper.refresh_lights();
 		});
 
 		connect(ui_audio_expanded_view->treble_knob, &QDial::valueChanged,
@@ -460,11 +470,13 @@ void MainWindow::setup_audio_expanded_view()
 		connect(ui_audio_expanded_view->gainstaging_knob, &QAbstractSlider::valueChanged, bind(&MainWindow::gain_staging_knob_changed, this, bus_index, _1));
 		connect(ui_audio_expanded_view->gainstaging_auto_checkbox, &QCheckBox::stateChanged, [this, bus_index](int state){
 			global_audio_mixer->set_gain_staging_auto(bus_index, state == Qt::Checked);
+			midi_mapper.refresh_lights();
 		});
 
 		connect(ui_audio_expanded_view->compressor_threshold_knob, &QDial::valueChanged, bind(&MainWindow::compressor_threshold_knob_changed, this, bus_index, _1));
 		connect(ui_audio_expanded_view->compressor_enabled, &QCheckBox::stateChanged, [this, bus_index](int state){
 			global_audio_mixer->set_compressor_enabled(bus_index, state == Qt::Checked);
+			midi_mapper.refresh_lights();
 		});
 
 		slave_fader(audio_miniviews[bus_index]->fader, ui_audio_expanded_view->fader);
@@ -476,8 +488,9 @@ void MainWindow::setup_audio_expanded_view()
 		peak_meter->set_ref_level(0.0f);
 
 		connect(ui_audio_expanded_view->peak_display_label, &ClickableLabel::clicked,
-		        [bus_index]() {
+		        [this, bus_index]() {
 				global_audio_mixer->reset_peak(bus_index);
+				midi_mapper.refresh_lights();
 			});
 
 		// Set up the compression attenuation meter.
@@ -569,6 +582,7 @@ void MainWindow::input_mapping_triggered()
 		setup_audio_expanded_view();
 	}
 	midi_mapper.refresh_highlights();
+	midi_mapper.refresh_lights();
 }
 
 void MainWindow::midi_mapping_triggered()
@@ -768,6 +782,8 @@ void MainWindow::audio_level_callback(float level_lufs, float peak_db, vector<Au
 					QString("Gain: ") +
 					QString::fromStdString(format_db(level.gain_staging_db, DB_WITH_SIGN)));
 				set_peak_label(view->peak_display_label, level.historic_peak_dbfs);
+
+				midi_mapper.set_has_peaked(bus_index, level.historic_peak_dbfs >= -0.1f);
 			}
 		}
 		ui->lra_meter->set_levels(global_level_lufs, range_low_lufs, range_high_lufs);
@@ -790,6 +806,9 @@ void MainWindow::audio_level_callback(float level_lufs, float peak_db, vector<Au
 			QString::fromStdString(format_db(final_makeup_gain_db, DB_WITH_SIGN)));
 		ui->makeup_gain_db_display_2->setText(
 			QString::fromStdString(format_db(final_makeup_gain_db, DB_WITH_SIGN)));
+
+		// Peak labels could have changed.
+		midi_mapper.refresh_lights();
 	});
 }
 
@@ -908,9 +927,13 @@ void MainWindow::toggle_compressor(unsigned bus_idx)
 
 void MainWindow::clear_peak(unsigned bus_idx)
 {
-	if (global_audio_mixer->get_mapping_mode() == AudioMixer::MappingMode::MULTICHANNEL) {
-		global_audio_mixer->reset_peak(bus_idx);
-	}
+	post_to_main_thread([=]{
+		if (global_audio_mixer->get_mapping_mode() == AudioMixer::MappingMode::MULTICHANNEL) {
+			global_audio_mixer->reset_peak(bus_idx);
+			midi_mapper.set_has_peaked(bus_idx, false);
+			midi_mapper.refresh_lights();
+		}
+	});
 }
 
 void MainWindow::clear_all_highlights()
@@ -1045,7 +1068,8 @@ void MainWindow::set_relative_value(T *control, float value)
 template<class T>
 void MainWindow::set_relative_value_if_exists(unsigned bus_idx, T *(Ui_AudioExpandedView::*control), float value)
 {
-	if (global_audio_mixer->get_mapping_mode() == AudioMixer::MappingMode::MULTICHANNEL &&
+	if (global_audio_mixer != nullptr &&
+	    global_audio_mixer->get_mapping_mode() == AudioMixer::MappingMode::MULTICHANNEL &&
 	    bus_idx < audio_expanded_views.size()) {
 		set_relative_value(audio_expanded_views[bus_idx]->*control, value);
 	}
@@ -1054,10 +1078,13 @@ void MainWindow::set_relative_value_if_exists(unsigned bus_idx, T *(Ui_AudioExpa
 template<class T>
 void MainWindow::click_button_if_exists(unsigned bus_idx, T *(Ui_AudioExpandedView::*control))
 {
-	if (global_audio_mixer->get_mapping_mode() == AudioMixer::MappingMode::MULTICHANNEL &&
-	    bus_idx < audio_expanded_views.size()) {
-		(audio_expanded_views[bus_idx]->*control)->click();
-	}
+	post_to_main_thread([this, bus_idx, control]{
+		if (global_audio_mixer != nullptr &&
+		    global_audio_mixer->get_mapping_mode() == AudioMixer::MappingMode::MULTICHANNEL &&
+		    bus_idx < audio_expanded_views.size()) {
+			(audio_expanded_views[bus_idx]->*control)->click();
+		}
+	});
 }
 
 template<class T>

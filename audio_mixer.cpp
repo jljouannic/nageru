@@ -987,6 +987,12 @@ InputMapping AudioMixer::get_input_mapping() const
 	return input_mapping;
 }
 
+unsigned AudioMixer::num_buses() const
+{
+	lock_guard<timed_mutex> lock(audio_mutex);
+	return input_mapping.buses.size();
+}
+
 void AudioMixer::reset_peak(unsigned bus_index)
 {
 	lock_guard<timed_mutex> lock(audio_mutex);

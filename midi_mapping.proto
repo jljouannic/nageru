@@ -14,6 +14,10 @@ message MIDIButtonProto {
 	required int32 note_number = 1;
 }
 
+message MIDILightProto {
+	required int32 note_number = 1;
+}
+
 // All the mappings for a given a bus.
 message MIDIMappingBusProto {
 	// TODO: If we need support for lots of buses (i.e., more than the typical eight
@@ -56,6 +60,21 @@ message MIDIMappingBusProto {
 	optional MIDIControllerProto locut = 21;
 	optional MIDIControllerProto limiter_threshold = 22;
 	optional MIDIControllerProto makeup_gain = 23;
+
+	// Per-bus lights.
+	optional MIDILightProto locut_is_on = 24;
+	optional MIDILightProto auto_gain_staging_is_on = 25;
+	optional MIDILightProto compressor_is_on = 26;
+	optional MIDILightProto has_peaked = 27;
+
+	// Global lights. Same logic as above for why they're in this proto.
+	optional MIDILightProto bank_1_is_selected = 28;
+	optional MIDILightProto bank_2_is_selected = 29;
+	optional MIDILightProto bank_3_is_selected = 30;
+	optional MIDILightProto bank_4_is_selected = 31;
+	optional MIDILightProto bank_5_is_selected = 32;
+	optional MIDILightProto limiter_is_on = 33;
+	optional MIDILightProto auto_makeup_gain_is_on = 34;
 }
 
 // The top-level protobuf, containing all the bus mappings, as well as

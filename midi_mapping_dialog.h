@@ -99,13 +99,15 @@ private:
 		ALL_GROUPS = -1,
 		PER_BUS_CONTROLLERS,
 		PER_BUS_BUTTONS,
+		PER_BUS_LIGHTS,
 		GLOBAL_CONTROLLERS,
-		GLOBAL_BUTTONS
+		GLOBAL_BUTTONS,
+		GLOBAL_LIGHTS
 	};
 
 	void add_bank_selector(QTreeWidgetItem *item, const MIDIMappingProto &mapping_proto, int bank_field_number);
 	
-	enum class ControlType { CONTROLLER, BUTTON };
+	enum class ControlType { CONTROLLER, BUTTON, LIGHT };
 	void add_controls(const std::string &heading, ControlType control_type,
 	                  SpinnerGroup spinner_group,
 	                  const MIDIMappingProto &mapping_proto, const std::vector<Control> &controls);
@@ -147,6 +149,7 @@ private:
 	};
 	std::vector<InstantiatedSpinner> controller_spinners;
 	std::vector<InstantiatedSpinner> button_spinners;
+	std::vector<InstantiatedSpinner> light_spinners;
 	std::vector<InstantiatedComboBox> bank_combo_boxes;
 
 	// Keyed on bus index, then field number.

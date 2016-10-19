@@ -114,6 +114,8 @@ public:
 	MappingMode get_mapping_mode() const;
 	InputMapping get_input_mapping() const;
 
+	unsigned num_buses() const;
+
 	void set_locut_cutoff(float cutoff_hz)
 	{
 		locut_cutoff_hz = cutoff_hz;
