@@ -328,6 +328,10 @@ void MainWindow::mixer_created(Mixer *mixer)
 		midi_mapper.refresh_lights();
 	});
 	connect(ui->reset_meters_button, &QPushButton::clicked, this, &MainWindow::reset_meters_button_clicked);
+	// Even though we have a reset button right next to it, the fact that
+	// the expanded audio view labels are clickable makes it natural to
+	// click this one as well.
+	connect(ui->peak_display, &ClickableLabel::clicked, this, &MainWindow::reset_meters_button_clicked);
 	mixer->get_audio_mixer()->set_audio_level_callback(bind(&MainWindow::audio_level_callback, this, _1, _2, _3, _4, _5, _6, _7, _8));
 
 	midi_mapper.refresh_highlights();

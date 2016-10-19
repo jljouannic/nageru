@@ -383,7 +383,7 @@
                </layout>
               </item>
               <item>
-               <widget class="QLabel" name="peak_display">
+               <widget class="ClickableLabel" name="peak_display">
                 <property name="minimumSize">
                  <size>
                   <width>30</width>
@@ -1398,6 +1398,11 @@
    <extends>QWidget</extends>
    <header>vumeter.h</header>
    <container>1</container>
+  </customwidget>
+  <customwidget>
+   <class>ClickableLabel</class>
+   <extends>QLabel</extends>
+   <header>clickable_label.h</header>
   </customwidget>
   <customwidget>
    <class>GLWidget</class>
