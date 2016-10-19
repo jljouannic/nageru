@@ -617,7 +617,7 @@
            </widget>
           </item>
           <item>
-           <layout class="QHBoxLayout" name="audiostrip" stretch="0,1,0">
+           <layout class="QHBoxLayout" name="audiostrip" stretch="0,0">
             <property name="spacing">
              <number>6</number>
             </property>
@@ -625,24 +625,64 @@
              <number>0</number>
             </property>
             <item>
-             <layout class="QHBoxLayout" name="faders">
-              <property name="sizeConstraint">
-               <enum>QLayout::SetFixedSize</enum>
+             <widget class="QScrollArea" name="fader_scroll">
+              <property name="frameShape">
+               <enum>QFrame::NoFrame</enum>
               </property>
-             </layout>
-            </item>
-            <item>
-             <spacer name="horizontalSpacer_3">
-              <property name="orientation">
-               <enum>Qt::Horizontal</enum>
+              <property name="verticalScrollBarPolicy">
+               <enum>Qt::ScrollBarAlwaysOff</enum>
               </property>
-              <property name="sizeHint" stdset="0">
-               <size>
-                <width>40</width>
-                <height>20</height>
-               </size>
+              <property name="widgetResizable">
+               <bool>true</bool>
               </property>
-             </spacer>
+              <widget class="QWidget" name="fader_scroll_contents">
+               <property name="geometry">
+                <rect>
+                 <x>0</x>
+                 <y>0</y>
+                 <width>505</width>
+                 <height>236</height>
+                </rect>
+               </property>
+               <layout class="QHBoxLayout" name="horizontalLayout_4">
+                <property name="spacing">
+                 <number>0</number>
+                </property>
+                <property name="leftMargin">
+                 <number>0</number>
+                </property>
+                <property name="topMargin">
+                 <number>0</number>
+                </property>
+                <property name="rightMargin">
+                 <number>0</number>
+                </property>
+                <property name="bottomMargin">
+                 <number>0</number>
+                </property>
+                <item>
+                 <layout class="QHBoxLayout" name="faders">
+                  <property name="sizeConstraint">
+                   <enum>QLayout::SetFixedSize</enum>
+                  </property>
+                 </layout>
+                </item>
+                <item>
+                 <spacer name="fader_spacer">
+                  <property name="orientation">
+                   <enum>Qt::Horizontal</enum>
+                  </property>
+                  <property name="sizeHint" stdset="0">
+                   <size>
+                    <width>40</width>
+                    <height>20</height>
+                   </size>
+                  </property>
+                 </spacer>
+                </item>
+               </layout>
+              </widget>
+             </widget>
             </item>
             <item>
              <layout class="QGridLayout" name="master_audio_strip" columnstretch="0,0,0,0,0,0">
@@ -1067,7 +1107,7 @@
            </layout>
           </item>
           <item>
-           <layout class="QHBoxLayout" name="audiostrip_2" stretch="0,1,0">
+           <layout class="QHBoxLayout" name="audiostrip_2" stretch="0,0">
             <property name="spacing">
              <number>6</number>
             </property>
@@ -1075,24 +1115,64 @@
              <number>0</number>
             </property>
             <item>
-             <layout class="QHBoxLayout" name="buses">
-              <property name="sizeConstraint">
-               <enum>QLayout::SetFixedSize</enum>
+             <widget class="QScrollArea" name="bus_scroll">
+              <property name="frameShape">
+               <enum>QFrame::NoFrame</enum>
               </property>
-             </layout>
-            </item>
-            <item>
-             <spacer name="horizontalSpacer_4">
-              <property name="orientation">
-               <enum>Qt::Horizontal</enum>
+              <property name="verticalScrollBarPolicy">
+               <enum>Qt::ScrollBarAlwaysOff</enum>
               </property>
-              <property name="sizeHint" stdset="0">
-               <size>
-                <width>40</width>
-                <height>20</height>
-               </size>
+              <property name="widgetResizable">
+               <bool>true</bool>
               </property>
-             </spacer>
+              <widget class="QWidget" name="bus_scroll_contents">
+               <property name="geometry">
+                <rect>
+                 <x>0</x>
+                 <y>0</y>
+                 <width>728</width>
+                 <height>282</height>
+                </rect>
+               </property>
+               <layout class="QHBoxLayout" name="horizontalLayout_5">
+                <property name="spacing">
+                 <number>0</number>
+                </property>
+                <property name="leftMargin">
+                 <number>0</number>
+                </property>
+                <property name="topMargin">
+                 <number>0</number>
+                </property>
+                <property name="rightMargin">
+                 <number>0</number>
+                </property>
+                <property name="bottomMargin">
+                 <number>0</number>
+                </property>
+                <item>
+                 <layout class="QHBoxLayout" name="buses">
+                  <property name="sizeConstraint">
+                   <enum>QLayout::SetFixedSize</enum>
+                  </property>
+                 </layout>
+                </item>
+                <item>
+                 <spacer name="buses_spacer">
+                  <property name="orientation">
+                   <enum>Qt::Horizontal</enum>
+                  </property>
+                  <property name="sizeHint" stdset="0">
+                   <size>
+                    <width>723</width>
+                    <height>20</height>
+                   </size>
+                  </property>
+                 </spacer>
+                </item>
+               </layout>
+              </widget>
+             </widget>
             </item>
             <item>
              <layout class="QGridLayout" name="master_audio_strip_2" columnstretch="0,0,0,0">
