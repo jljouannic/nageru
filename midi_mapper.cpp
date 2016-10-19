@@ -346,13 +346,27 @@ void MIDIMapper::handle_event(snd_seq_t *seq, snd_seq_event_t *event)
 	case SND_SEQ_EVENT_PORT_EXIT:
 		printf("MIDI port %d:%d went away.\n", event->data.addr.client, event->data.addr.port);
 		break;
+	case SND_SEQ_EVENT_PORT_SUBSCRIBED:
+		if (event->data.connect.sender.client != 0 &&  // Ignore system senders.
+		    event->data.connect.sender.client != snd_seq_client_id(seq) &&
+		    event->data.connect.dest.client == snd_seq_client_id(seq)) {
+			++num_subscribed_ports;
+			update_highlights();
+		}
+		break;
+	case SND_SEQ_EVENT_PORT_UNSUBSCRIBED:
+		if (event->data.connect.sender.client != 0 &&  // Ignore system senders.
+		    event->data.connect.sender.client != snd_seq_client_id(seq) &&
+		    event->data.connect.dest.client == snd_seq_client_id(seq)) {
+			--num_subscribed_ports;
+			update_highlights();
+		}
+		break;
 	case SND_SEQ_EVENT_NOTEOFF:
 	case SND_SEQ_EVENT_CLIENT_START:
 	case SND_SEQ_EVENT_CLIENT_EXIT:
 	case SND_SEQ_EVENT_CLIENT_CHANGE:
 	case SND_SEQ_EVENT_PORT_CHANGE:
-	case SND_SEQ_EVENT_PORT_SUBSCRIBED:
-	case SND_SEQ_EVENT_PORT_UNSUBSCRIBED:
 		break;
 	default:
 		printf("Ignoring MIDI event of unknown type %d.\n", event->type);
@@ -467,6 +481,11 @@ void MIDIMapper::refresh_lights()
 
 void MIDIMapper::update_highlights()
 {
+	if (num_subscribed_ports.load() == 0) {
+		receiver->clear_all_highlights();
+		return;
+	}
+
 	// Global controllers.
 	bool highlight_locut = false;
 	bool highlight_limiter_threshold = false;

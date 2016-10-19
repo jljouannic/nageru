@@ -117,6 +117,7 @@ private:
 	std::unique_ptr<MIDIMappingProto> mapping_proto;  // Under <mu>.
 	int num_controller_banks;  // Under <mu>.
 	std::atomic<int> current_controller_bank{0};
+	std::atomic<int> num_subscribed_ports{0};
 
 	std::thread midi_thread;
 	std::map<unsigned, bool> current_light_status;  // Keyed by note number. Under <mu>.
