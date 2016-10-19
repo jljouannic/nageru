@@ -403,7 +403,7 @@ void AudioMixer::find_sample_src_from_device(const map<DeviceSpec, vector<float>
 void AudioMixer::fill_audio_bus(const map<DeviceSpec, vector<float>> &samples_card, const InputMapping::Bus &bus, unsigned num_samples, float *output)
 {
 	if (bus.device.type == InputSourceType::SILENCE) {
-		memset(output, 0, num_samples * sizeof(*output));
+		memset(output, 0, num_samples * 2 * sizeof(*output));
 	} else {
 		assert(bus.device.type == InputSourceType::CAPTURE_CARD ||
 		       bus.device.type == InputSourceType::ALSA_INPUT);
