@@ -60,6 +60,7 @@ public slots:
 	void limiter_threshold_knob_changed(int value);
 	void compressor_threshold_knob_changed(unsigned bus_index, int value);
 	void mini_fader_changed(int bus, double db_volume);
+	void mute_button_toggled(int bus, bool checked);
 	void reset_meters_button_clicked();
 	void relayout();
 
@@ -75,6 +76,7 @@ public slots:
 	void set_compressor_threshold(unsigned bus_idx, float value) override;
 	void set_fader(unsigned bus_idx, float value) override;
 
+	void toggle_mute(unsigned bus_idx) override;
 	void toggle_locut(unsigned bus_idx) override;
 	void toggle_auto_gain_staging(unsigned bus_idx) override;
 	void toggle_compressor(unsigned bus_idx) override;
@@ -95,6 +97,7 @@ public slots:
 	void highlight_compressor_threshold(unsigned bus_idx, bool highlight) override;
 	void highlight_fader(unsigned bus_idx, bool highlight) override;
 
+	void highlight_mute(unsigned bus_idx, bool highlight) override;
 	void highlight_toggle_locut(unsigned bus_idx, bool highlight) override;
 	void highlight_toggle_auto_gain_staging(unsigned bus_idx, bool highlight) override;
 	void highlight_toggle_compressor(unsigned bus_idx, bool highlight) override;
@@ -137,7 +140,10 @@ private:
 	void highlight_control(T *control, bool highlight);
 
 	template<class T>
-	void highlight_control_if_exists(unsigned bus_idx, T *(Ui_AudioExpandedView::*control), bool highlight);
+	void highlight_mute_control(T *control, bool highlight);
+
+	template<class T>
+	void highlight_control_if_exists(unsigned bus_idx, T *(Ui_AudioExpandedView::*control), bool highlight, bool is_mute_button = false);
 
 	Ui::MainWindow *ui;
 	QLabel *disk_free_label;

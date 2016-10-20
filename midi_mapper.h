@@ -39,6 +39,7 @@ public:
 	virtual void set_compressor_threshold(unsigned bus_idx, float value) = 0;
 	virtual void set_fader(unsigned bus_idx, float value) = 0;
 
+	virtual void toggle_mute(unsigned bus_idx) = 0;
 	virtual void toggle_locut(unsigned bus_idx) = 0;
 	virtual void toggle_auto_gain_staging(unsigned bus_idx) = 0;
 	virtual void toggle_compressor(unsigned bus_idx) = 0;
@@ -61,6 +62,7 @@ public:
 	virtual void highlight_compressor_threshold(unsigned bus_idx, bool highlight) = 0;
 	virtual void highlight_fader(unsigned bus_idx, bool highlight) = 0;
 
+	virtual void highlight_mute(unsigned bus_idx, bool highlight) = 0;
 	virtual void highlight_toggle_locut(unsigned bus_idx, bool highlight) = 0;
 	virtual void highlight_toggle_auto_gain_staging(unsigned bus_idx, bool highlight) = 0;
 	virtual void highlight_toggle_compressor(unsigned bus_idx, bool highlight) = 0;

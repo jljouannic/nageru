@@ -51,6 +51,7 @@ public:
 	void set_compressor_threshold(unsigned bus_idx, float value) override {}
 	void set_fader(unsigned bus_idx, float value) override {}
 
+	void toggle_mute(unsigned bus_idx) override {}
 	void toggle_locut(unsigned bus_idx) override {}
 	void toggle_auto_gain_staging(unsigned bus_idx) override {}
 	void toggle_compressor(unsigned bus_idx) override {}
@@ -71,6 +72,7 @@ public:
 	void highlight_compressor_threshold(unsigned bus_idx, bool highlight) override {}
 	void highlight_fader(unsigned bus_idx, bool highlight) override {}
 
+	void highlight_mute(unsigned bus_idx, bool highlight) override {}
 	void highlight_toggle_locut(unsigned bus_idx, bool highlight) override {}
 	void highlight_toggle_auto_gain_staging(unsigned bus_idx, bool highlight) override {}
 	void highlight_toggle_compressor(unsigned bus_idx, bool highlight) override {}

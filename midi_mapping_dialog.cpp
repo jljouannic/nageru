@@ -26,6 +26,8 @@ vector<MIDIMappingDialog::Control> per_bus_controllers = {
 	{ "Fader",                    MIDIMappingBusProto::kFaderFieldNumber,  MIDIMappingProto::kFaderBankFieldNumber }
 };
 vector<MIDIMappingDialog::Control> per_bus_buttons = {
+	{ "Toggle mute",              MIDIMappingBusProto::kToggleMuteFieldNumber,
+	                              MIDIMappingProto::kToggleMuteBankFieldNumber },
 	{ "Toggle locut",             MIDIMappingBusProto::kToggleLocutFieldNumber,
 	                              MIDIMappingProto::kToggleLocutBankFieldNumber },
 	{ "Togle auto gain staging",  MIDIMappingBusProto::kToggleAutoGainStagingFieldNumber,
@@ -36,6 +38,7 @@ vector<MIDIMappingDialog::Control> per_bus_buttons = {
 	                              MIDIMappingProto::kClearPeakBankFieldNumber }
 };
 vector<MIDIMappingDialog::Control> per_bus_lights = {
+	{ "Is muted",                 MIDIMappingBusProto::kIsMutedFieldNumber, 0 },
 	{ "Locut is on",              MIDIMappingBusProto::kLocutIsOnFieldNumber, 0 },
 	{ "Auto gain staging is on",  MIDIMappingBusProto::kAutoGainStagingIsOnFieldNumber, 0 },
 	{ "Compressor is on",         MIDIMappingBusProto::kCompressorIsOnFieldNumber, 0 },

@@ -319,6 +319,7 @@ AudioMixer::BusSettings AudioMixer::get_default_bus_settings()
 {
 	BusSettings settings;
 	settings.fader_volume_db = 0.0f;
+	settings.muted = false;
 	settings.locut_enabled = global_flags.locut_enabled;
 	for (unsigned band_index = 0; band_index < NUM_EQ_BANDS; ++band_index) {
 		settings.eq_level_db[band_index] = 0.0f;
@@ -335,6 +336,7 @@ AudioMixer::BusSettings AudioMixer::get_bus_settings(unsigned bus_index) const
 	lock_guard<timed_mutex> lock(audio_mutex);
 	BusSettings settings;
 	settings.fader_volume_db = fader_volume_db[bus_index];
+	settings.muted = mute[bus_index];
 	settings.locut_enabled = locut_enabled[bus_index];
 	for (unsigned band_index = 0; band_index < NUM_EQ_BANDS; ++band_index) {
 		settings.eq_level_db[band_index] = eq_level_db[bus_index][band_index];
@@ -350,6 +352,7 @@ void AudioMixer::set_bus_settings(unsigned bus_index, const AudioMixer::BusSetti
 {
 	lock_guard<timed_mutex> lock(audio_mutex);
 	fader_volume_db[bus_index] = settings.fader_volume_db;
+	mute[bus_index] = settings.muted;
 	locut_enabled[bus_index] = settings.locut_enabled;
 	for (unsigned band_index = 0; band_index < NUM_EQ_BANDS; ++band_index) {
 		eq_level_db[bus_index][band_index] = settings.eq_level_db[band_index];
@@ -683,13 +686,14 @@ void AudioMixer::add_bus_to_master(unsigned bus_index, const vector<float> &samp
 	assert(samples_bus.size() == samples_out->size());
 	assert(samples_bus.size() % 2 == 0);
 	unsigned num_samples = samples_bus.size() / 2;
-	if (fabs(fader_volume_db[bus_index] - last_fader_volume_db[bus_index]) > 1e-3) {
+	const float new_volume_db = mute[bus_index] ? -90.0f : fader_volume_db[bus_index].load();
+	if (fabs(new_volume_db - last_fader_volume_db[bus_index]) > 1e-3) {
 		// The volume has changed; do a fade over the course of this frame.
 		// (We might have some numerical issues here, but it seems to sound OK.)
 		// For the purpose of fading here, the silence floor is set to -90 dB
 		// (the fader only goes to -84).
 		float old_volume = from_db(max<float>(last_fader_volume_db[bus_index], -90.0f));
-		float volume = from_db(max<float>(fader_volume_db[bus_index], -90.0f));
+		float volume = from_db(max<float>(new_volume_db, -90.0f));
 
 		float volume_inc = pow(volume / old_volume, 1.0 / num_samples);
 		volume = old_volume;
@@ -706,8 +710,8 @@ void AudioMixer::add_bus_to_master(unsigned bus_index, const vector<float> &samp
 				volume *= volume_inc;
 			}
 		}
-	} else {
-		float volume = from_db(fader_volume_db[bus_index]);
+	} else if (new_volume_db > -90.0f) {
+		float volume = from_db(new_volume_db);
 		if (bus_index == 0) {
 			for (unsigned i = 0; i < num_samples; ++i) {
 				(*samples_out)[i * 2 + 0] = samples_bus[i * 2 + 0] * volume;
@@ -721,13 +725,13 @@ void AudioMixer::add_bus_to_master(unsigned bus_index, const vector<float> &samp
 		}
 	}
 
-	last_fader_volume_db[bus_index] = fader_volume_db[bus_index];
+	last_fader_volume_db[bus_index] = new_volume_db;
 }
 
 void AudioMixer::measure_bus_levels(unsigned bus_index, const vector<float> &left, const vector<float> &right)
 {
 	assert(left.size() == right.size());
-	const float volume = from_db(fader_volume_db[bus_index]);
+	const float volume = mute[bus_index] ? 0.0f : from_db(fader_volume_db[bus_index]);
 	const float peak_levels[2] = {
 		find_peak(left.data(), left.size()) * volume,
 		find_peak(right.data(), right.size()) * volume

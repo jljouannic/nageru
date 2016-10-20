@@ -452,6 +452,9 @@ void MainWindow::setup_audio_expanded_view()
 		update_eq_label(bus_index, EQ_BAND_MID, global_audio_mixer->get_eq(bus_index, EQ_BAND_MID));
 		update_eq_label(bus_index, EQ_BAND_BASS, global_audio_mixer->get_eq(bus_index, EQ_BAND_BASS));
 		ui_audio_expanded_view->fader->setDbValue(global_audio_mixer->get_fader_volume(bus_index));
+		ui_audio_expanded_view->mute_button->setChecked(global_audio_mixer->get_mute(bus_index) ? Qt::Checked : Qt::Unchecked);
+		connect(ui_audio_expanded_view->mute_button, &QPushButton::toggled,
+			bind(&MainWindow::mute_button_toggled, this, bus_index, _1));
 		ui->buses->addWidget(channel);
 
 		ui_audio_expanded_view->locut_enabled->setChecked(global_audio_mixer->get_locut_enabled(bus_index));
@@ -733,6 +736,12 @@ void MainWindow::mini_fader_changed(int bus, double volume_db)
 	global_audio_mixer->set_fader_volume(bus, volume_db);
 }
 
+void MainWindow::mute_button_toggled(int bus, bool checked)
+{
+	global_audio_mixer->set_mute(bus, checked);
+	midi_mapper.refresh_lights();
+}
+
 void MainWindow::reset_meters_button_clicked()
 {
 	global_audio_mixer->reset_meters();
@@ -914,6 +923,11 @@ void MainWindow::set_fader(unsigned bus_idx, float value)
 	set_relative_value_if_exists(bus_idx, &Ui::AudioExpandedView::fader, value);
 }
 
+void MainWindow::toggle_mute(unsigned bus_idx)
+{
+	click_button_if_exists(bus_idx, &Ui::AudioExpandedView::mute_button);
+}
+
 void MainWindow::toggle_locut(unsigned bus_idx)
 {
 	click_button_if_exists(bus_idx, &Ui::AudioExpandedView::locut_enabled);
@@ -955,6 +969,7 @@ void MainWindow::clear_all_highlights()
 			highlight_gain(bus_idx, false);
 			highlight_compressor_threshold(bus_idx, false);
 			highlight_fader(bus_idx, false);
+			highlight_mute(bus_idx, false);
 			highlight_toggle_locut(bus_idx, false);
 			highlight_toggle_auto_gain_staging(bus_idx, false);
 			highlight_toggle_compressor(bus_idx, false);
@@ -1028,6 +1043,11 @@ void MainWindow::highlight_compressor_threshold(unsigned bus_idx, bool highlight
 void MainWindow::highlight_fader(unsigned bus_idx, bool highlight)
 {
 	highlight_control_if_exists(bus_idx, &Ui::AudioExpandedView::fader, highlight);
+}
+
+void MainWindow::highlight_mute(unsigned bus_idx, bool highlight)
+{
+	highlight_control_if_exists(bus_idx, &Ui::AudioExpandedView::mute_button, highlight, /*is_mute_btton=*/true);
 }
 
 void MainWindow::highlight_toggle_locut(unsigned bus_idx, bool highlight)
@@ -1109,11 +1129,32 @@ void MainWindow::highlight_control(T *control, bool highlight)
 }
 
 template<class T>
-void MainWindow::highlight_control_if_exists(unsigned bus_idx, T *(Ui_AudioExpandedView::*control), bool highlight)
+void MainWindow::highlight_mute_control(T *control, bool highlight)
 {
-	post_to_main_thread([this, bus_idx, control, highlight]{
+	if (control == nullptr) {
+		return;
+	}
+	if (global_audio_mixer == nullptr ||
+	    global_audio_mixer->get_mapping_mode() != AudioMixer::MappingMode::MULTICHANNEL) {
+		highlight = false;
+	}
+	if (highlight) {
+		control->setStyleSheet("QPushButton { background: rgb(0,255,0,80); } QPushButton:checked { background: rgba(255,80,0,140); }");
+	} else {
+		control->setStyleSheet("QPushButton:checked { background: rgba(255,0,0,80); }");
+	}
+}
+
+template<class T>
+void MainWindow::highlight_control_if_exists(unsigned bus_idx, T *(Ui_AudioExpandedView::*control), bool highlight, bool is_mute_button)
+{
+	post_to_main_thread([this, bus_idx, control, highlight, is_mute_button]{
 		if (bus_idx < audio_expanded_views.size()) {
-			highlight_control(audio_expanded_views[bus_idx]->*control, highlight);
+			if (is_mute_button) {
+				highlight_mute_control(audio_expanded_views[bus_idx]->*control, highlight);
+			} else {
+				highlight_control(audio_expanded_views[bus_idx]->*control, highlight);
+			}
 		}
 	});
 }

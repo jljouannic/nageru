@@ -335,6 +335,8 @@ void MIDIMapper::handle_event(snd_seq_t *seq, snd_seq_event_t *event)
 			bind(&ControllerReceiver::toggle_compressor, receiver, _1));
 		match_button(note, MIDIMappingBusProto::kClearPeakFieldNumber, MIDIMappingProto::kClearPeakBankFieldNumber,
 			bind(&ControllerReceiver::clear_peak, receiver, _1));
+		match_button(note, MIDIMappingBusProto::kToggleMuteFieldNumber, MIDIMappingProto::kClearPeakBankFieldNumber,
+			bind(&ControllerReceiver::toggle_mute, receiver, _1));
 		match_button(note, MIDIMappingBusProto::kToggleLimiterFieldNumber, MIDIMappingProto::kToggleLimiterBankFieldNumber,
 			bind(&ControllerReceiver::toggle_limiter, receiver));
 		match_button(note, MIDIMappingBusProto::kToggleAutoMakeupGainFieldNumber, MIDIMappingProto::kToggleAutoMakeupGainBankFieldNumber,
@@ -534,6 +536,8 @@ void MIDIMapper::update_highlights()
 			bus_idx, MIDIMappingBusProto::kCompressorThresholdFieldNumber, MIDIMappingProto::kCompressorThresholdBankFieldNumber));
 		receiver->highlight_fader(bus_idx, has_active_controller(
 			bus_idx, MIDIMappingBusProto::kFaderFieldNumber, MIDIMappingProto::kFaderBankFieldNumber));
+		receiver->highlight_mute(bus_idx, has_active_controller(
+			bus_idx, MIDIMappingBusProto::kToggleMuteFieldNumber, MIDIMappingProto::kToggleMuteBankFieldNumber));
 		receiver->highlight_toggle_locut(bus_idx, has_active_controller(
 			bus_idx, MIDIMappingBusProto::kToggleLocutFieldNumber, MIDIMappingProto::kToggleLocutBankFieldNumber));
 		receiver->highlight_toggle_auto_gain_staging(bus_idx, has_active_controller(
@@ -573,6 +577,9 @@ void MIDIMapper::update_lights_lock_held()
 	}
 	unsigned num_buses = min<unsigned>(global_audio_mixer->num_buses(), mapping_proto->bus_mapping_size());
 	for (unsigned bus_idx = 0; bus_idx < num_buses; ++bus_idx) {
+		if (global_audio_mixer->get_mute(bus_idx)) {
+			activate_lights(bus_idx, MIDIMappingBusProto::kIsMutedFieldNumber, &active_lights);
+		}
 		if (global_audio_mixer->get_locut_enabled(bus_idx)) {
 			activate_lights(bus_idx, MIDIMappingBusProto::kLocutIsOnFieldNumber, &active_lights);
 		}

@@ -67,6 +67,9 @@ public:
 	float get_fader_volume(unsigned bus_index) const { return fader_volume_db[bus_index]; }
 	void set_fader_volume(unsigned bus_index, float level_db) { fader_volume_db[bus_index] = level_db; }
 
+	bool get_mute(unsigned bus_index) const { return mute[bus_index]; }
+	void set_mute(unsigned bus_index, bool muted) { mute[bus_index] = muted; }
+
 	// Note: This operation holds all ALSA devices (see ALSAPool::get_devices()).
 	// You will need to call set_input_mapping() to get the hold state correctly,
 	// or every card will be held forever.
@@ -281,6 +284,7 @@ public:
 	// or set_* functions for that bus.
 	struct BusSettings {
 		float fader_volume_db;
+		bool muted;
 		bool locut_enabled;
 		float eq_level_db[NUM_EQ_BANDS];
 		float gain_staging_db;
@@ -367,6 +371,7 @@ private:
 	MappingMode current_mapping_mode;  // Under audio_mutex.
 	InputMapping input_mapping;  // Under audio_mutex.
 	std::atomic<float> fader_volume_db[MAX_BUSES] {{ 0.0f }};
+	std::atomic<bool> mute[MAX_BUSES] {{ false }};
 	float last_fader_volume_db[MAX_BUSES] { 0.0f };  // Under audio_mutex.
 	std::atomic<float> eq_level_db[MAX_BUSES][NUM_EQ_BANDS] {{{ 0.0f }}};
 	float last_eq_level_db[MAX_BUSES][NUM_EQ_BANDS] {{ 0.0f }};
