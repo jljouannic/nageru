@@ -246,8 +246,6 @@ void MIDIMapper::handle_event(snd_seq_t *seq, snd_seq_event_t *event)
 	lock_guard<mutex> lock(mu);
 	switch (event->type) {
 	case SND_SEQ_EVENT_CONTROLLER: {
-		printf("Controller %d changed to %d\n", event->data.control.param, event->data.control.value);
-
 		const int controller = event->data.control.param;
 		const float value = map_controller_to_float(event->data.control.value);
 
@@ -280,8 +278,6 @@ void MIDIMapper::handle_event(snd_seq_t *seq, snd_seq_event_t *event)
 		const int note = event->data.note.note;
 
 		receiver->note_on(note);
-
-		printf("Note: %d\n", note);
 
 		for (size_t bus_idx = 0; bus_idx < size_t(mapping_proto->bus_mapping_size()); ++bus_idx) {
 			const MIDIMappingBusProto &bus_mapping = mapping_proto->bus_mapping(bus_idx);
