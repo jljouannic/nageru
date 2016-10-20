@@ -5,12 +5,17 @@
 #include <stdint.h>
 #include <atomic>
 #include <functional>
+#include <map>
+#include <memory>
 #include <string>
 
+#include "DeckLinkAPIModes.h"
+#include "DeckLinkAPITypes.h"
+#include "LinuxCOM.h"
 #include "bmusb/bmusb.h"
 
 class IDeckLink;
-class IDeckLinkDisplayMode;
+class IDeckLinkConfiguration;
 
 // TODO: Adjust CaptureInterface to be a little less bmusb-centric.
 // There are too many member functions here that don't really do anything.

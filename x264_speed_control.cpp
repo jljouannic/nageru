@@ -1,11 +1,15 @@
 #include "x264_speed_control.h"
 
-#include "flags.h"
-
-#include <time.h>
-
+#include <math.h>
+#include <stdio.h>
+#include <x264.h>
 #include <algorithm>
 #include <chrono>
+#include <cmath>
+#include <ratio>
+#include <type_traits>
+
+#include "flags.h"
 
 using namespace std;
 using namespace std::chrono;

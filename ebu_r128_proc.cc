@@ -19,9 +19,10 @@
 // ------------------------------------------------------------------------
 
 
-#include <string.h>
-#include <math.h>
 #include "ebu_r128_proc.h"
+
+#include <string.h>
+#include <cmath>
 
 
 float Ebu_r128_hist::_bin_power [100] = { 0.0f };

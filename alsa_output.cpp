@@ -1,5 +1,9 @@
 #include "alsa_output.h"
 
+#include <alsa/asoundlib.h>
+#include <errno.h>
+#include <stdio.h>
+#include <stdlib.h>
 #include <vector>
 
 using namespace std;

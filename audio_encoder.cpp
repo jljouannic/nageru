@@ -5,18 +5,24 @@ extern "C" {
 #include <libavformat/avformat.h>
 #include <libavresample/avresample.h>
 #include <libavutil/channel_layout.h>
+#include <libavutil/error.h>
 #include <libavutil/frame.h>
+#include <libavutil/mem.h>
+#include <libavutil/opt.h>
 #include <libavutil/rational.h>
 #include <libavutil/samplefmt.h>
-#include <libavutil/opt.h>
 }
 
 #include <assert.h>
-
+#include <errno.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <memory>
 #include <string>
 #include <vector>
 
 #include "defs.h"
+#include "mux.h"
 #include "timebase.h"
 
 using namespace std;

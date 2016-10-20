@@ -1,9 +1,11 @@
+#include <assert.h>
 #include <math.h>
 #include <stdio.h>
 #include <string.h>
-#include <assert.h>
-#include <complex>
 #include <algorithm>
+#include <complex>
+
+#include "defs.h"
 
 #ifdef __SSE__
 #include <mmintrin.h>

@@ -1,7 +1,13 @@
 #ifndef _NONLINEAR_FADER_H
 #define _NONLINEAR_FADER_H 1
 
+#include <QAbstractSlider>
 #include <QSlider>
+#include <QString>
+
+class QObject;
+class QPaintEvent;
+class QWidget;
 
 class NonLinearFader : public QSlider {
 	Q_OBJECT

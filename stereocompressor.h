@@ -1,6 +1,7 @@
 #ifndef _STEREOCOMPRESSOR_H
 #define _STEREOCOMPRESSOR_H 1
 
+#include <stddef.h>
 // A simple compressor based on absolute values, with independent
 // attack/release times. There is no sidechain or lookahead, but the
 // peak value is shared between both channels.
@@ -8,8 +9,6 @@
 // The compressor was originally written by, and is copyrighted by, Rune Holm.
 // It has been adapted and relicensed under GPLv3 (or, at your option,
 // any later version) for Nageru, so that its license matches the rest of the code.
-
-class StereoBuffer;
 
 class StereoCompressor {
 public:

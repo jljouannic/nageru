@@ -10,7 +10,7 @@
 // The bitrate is measured over a simple 30-second sliding window.
 
 #include <stdint.h>
-
+#include <sys/types.h>
 #include <deque>
 #include <functional>
 #include <string>

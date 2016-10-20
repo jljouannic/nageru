@@ -1,9 +1,10 @@
-#include <sys/stat.h>
-#include <sys/types.h>
-#include <sys/vfs.h>
-#include <unistd.h>
-
 #include "disk_space_estimator.h"
+
+#include <stdio.h>
+#include <sys/stat.h>
+#include <sys/statfs.h>
+#include <memory>
+
 #include "timebase.h"
 
 DiskSpaceEstimator::DiskSpaceEstimator(DiskSpaceEstimator::callback_t callback)

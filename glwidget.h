@@ -2,15 +2,16 @@
 #define GLWIDGET_H
 
 #include <epoxy/gl.h>
-#include <QGLWidget>
+#include <QGL>
+#include <QString>
 #include <string>
 #include <vector>
 
 #include "mixer.h"
-#include "qgl.h"
-#include "qobjectdefs.h"
 
 class QMouseEvent;
+class QObject;
+class QPoint;
 class QWidget;
 
 namespace movit {

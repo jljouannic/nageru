@@ -1,5 +1,7 @@
 #include "aboutdialog.h"
 
+#include <QDialogButtonBox>
+
 #include "ui_aboutdialog.h"
 
 using namespace std;

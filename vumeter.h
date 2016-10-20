@@ -2,12 +2,16 @@
 #define VUMETER_H
 
 #include <math.h>
-#include <QLabel>
-#include <QPaintEvent>
+#include <QPixmap>
+#include <QString>
 #include <QWidget>
 #include <mutex>
 
 #include "vu_common.h"
+
+class QObject;
+class QPaintEvent;
+class QResizeEvent;
 
 class VUMeter : public QWidget
 {

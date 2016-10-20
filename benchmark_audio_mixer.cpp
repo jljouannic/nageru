@@ -2,12 +2,21 @@
 // with the default settings, feeds some white noise to the inputs and
 // runs a while. Useful for e.g. profiling.
 
-#include <stdio.h>
+#include <assert.h>
+#include <bmusb/bmusb.h>
 #include <stdint.h>
-#include <vector>
+#include <stdio.h>
+#include <algorithm>
 #include <chrono>
+#include <cmath>
+#include <ratio>
+#include <vector>
+
 #include "audio_mixer.h"
 #include "db.h"
+#include "defs.h"
+#include "input_mapping.h"
+#include "resampling_queue.h"
 #include "timebase.h"
 
 #define NUM_BENCHMARK_CARDS 4

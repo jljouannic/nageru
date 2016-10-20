@@ -1,18 +1,22 @@
 #ifndef MAINWINDOW_H
 #define MAINWINDOW_H
 
+#include <stdbool.h>
+#include <sys/types.h>
 #include <QMainWindow>
+#include <QString>
 #include <chrono>
 #include <string>
 #include <vector>
-#include <sys/time.h>
 
+#include "audio_mixer.h"
 #include "midi_mapper.h"
 #include "mixer.h"
 
-class GLWidget;
-class Ui_AudioExpandedView;
+class QEvent;
+class QObject;
 class QResizeEvent;
+class Ui_AudioExpandedView;
 
 namespace Ui {
 class AudioExpandedView;
@@ -21,7 +25,6 @@ class Display;
 class MainWindow;
 }  // namespace Ui
 
-class QDial;
 class QLabel;
 class QPushButton;
 

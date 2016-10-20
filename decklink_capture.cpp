@@ -1,19 +1,21 @@
 #include "decklink_capture.h"
 
-#include <assert.h>
-#include <stdint.h>
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
-#include <cstddef>
-#ifdef __SSE2__
-#include <immintrin.h>
-#endif
-
 #include <DeckLinkAPI.h>
 #include <DeckLinkAPIConfiguration.h>
 #include <DeckLinkAPIDiscovery.h>
 #include <DeckLinkAPIModes.h>
+#include <assert.h>
+#ifdef __SSE2__
+#include <immintrin.h>
+#endif
+#include <stdint.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <cstdint>
+#include <utility>
+#include <vector>
+
 #include "bmusb/bmusb.h"
 
 #define FRAME_SIZE (8 << 20)  // 8 MB.

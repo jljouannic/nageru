@@ -1,11 +1,29 @@
 #include "input_mapping_dialog.h"
 
+#include <assert.h>
+#include <stdbool.h>
+#include <stdint.h>
+#include <stdio.h>
+#include <QAbstractItemView>
+#include <QComboBox>
+#include <QDialogButtonBox>
+#include <QFileDialog>
+#include <QHeaderView>
+#include <QList>
+#include <QMessageBox>
+#include <QPushButton>
+#include <QTableWidget>
+#include <QVariant>
+#include <functional>
+#include <memory>
+#include <set>
+#include <string>
+#include <utility>
+
+#include "alsa_pool.h"
+#include "defs.h"
 #include "post_to_main_thread.h"
 #include "ui_input_mapping.h"
-
-#include <QComboBox>
-#include <QFileDialog>
-#include <QMessageBox>
 
 using namespace std;
 using namespace std::placeholders;

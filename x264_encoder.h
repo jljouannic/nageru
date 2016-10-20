@@ -17,16 +17,16 @@
 #define _X264ENCODE_H 1
 
 #include <stdint.h>
-
+#include <x264.h>
 #include <atomic>
 #include <condition_variable>
 #include <memory>
 #include <mutex>
-#include <thread>
 #include <queue>
+#include <string>
+#include <thread>
 
 extern "C" {
-#include "x264.h"
 #include <libavformat/avformat.h>
 }
 

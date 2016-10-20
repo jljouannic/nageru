@@ -1,17 +1,24 @@
 #include "midi_mapper.h"
 
-#include "audio_mixer.h"
-#include "midi_mapping.pb.h"
-
 #include <alsa/asoundlib.h>
-#include <google/protobuf/text_format.h>
-#include <google/protobuf/io/zero_copy_stream.h>
-#include <google/protobuf/io/zero_copy_stream_impl.h>
+#include <assert.h>
+#include <errno.h>
 #include <fcntl.h>
+#include <google/protobuf/descriptor.h>
+#include <google/protobuf/io/zero_copy_stream_impl.h>
+#include <google/protobuf/message.h>
+#include <google/protobuf/text_format.h>
+#include <poll.h>
+#include <stdint.h>
+#include <stdio.h>
 #include <sys/eventfd.h>
-
+#include <unistd.h>
+#include <algorithm>
 #include <functional>
 #include <thread>
+
+#include "audio_mixer.h"
+#include "midi_mapping.pb.h"
 
 using namespace google::protobuf;
 using namespace std;

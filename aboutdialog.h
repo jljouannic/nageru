@@ -2,11 +2,9 @@
 #define _ABOUTDIALOG_H 1
 
 #include <QDialog>
-#include <string>
-#include <vector>
-#include <sys/time.h>
+#include <QString>
 
-#include "mixer.h"
+class QObject;
 
 namespace Ui {
 class AboutDialog;

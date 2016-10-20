@@ -5,13 +5,11 @@
 
 #include <assert.h>
 #include <epoxy/gl.h>
+
 #undef Success
 
-#include <movit/effect_chain.h>
-#include <movit/flat_input.h>
 #include <stdbool.h>
 #include <stdint.h>
-
 #include <atomic>
 #include <chrono>
 #include <condition_variable>
@@ -25,34 +23,28 @@
 #include <thread>
 #include <vector>
 
-#include "alsa_output.h"
 #include "audio_mixer.h"
 #include "bmusb/bmusb.h"
 #include "defs.h"
 #include "httpd.h"
 #include "input_state.h"
+#include "libusb.h"
 #include "pbo_frame_allocator.h"
 #include "ref_counted_frame.h"
 #include "ref_counted_gl_sync.h"
-#include "resampling_queue.h"
 #include "theme.h"
 #include "timebase.h"
-#include "stereocompressor.h"
 #include "video_encoder.h"
 
 class ALSAOutput;
 class QSurface;
-class QuickSyncEncoder;
+
 namespace movit {
 class Effect;
 class EffectChain;
 class FlatInput;
 class ResourcePool;
 }  // namespace movit
-
-namespace movit {
-class YCbCrInput;
-}
 class QSurfaceFormat;
 
 // For any card that's not the master (where we pick out the frames as they

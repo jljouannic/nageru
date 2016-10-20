@@ -7,7 +7,8 @@
 
 #include "metacube2.h"
 
-#include <arpa/inet.h>
+#include <byteswap.h>
+#include <netinet/in.h>
 
 /*
  * https://www.ece.cmu.edu/~koopman/pubs/KoopmanCRCWebinar9May2012.pdf

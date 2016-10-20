@@ -19,8 +19,8 @@
 #include "correlation_measurer.h"
 
 #include <assert.h>
-#include <stdint.h>
-#include <math.h>
+#include <cmath>
+#include <cstddef>
 
 using namespace std;
 

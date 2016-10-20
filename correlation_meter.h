@@ -1,9 +1,15 @@
 #ifndef CORRELATION_METER_H
 #define CORRELATION_METER_H
 
-#include <QPaintEvent>
-#include <QWidget>
 #include <mutex>
+
+#include <QPixmap>
+#include <QString>
+#include <QWidget>
+
+class QObject;
+class QPaintEvent;
+class QResizeEvent;
 
 class CorrelationMeter : public QWidget
 {

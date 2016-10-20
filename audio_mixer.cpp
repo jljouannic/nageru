@@ -1,19 +1,25 @@
 #include "audio_mixer.h"
 
 #include <assert.h>
-#include <endian.h>
 #include <bmusb/bmusb.h>
-#include <stdio.h>
 #include <endian.h>
-#include <cmath>
-#include <limits>
-#ifdef __SSE__
+#include <math.h>
+#ifdef __SSE2__
 #include <immintrin.h>
 #endif
+#include <stdbool.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <algorithm>
+#include <chrono>
+#include <cmath>
+#include <cstddef>
+#include <limits>
+#include <utility>
 
 #include "db.h"
 #include "flags.h"
-#include "mixer.h"
 #include "state.pb.h"
 #include "timebase.h"
 

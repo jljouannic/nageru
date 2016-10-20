@@ -43,10 +43,7 @@
 // one does not need to patch x264 to use it in Nageru. It still could do with
 // some cleanup, but it's much, much better than just using a static preset.
 
-#include <stdio.h>
 #include <stdint.h>
-#include <string.h>
-#include <math.h>
 #include <chrono>
 #include <functional>
 

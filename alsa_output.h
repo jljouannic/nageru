@@ -9,7 +9,6 @@
 // probably drift out of sync enough to make a little pop.
 
 #include <alsa/asoundlib.h>
-
 #include <vector>
 
 class ALSAOutput {

@@ -1,17 +1,28 @@
 #include "midi_mapping_dialog.h"
 
-#include "midi_mapper.h"
-#include "midi_mapping.pb.h"
-#include "post_to_main_thread.h"
-#include "ui_midi_mapping.h"
-
+#include <assert.h>
+#include <google/protobuf/descriptor.h>
+#include <google/protobuf/message.h>
 #include <QComboBox>
+#include <QDialogButtonBox>
 #include <QFileDialog>
 #include <QMessageBox>
+#include <QPushButton>
 #include <QSpinBox>
-
+#include <QStringList>
+#include <QTreeWidget>
+#include <stdio.h>
 #include <algorithm>
+#include <cstddef>
+#include <functional>
+#include <limits>
 #include <string>
+
+#include "midi_mapper.h"
+#include "midi_mapping.pb.h"
+#include "ui_midi_mapping.h"
+
+class QObject;
 
 using namespace google::protobuf;
 using namespace std;

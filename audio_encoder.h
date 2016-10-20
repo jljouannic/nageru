@@ -3,18 +3,21 @@
 #ifndef _AUDIO_ENCODER_H
 #define _AUDIO_ENCODER_H 1
 
-#include <memory>
+#include <stddef.h>
+#include <stdint.h>
 #include <string>
 #include <vector>
 
 extern "C" {
 #include <libavcodec/avcodec.h>
+#include <libavformat/avformat.h>
 #include <libavresample/avresample.h>
 #include <libavutil/frame.h>
 }
 
 #include "ffmpeg_raii.h"
-#include "mux.h"
+
+class Mux;
 
 class AudioEncoder {
 public:

@@ -6,12 +6,12 @@
 extern "C" {
 #include <libavcodec/avcodec.h>
 #include <libavformat/avformat.h>
-#include <libavformat/avio.h>
 }
 
+#include <sys/types.h>
 #include <functional>
 #include <mutex>
-#include <queue>
+#include <string>
 #include <vector>
 
 class Mux {

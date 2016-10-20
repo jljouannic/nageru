@@ -1,33 +1,31 @@
-#include <qmetatype.h>  // Needs to come before egl.h.
-#include <qdatastream.h>  // Needs to come before egl.h.
-#include <qtextstream.h>  // Needs to come before egl.h.
-#include <qcursor.h>  // Needs to come before egl.h.
-#include <qcoreevent.h>  // Needs to come before egl.h.
-#include <qevent.h>  // Needs to come before egl.h.
-#include <epoxy/gl.h>
-#include <epoxy/egl.h>
-#include <QAction>
-#include <QMenu>
-#include <QSurfaceFormat>
-
 #include "glwidget.h"
 
-#include <stdio.h>
-#include <functional>
-#include <limits>
-#include <mutex>
+#include <assert.h>
+#include <bmusb/bmusb.h>
 #include <movit/effect_chain.h>
 #include <movit/resource_pool.h>
+#include <stdbool.h>
+#include <stdint.h>
+#include <QAction>
+#include <QActionGroup>
+#include <QList>
+#include <QMenu>
+#include <QPoint>
+#include <QVariant>
+#include <QWidget>
+#include <functional>
+#include <map>
+#include <mutex>
+#include <utility>
 
+#include "audio_mixer.h"
 #include "context.h"
 #include "flags.h"
 #include "mainwindow.h"
 #include "mixer.h"
-#include "qnamespace.h"
 #include "ref_counted_gl_sync.h"
 
 class QMouseEvent;
-class QWidget;
 
 #undef Success
 #include <movit/util.h>

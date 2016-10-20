@@ -1,16 +1,21 @@
 #include "alsa_pool.h"
 
-#include <alsa/control.h>
-#include <alsa/error.h>
-#include <alsa/pcm.h>
+#include <alsa/asoundlib.h>
 #include <assert.h>
+#include <errno.h>
 #include <limits.h>
+#include <poll.h>
+#include <stdint.h>
 #include <stdio.h>
 #include <sys/eventfd.h>
 #include <sys/inotify.h>
 #include <unistd.h>
 #include <algorithm>
+#include <chrono>
+#include <functional>
+#include <iterator>
 #include <memory>
+#include <ratio>
 
 #include "alsa_input.h"
 #include "audio_mixer.h"

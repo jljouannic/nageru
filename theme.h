@@ -1,26 +1,23 @@
 #ifndef _THEME_H
 #define _THEME_H 1
 
-#include <epoxy/gl.h>
 #include <lua.hpp>
-#include <movit/effect_chain.h>
-#include <movit/deinterlace_effect.h>
 #include <movit/ycbcr_input.h>
 #include <stdbool.h>
-#include <stdio.h>
 #include <functional>
+#include <map>
 #include <mutex>
-#include <set>
 #include <string>
-#include <utility>
 #include <vector>
 
-#include "defs.h"
-#include "input_state.h"
 #include "ref_counted_frame.h"
+
+struct InputState;
 
 namespace movit {
 class ResourcePool;
+class Effect;
+class EffectChain;
 struct ImageFormat;
 struct YCbCrFormat;
 }  // namespace movit

@@ -5,6 +5,7 @@
 #include <errno.h>
 #include <stdio.h>
 #include <unistd.h>
+#include <cstdint>
 
 #include "alsa_pool.h"
 #include "bmusb/bmusb.h"

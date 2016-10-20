@@ -1,11 +1,9 @@
 #include "vu_common.h"
 
-#include <math.h>
-#include <algorithm>
-
-#include <QBrush>
 #include <QColor>
 #include <QPainter>
+#include <algorithm>
+#include <cmath>
 
 using namespace std;
 

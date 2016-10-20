@@ -5,21 +5,29 @@
 #ifndef _VIDEO_ENCODER_H
 #define _VIDEO_ENCODER_H
 
+#include <epoxy/gl.h>
+#include <stdbool.h>
 #include <stdint.h>
+#include <atomic>
 #include <memory>
-#include <set>
+#include <mutex>
 #include <string>
 #include <vector>
 
-#include "audio_encoder.h"
-#include "mux.h"
-#include "ref_counted_frame.h"
+extern "C" {
+#include <libavformat/avformat.h>
+#include <libavformat/avio.h>
+}
+
 #include "ref_counted_gl_sync.h"
 
+class AudioEncoder;
 class DiskSpaceEstimator;
 class HTTPD;
+class Mux;
 class QSurface;
 class QuickSyncEncoder;
+class RefCountedFrame;
 class X264Encoder;
 
 namespace movit {

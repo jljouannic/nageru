@@ -1,8 +1,8 @@
-#include <math.h>
+#include "stereocompressor.h"
+
 #include <assert.h>
 #include <algorithm>
-
-#include "stereocompressor.h"
+#include <cmath>
 
 using namespace std;
 

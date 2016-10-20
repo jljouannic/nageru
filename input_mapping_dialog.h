@@ -2,12 +2,14 @@
 #define _INPUT_MAPPING_DIALOG_H
 
 #include <QDialog>
-#include <string>
+#include <QString>
+#include <map>
 #include <vector>
-#include <sys/time.h>
 
 #include "audio_mixer.h"
-#include "mixer.h"
+#include "input_mapping.h"
+
+class QObject;
 
 namespace Ui {
 class InputMappingDialog;

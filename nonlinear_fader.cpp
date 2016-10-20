@@ -1,15 +1,18 @@
+#include "nonlinear_fader.h"
+
 #include <assert.h>
 #include <math.h>
-#include <stdio.h>
-#include <vector>
-#include <utility>
-
-#include <QResizeEvent>
 #include <QPainter>
+#include <QPoint>
+#include <QRect>
 #include <QStyle>
-#include <QStyleOptionSlider>
+#include <QStyleOption>
+#include <memory>
+#include <utility>
+#include <vector>
 
-#include "nonlinear_fader.h"
+class QPaintEvent;
+class QWidget;
 
 using namespace std;
 

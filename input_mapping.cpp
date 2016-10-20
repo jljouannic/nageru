@@ -1,13 +1,14 @@
-#include <stdio.h>
-#include <fcntl.h>
-#include <unistd.h>
+#include "input_mapping.h"
 
-#include <google/protobuf/text_format.h>
-#include <google/protobuf/io/zero_copy_stream.h>
+#include <assert.h>
+#include <fcntl.h>
 #include <google/protobuf/io/zero_copy_stream_impl.h>
+#include <google/protobuf/text_format.h>
+#include <stdio.h>
+#include <set>
+#include <utility>
 
 #include "audio_mixer.h" 
-#include "input_mapping.h"
 #include "state.pb.h"
 
 using namespace std;

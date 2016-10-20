@@ -1,15 +1,16 @@
 #ifndef _IMAGE_INPUT_H
 #define _IMAGE_INPUT_H 1
 
+#include <epoxy/gl.h>
+#include <movit/flat_input.h>
+#include <stdbool.h>
+#include <time.h>
+#include <cstdint>
 #include <map>
 #include <memory>
 #include <mutex>
 #include <string>
 #include <thread>
-
-#include <time.h>
-
-#include <movit/flat_input.h>
 
 // An output that takes its input from a static image, loaded with ffmpeg.
 // comes from a single 2D array with chunky pixels. The image is refreshed

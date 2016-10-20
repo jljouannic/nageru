@@ -1,19 +1,18 @@
-#include <arpa/inet.h>
-#include <assert.h>
-#include <endian.h>
-#include <microhttpd.h>
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
-
-#include <vector>
-
 #include "httpd.h"
 
+#include <assert.h>
+#include <byteswap.h>
+#include <endian.h>
+#include <microhttpd.h>
+#include <netinet/in.h>
+#include <stdio.h>
+#include <string.h>
+#include <sys/time.h>
+#include <time.h>
+#include <memory>
+
 #include "defs.h"
-#include "flags.h"
 #include "metacube2.h"
-#include "timebase.h"
 
 struct MHD_Connection;
 struct MHD_Response;

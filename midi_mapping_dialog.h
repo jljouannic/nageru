@@ -1,21 +1,24 @@
 #ifndef _MIDI_MAPPING_DIALOG_H
 #define _MIDI_MAPPING_DIALOG_H
 
+#include <stdbool.h>
 #include <QDialog>
+#include <QString>
+#include <map>
+#include <memory>
 #include <string>
 #include <utility>
 #include <vector>
-#include <sys/time.h>
 
-#include "audio_mixer.h"
 #include "midi_mapper.h"
-#include "mixer.h"
+
+class QEvent;
+class QObject;
 
 namespace Ui {
 class MIDIMappingDialog;
 }  // namespace Ui
 
-class MIDIMapper;
 class MIDIMappingProto;
 class QComboBox;
 class QSpinBox;

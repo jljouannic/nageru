@@ -1,7 +1,11 @@
-#include <QPainter>
-
 #include "vumeter.h"
+
+#include <QPainter>
+#include <QRect>
 #include "vu_common.h"
+
+class QPaintEvent;
+class QResizeEvent;
 
 using namespace std;
 

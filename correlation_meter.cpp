@@ -1,8 +1,15 @@
-#include <QPainter>
+#include "correlation_meter.h"
 
 #include <math.h>
+#include <algorithm>
 
-#include "correlation_meter.h"
+#include <QBrush>
+#include <QColor>
+#include <QPainter>
+#include <QRect>
+
+class QPaintEvent;
+class QResizeEvent;
 
 using namespace std;
 

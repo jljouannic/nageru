@@ -10,21 +10,17 @@
 // as a whole, since that's what AudioMixer::add_audio() wants.
 
 #include <alsa/asoundlib.h>
-#include <alsa/pcm.h>
 #include <stdint.h>
 #include <sys/types.h>
 #include <atomic>
 #include <functional>
+#include <memory>
 #include <string>
 #include <thread>
-#include <unordered_map>
-#include <vector>
 
 #include "bmusb/bmusb.h"
-#include "timebase.h"
 
 class ALSAPool;
-class DeviceSpecProto;
 
 class ALSAInput {
 public:

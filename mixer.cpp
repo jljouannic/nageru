@@ -3,7 +3,6 @@
 #include "mixer.h"
 
 #include <assert.h>
-#include <endian.h>
 #include <epoxy/egl.h>
 #include <movit/effect_chain.h>
 #include <movit/effect_util.h>
@@ -16,33 +15,37 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <sys/resource.h>
-#include <sys/time.h>
-#include <time.h>
 #include <algorithm>
 #include <chrono>
-#include <cmath>
 #include <condition_variable>
 #include <cstddef>
+#include <cstdint>
 #include <memory>
 #include <mutex>
+#include <ratio>
 #include <string>
 #include <thread>
 #include <utility>
 #include <vector>
 
+#include "DeckLinkAPI.h"
+#include "LinuxCOM.h"
+#include "alsa_output.h"
 #include "bmusb/bmusb.h"
 #include "bmusb/fake_capture.h"
 #include "context.h"
-#include "db.h"
 #include "decklink_capture.h"
 #include "defs.h"
 #include "disk_space_estimator.h"
 #include "flags.h"
+#include "input_mapping.h"
 #include "pbo_frame_allocator.h"
 #include "ref_counted_gl_sync.h"
+#include "resampling_queue.h"
 #include "timebase.h"
 #include "video_encoder.h"
 
+class IDeckLink;
 class QOpenGLContext;
 
 using namespace movit;

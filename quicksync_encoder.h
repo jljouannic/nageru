@@ -29,8 +29,6 @@
 #include <epoxy/gl.h>
 #include <stdbool.h>
 #include <stdint.h>
-#include <atomic>
-#include <functional>
 #include <memory>
 #include <string>
 #include <vector>
@@ -39,10 +37,8 @@ extern "C" {
 #include <libavformat/avformat.h>
 }
 
-#include "ref_counted_frame.h"
 #include "ref_counted_gl_sync.h"
 
-class AudioEncoder;
 class DiskSpaceEstimator;
 class Mux;
 class QSurface;

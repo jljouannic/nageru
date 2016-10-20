@@ -20,11 +20,14 @@
 #include "resampling_queue.h"
 
 #include <assert.h>
-#include <math.h>
-#include <stddef.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 #include <zita-resampler/vresampler.h>
+#include <algorithm>
+#include <cmath>
+
+using namespace std;
 
 ResamplingQueue::ResamplingQueue(unsigned card_num, unsigned freq_in, unsigned freq_out, unsigned num_channels)
 	: card_num(card_num), freq_in(freq_in), freq_out(freq_out), num_channels(num_channels),

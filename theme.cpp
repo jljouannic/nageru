@@ -1,17 +1,19 @@
 #include "theme.h"
 
 #include <assert.h>
+#include <bmusb/bmusb.h>
+#include <epoxy/gl.h>
 #include <lauxlib.h>
 #include <lua.hpp>
 #include <movit/effect.h>
 #include <movit/effect_chain.h>
 #include <movit/image_format.h>
 #include <movit/mix_effect.h>
+#include <movit/multiply_effect.h>
 #include <movit/overlay_effect.h>
 #include <movit/padding_effect.h>
 #include <movit/resample_effect.h>
 #include <movit/resize_effect.h>
-#include <movit/multiply_effect.h>
 #include <movit/util.h>
 #include <movit/white_balance_effect.h>
 #include <movit/ycbcr.h>
@@ -19,14 +21,19 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <cstddef>
+#include <memory>
 #include <new>
 #include <utility>
-#include <memory>
 
 #include "defs.h"
+#include "deinterlace_effect.h"
 #include "flags.h"
 #include "image_input.h"
-#include "mixer.h"
+#include "input.h"
+#include "input_state.h"
+#include "pbo_frame_allocator.h"
+
+class Mixer;
 
 namespace movit {
 class ResourcePool;

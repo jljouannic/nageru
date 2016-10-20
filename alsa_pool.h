@@ -1,18 +1,13 @@
 #ifndef _ALSA_POOL_H
 #define _ALSA_POOL_H 1
 
-#include <alsa/asoundlib.h>
 #include <atomic>
-#include <functional>
+#include <memory>
 #include <mutex>
 #include <string>
 #include <thread>
 #include <unordered_map>
 #include <vector>
-
-#include "alsa_input.h"
-#include "bmusb/bmusb.h"
-#include "timebase.h"
 
 class ALSAInput;
 class DeviceSpecProto;

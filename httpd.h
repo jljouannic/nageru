@@ -3,13 +3,11 @@
 
 // A class dealing with stream output to HTTP.
 
-#include <microhttpd.h>
 #include <stddef.h>
 #include <stdint.h>
 #include <sys/types.h>
 #include <condition_variable>
 #include <deque>
-#include <memory>
 #include <mutex>
 #include <set>
 #include <string>

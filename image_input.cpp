@@ -1,25 +1,39 @@
 #include "image_input.h"
 
+#include <errno.h>
 #include <movit/image_format.h>
+#include <stdint.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
 
 extern "C" {
 #include <libavcodec/avcodec.h>
 #include <libavformat/avformat.h>
+#include <libavutil/avutil.h>
+#include <libavutil/error.h>
+#include <libavutil/frame.h>
 #include <libavutil/imgutils.h>
+#include <libavutil/mem.h>
 #include <libavutil/pixfmt.h>
 #include <libswscale/swscale.h>
 }
 
-#include <sys/types.h>
+#include <fcntl.h>
 #include <sys/stat.h>
 #include <unistd.h>
-#include <fcntl.h>
-
+#include <cstddef>
+#include <functional>
 #include <mutex>
 #include <thread>
+#include <utility>
+#include <vector>
 
 #include "ffmpeg_raii.h"
 #include "flags.h"
+#include "flat_input.h"
+
+struct SwsContext;
 
 using namespace std;
 

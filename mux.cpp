@@ -1,12 +1,27 @@
-#include <assert.h>
+#include "mux.h"
 
+#include <assert.h>
+#include <stdint.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
 #include <algorithm>
 #include <mutex>
 #include <string>
+#include <utility>
 #include <vector>
 
+extern "C" {
+#include <libavformat/avio.h>
+#include <libavutil/avutil.h>
+#include <libavutil/dict.h>
+#include <libavutil/mathematics.h>
+#include <libavutil/mem.h>
+#include <libavutil/pixfmt.h>
+#include <libavutil/rational.h>
+}
+
 #include "defs.h"
-#include "mux.h"
 #include "timebase.h"
 
 using namespace std;

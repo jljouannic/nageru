@@ -8,19 +8,19 @@
 //
 // All operations on AudioMixer (except destruction) are thread-safe.
 
-#include <math.h>
+#include <assert.h>
 #include <stdint.h>
+#include <zita-resampler/resampler.h>
 #include <atomic>
+#include <functional>
 #include <map>
 #include <memory>
 #include <mutex>
 #include <set>
+#include <string>
 #include <vector>
-#include <zita-resampler/resampler.h>
 
-#include "alsa_input.h"
 #include "alsa_pool.h"
-#include "bmusb/bmusb.h"
 #include "correlation_measurer.h"
 #include "db.h"
 #include "defs.h"
@@ -29,6 +29,8 @@
 #include "input_mapping.h"
 #include "resampling_queue.h"
 #include "stereocompressor.h"
+
+class DeviceSpecProto;
 
 namespace bmusb {
 struct AudioFormat;

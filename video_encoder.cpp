@@ -1,15 +1,27 @@
 #include "video_encoder.h"
 
 #include <assert.h>
-
+#include <stdio.h>
+#include <time.h>
+#include <unistd.h>
 #include <string>
+#include <thread>
 
+extern "C" {
+#include <libavutil/mem.h>
+}
+
+#include "audio_encoder.h"
 #include "defs.h"
+#include "ffmpeg_raii.h"
 #include "flags.h"
 #include "httpd.h"
-#include "timebase.h"
+#include "mux.h"
 #include "quicksync_encoder.h"
+#include "timebase.h"
 #include "x264_encoder.h"
+
+class RefCountedFrame;
 
 using namespace std;
 using namespace movit;

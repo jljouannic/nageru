@@ -1,14 +1,20 @@
+#include "x264_encoder.h"
+
+#include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
+#include <x264.h>
+#include <cstdint>
 
 #include "defs.h"
 #include "flags.h"
 #include "mux.h"
 #include "timebase.h"
-#include "x264_encoder.h"
 #include "x264_speed_control.h"
 
 extern "C" {
+#include <libavcodec/avcodec.h>
 #include <libavformat/avformat.h>
 }
 

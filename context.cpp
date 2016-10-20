@@ -3,9 +3,8 @@
 #include <QGL>
 #include <QOffscreenSurface>
 #include <QOpenGLContext>
+#include <QSurface>
 #include <QSurfaceFormat>
-
-class QSurface;
 
 QGLWidget *global_share_widget = nullptr;
 

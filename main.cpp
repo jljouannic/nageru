@@ -5,13 +5,13 @@ extern "C" {
 #include <stdio.h>
 #include <stdlib.h>
 #include <sys/mman.h>
-#include <epoxy/gl.h>
-
+#include <epoxy/gl.h>  // IWYU pragma: keep
 #include <QApplication>
 #include <QCoreApplication>
 #include <QGL>
 #include <QSize>
 #include <QSurfaceFormat>
+#include <string>
 
 #include "context.h"
 #include "flags.h"

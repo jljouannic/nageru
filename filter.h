@@ -10,19 +10,12 @@
 #define _FILTER_H 1
 
 #define _USE_MATH_DEFINES
-#include <math.h>
-#include <string.h>
+#include <cmath>
 #include <complex>
 
 #ifdef __SSE__
 #include <xmmintrin.h>
 #endif
-
-#include "defs.h"
-
-namespace std {
-template <typename _Tp> struct complex;
-}  // namespace std
 
 enum FilterType
 {
