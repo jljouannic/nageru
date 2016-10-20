@@ -11,9 +11,10 @@ Features:
    for intermediate calculations, dithered output.
 
  - Proper sound support: Syncing of multiple unrelated sources through
-   high-quality resampling, freely selectable input, cue out for headphones,
-   dynamic range compression, simple EQ (low-cut), level meters conforming
-   to EBU R128.
+   high-quality resampling, multichannel mixing with separate effects
+   per-bus, cue out for headphones, dynamic range compression,
+   three-band graphical EQ (pluss a fixed low-cut), level meters conforming
+   to EBU R128, automation via MIDI controllers.
 
  - Theme engine encapsulating the design demands of each individual
    event; Lua code is responsible for setting up the pixel processing
