@@ -11,6 +11,8 @@
 #include <utility>
 #include <vector>
 
+#include "piecewise_interpolator.h"
+
 class QPaintEvent;
 class QWidget;
 
@@ -18,7 +20,7 @@ using namespace std;
 
 namespace {
 
-vector<pair<double, double>> fader_control_points = {
+PiecewiseInterpolator interpolator({
 	// The main area is from +6 to -12 dB (18 dB), and we use half the slider range for it.
 	// Adjust slightly so that the MIDI controller value of 106 becomes exactly 0.0 dB
 	// (cf. map_controller_to_float()); otherwise, we'd miss ever so slightly, which is
@@ -37,49 +39,7 @@ vector<pair<double, double>> fader_control_points = {
 
 	// -48 to -84 (36 dB) gets half of half of half.
 	{ -84.0, 0.0 },
-};
-
-double slider_fraction_to_db(double db)
-{
-	if (db >= fader_control_points[0].second) {
-		return fader_control_points[0].first;
-	}
-	if (db <= fader_control_points.back().second) {
-		return fader_control_points.back().first;
-	}
-	for (unsigned i = 1; i < fader_control_points.size(); ++i) {
-		const double x0 = fader_control_points[i].second;
-		const double x1 = fader_control_points[i - 1].second;
-		const double y0 = fader_control_points[i].first;
-		const double y1 = fader_control_points[i - 1].first;
-		if (db >= x0 && db <= x1) {
-			const double t = (db - x0) / (x1 - x0);
-			return y0 + t * (y1 - y0);
-		}
-	}
-	assert(false);
-}
-
-double db_to_slider_fraction(double x)
-{
-	if (x >= fader_control_points[0].first) {
-		return fader_control_points[0].second;
-	}
-	if (x <= fader_control_points.back().first) {
-		return fader_control_points.back().second;
-	}
-	for (unsigned i = 1; i < fader_control_points.size(); ++i) {
-		const double x0 = fader_control_points[i].first;
-		const double x1 = fader_control_points[i - 1].first;
-		const double y0 = fader_control_points[i].second;
-		const double y1 = fader_control_points[i - 1].second;
-		if (x >= x0 && x <= x1) {
-			const double t = (x - x0) / (x1 - x0);
-			return y0 + t * (y1 - y0);
-		}
-	}
-	assert(false);
-}
+});
 
 }  // namespace
 
@@ -117,7 +77,7 @@ void NonLinearFader::paintEvent(QPaintEvent *event)
 	int x_margin = 5;
 	p.setPen(Qt::darkGray);
 	for (int db = -84; db <= 6; db += 6) {
-		int y = slider_min + lrint(db_to_slider_fraction(db) * (slider_max - slider_min));
+		int y = slider_min + lrint(interpolator.db_to_fraction(db) * (slider_max - slider_min));
 		p.drawLine(QPoint(0, y), QPoint(gr.left() - x_margin, y));
 		p.drawLine(QPoint(gr.right() + x_margin, y), QPoint(width() - 1, y));
 	}
@@ -133,7 +93,7 @@ void NonLinearFader::sliderChange(SliderChange change)
 			db_value = -HUGE_VAL;
 		} else {
 			double frac = double(value() - minimum()) / (maximum() - minimum());
-			db_value = slider_fraction_to_db(frac);
+			db_value = interpolator.fraction_to_db(frac);
 		}
 		emit dbValueChanged(db_value);
 	}
@@ -142,7 +102,7 @@ void NonLinearFader::sliderChange(SliderChange change)
 void NonLinearFader::update_slider_position()
 {
 	inhibit_updates = true;
-	double val = db_to_slider_fraction(db_value) * (maximum() - minimum()) + minimum();
+	double val = interpolator.db_to_fraction(db_value) * (maximum() - minimum()) + minimum();
 	setValue(lrint(val));
 	inhibit_updates = false;
 }

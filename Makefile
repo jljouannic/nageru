@@ -14,7 +14,7 @@ endif
 LDLIBS=$(shell pkg-config --libs $(PKG_MODULES)) -pthread -lva -lva-drm -lva-x11 -lX11 -lavformat -lavcodec -lavutil -lswscale -lavresample -lzita-resampler -lasound -ldl
 
 # Qt objects
-OBJS=glwidget.o main.o mainwindow.o vumeter.o lrameter.o vu_common.o correlation_meter.o aboutdialog.o input_mapping_dialog.o midi_mapping_dialog.o nonlinear_fader.o
+OBJS=glwidget.o main.o mainwindow.o vumeter.o lrameter.o vu_common.o correlation_meter.o aboutdialog.o input_mapping_dialog.o midi_mapping_dialog.o nonlinear_fader.o piecewise_interpolator.o
 OBJS += glwidget.moc.o mainwindow.moc.o vumeter.moc.o lrameter.moc.o correlation_meter.moc.o aboutdialog.moc.o ellipsis_label.moc.o input_mapping_dialog.moc.o midi_mapping_dialog.moc.o nonlinear_fader.moc.o clickable_label.moc.o
 OBJS += midi_mapper.o midi_mapping.pb.o
 
