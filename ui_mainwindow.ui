@@ -947,13 +947,13 @@
                  </size>
                 </property>
                 <property name="minimum">
-                 <number>-300</number>
+                 <number>-150</number>
                 </property>
                 <property name="maximum">
-                 <number>300</number>
+                 <number>150</number>
                 </property>
                 <property name="notchTarget">
-                 <double>60.000000000000000</double>
+                 <double>30.000000000000000</double>
                 </property>
                 <property name="notchesVisible">
                  <bool>true</bool>
@@ -1339,13 +1339,13 @@
                  </size>
                 </property>
                 <property name="minimum">
-                 <number>-300</number>
+                 <number>-150</number>
                 </property>
                 <property name="maximum">
-                 <number>300</number>
+                 <number>150</number>
                 </property>
                 <property name="notchTarget">
-                 <double>60.000000000000000</double>
+                 <double>30.000000000000000</double>
                 </property>
                 <property name="notchesVisible">
                  <bool>true</bool>
