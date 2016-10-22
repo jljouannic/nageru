@@ -40,19 +40,11 @@ void VUMeter::paintEvent(QPaintEvent *event)
 		float level_lu = level_lufs[channel] - ref_level_lufs;
 		int on_pos = lrint(lufs_to_pos(level_lu, height()));
 
-		if (flip) {
-			QRect on_rect(left, 0, right - left, height() - on_pos);
-			QRect off_rect(left, height() - on_pos, right - left, height());
+		QRect off_rect(left, 0, right - left, on_pos);
+		QRect on_rect(left, on_pos, right - left, height() - on_pos);
 
-			painter.drawPixmap(on_rect, on_pixmap, on_rect);
-			painter.drawPixmap(off_rect, off_pixmap, off_rect);
-		} else {
-			QRect off_rect(left, 0, right - left, on_pos);
-			QRect on_rect(left, on_pos, right - left, height() - on_pos);
-
-			painter.drawPixmap(off_rect, off_pixmap, off_rect);
-			painter.drawPixmap(on_rect, on_pixmap, on_rect);
-		}
+		painter.drawPixmap(off_rect, off_pixmap, off_rect);
+		painter.drawPixmap(on_rect, on_pixmap, on_rect);
 
 		float peak_lu = peak_lufs[channel] - ref_level_lufs;
 		if (peak_lu >= min_level && peak_lu <= max_level) {
@@ -67,13 +59,18 @@ void VUMeter::recalculate_pixmaps()
 {
 	full_on_pixmap = QPixmap(width(), height());
 	QPainter full_on_painter(&full_on_pixmap);
-	draw_vu_meter(full_on_painter, width(), height(), 0, 0.0, true, min_level, max_level, flip);
+	full_on_painter.fillRect(0, 0, width(), height(), parentWidget()->palette().window());
+	draw_vu_meter(full_on_painter, width(), height(), 0, 0.0, true, min_level, max_level, /*flip=*/false);
+
+	float margin = 0.5 * (width() - 20);
 
 	on_pixmap = QPixmap(width(), height());
 	QPainter on_painter(&on_pixmap);
-	draw_vu_meter(on_painter, width(), height(), 0, 2.0, true, min_level, max_level, flip);
+	on_painter.fillRect(0, 0, width(), height(), parentWidget()->palette().window());
+	draw_vu_meter(on_painter, width(), height(), margin, 2.0, true, min_level, max_level, /*flip=*/false);
 
 	off_pixmap = QPixmap(width(), height());
 	QPainter off_painter(&off_pixmap);
-	draw_vu_meter(off_painter, width(), height(), 0, 2.0, false, min_level, max_level, flip);
+	off_painter.fillRect(0, 0, width(), height(), parentWidget()->palette().window());
+	draw_vu_meter(off_painter, width(), height(), margin, 2.0, false, min_level, max_level, /*flip=*/false);
 }

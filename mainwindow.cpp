@@ -529,13 +529,6 @@ void MainWindow::setup_audio_expanded_view()
 				global_audio_mixer->reset_peak(bus_index);
 				midi_mapper.refresh_lights();
 			});
-
-		// Set up the compression attenuation meter.
-		VUMeter *reduction_meter = ui_audio_expanded_view->reduction_meter;
-		reduction_meter->set_min_level(0.0f);
-		reduction_meter->set_max_level(10.0f);
-		reduction_meter->set_ref_level(0.0f);
-		reduction_meter->set_flip(true);
 	}
 
 	update_cutoff_labels(global_audio_mixer->get_locut_cutoff());
@@ -817,7 +810,7 @@ void MainWindow::audio_level_callback(float level_lufs, float peak_db, vector<Au
 					level.current_level_dbfs[0], level.current_level_dbfs[1]);
 				view->peak_meter->set_peak(
 					level.peak_level_dbfs[0], level.peak_level_dbfs[1]);
-				view->reduction_meter->set_level(level.compressor_attenuation_db);
+				view->reduction_meter->set_reduction_db(level.compressor_attenuation_db);
 				view->gainstaging_knob->blockSignals(true);
 				view->gainstaging_knob->setValue(lrintf(level.gain_staging_db * 10.0f));
 				view->gainstaging_knob->blockSignals(false);

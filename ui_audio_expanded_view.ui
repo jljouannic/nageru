@@ -323,6 +323,9 @@
          </item>
          <item>
           <layout class="QVBoxLayout" name="reduction_layout" stretch="0,1">
+           <property name="spacing">
+            <number>0</number>
+           </property>
            <item>
             <widget class="QLabel" name="reduction_header">
              <property name="text">
@@ -336,10 +339,10 @@
            <item>
             <layout class="QHBoxLayout" name="reduction_meter_centerer">
              <item>
-              <widget class="VUMeter" name="reduction_meter" native="true">
+              <widget class="CompressionReductionMeter" name="reduction_meter" native="true">
                <property name="maximumSize">
                 <size>
-                 <width>20</width>
+                 <width>16777215</width>
                  <height>16777215</height>
                 </size>
                </property>
@@ -505,6 +508,12 @@
    <class>EllipsisLabel</class>
    <extends>QLabel</extends>
    <header>ellipsis_label.h</header>
+  </customwidget>
+  <customwidget>
+   <class>CompressionReductionMeter</class>
+   <extends>QWidget</extends>
+   <header>compression_reduction_meter.h</header>
+   <container>1</container>
   </customwidget>
  </customwidgets>
  <resources/>

@@ -30,9 +30,9 @@ double lufs_to_pos(float level_lu, int height, float min_level, float max_level)
 	return y;
 }
 
-void draw_vu_meter(QPainter &painter, int width, int height, int horizontal_margin, double segment_margin, bool is_on, float min_level, float max_level, bool flip)
+void draw_vu_meter(QPainter &painter, int width, int height, int horizontal_margin, double segment_margin, bool is_on, float min_level, float max_level, bool flip, int y_offset)
 {
-	painter.fillRect(horizontal_margin, 0, width - 2 * horizontal_margin, height, Qt::black);
+	painter.fillRect(horizontal_margin, y_offset, width - 2 * horizontal_margin, height, Qt::black);
 
 	for (int y = 0; y < height; ++y) {
 		// Find coverage of “on” rectangles in this pixel row.
@@ -68,6 +68,6 @@ void draw_vu_meter(QPainter &painter, int width, int height, int horizontal_marg
 		int g = lrintf(255 * pow(on_g * coverage, 1.0 / 2.2));
 		int b = lrintf(255 * pow(on_b * coverage, 1.0 / 2.2));
 		int draw_y = flip ? (height - y - 1) : y;
-		painter.fillRect(horizontal_margin, draw_y, width - 2 * horizontal_margin, 1, QColor(r, g, b));
+		painter.fillRect(horizontal_margin, draw_y + y_offset, width - 2 * horizontal_margin, 1, QColor(r, g, b));
 	}
 }
