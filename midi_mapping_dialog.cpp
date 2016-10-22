@@ -239,7 +239,7 @@ void MIDIMappingDialog::guess_clicked(bool limit_to_group)
 		QSpinBox *source_spinner = spinners[source_bus_idx][field_number].spinner;
 		assert(spinners[source_bus_idx][field_number].group == this_spinner_group);
 
-		if (source_spinner->value() != 0) {
+		if (source_spinner->value() != -1) {
 			spinner->setValue(source_spinner->value() + offset);
 		}
 	}
@@ -329,7 +329,7 @@ unique_ptr<MIDIMappingProto> MIDIMappingDialog::construct_mapping_proto_from_ui(
 	unique_ptr<MIDIMappingProto> mapping_proto(new MIDIMappingProto);
 	for (const InstantiatedSpinner &is : controller_spinners) {
 		const int val = is.spinner->value();
-		if (val == 0) {
+		if (val == -1) {
 			continue;
 		}
 
@@ -339,7 +339,7 @@ unique_ptr<MIDIMappingProto> MIDIMappingDialog::construct_mapping_proto_from_ui(
 	}
 	for (const InstantiatedSpinner &is : button_spinners) {
 		const int val = is.spinner->value();
-		if (val == 0) {
+		if (val == -1) {
 			continue;
 		}
 
@@ -349,7 +349,7 @@ unique_ptr<MIDIMappingProto> MIDIMappingDialog::construct_mapping_proto_from_ui(
 	}
 	for (const InstantiatedSpinner &is : light_spinners) {
 		const int val = is.spinner->value();
-		if (val == 0) {
+		if (val == -1) {
 			continue;
 		}
 
@@ -405,7 +405,7 @@ void MIDIMappingDialog::add_controls(const string &heading,
 
 		for (unsigned bus_idx = 0; bus_idx < num_buses; ++bus_idx) {
 			QSpinBox *spinner = new QSpinBox(this);
-			spinner->setRange(0, 127);
+			spinner->setRange(-1, 127);
 			spinner->setAutoFillBackground(true);
 			spinner->setSpecialValueText("\u200d");  // Zero-width joiner (ie., empty).
 			spinner->installEventFilter(this);  // So we know when the focus changes.
@@ -430,13 +430,13 @@ void MIDIMappingDialog::add_controls(const string &heading,
 void MIDIMappingDialog::fill_controls_from_mapping(const MIDIMappingProto &mapping_proto)
 {
 	for (const InstantiatedSpinner &is : controller_spinners) {
-		is.spinner->setValue(get_controller_mapping(mapping_proto, is.bus_idx, is.field_number, 0));
+		is.spinner->setValue(get_controller_mapping(mapping_proto, is.bus_idx, is.field_number, -1));
 	}
 	for (const InstantiatedSpinner &is : button_spinners) {
-		is.spinner->setValue(get_button_mapping(mapping_proto, is.bus_idx, is.field_number, 0));
+		is.spinner->setValue(get_button_mapping(mapping_proto, is.bus_idx, is.field_number, -1));
 	}
 	for (const InstantiatedSpinner &is : light_spinners) {
-		is.spinner->setValue(get_light_mapping(mapping_proto, is.bus_idx, is.field_number, 0));
+		is.spinner->setValue(get_light_mapping(mapping_proto, is.bus_idx, is.field_number, -1));
 	}
 	for (const InstantiatedComboBox &ic : bank_combo_boxes) {
 		ic.combo_box->setCurrentIndex(get_bank(mapping_proto, ic.field_number, -1) + 1);
@@ -504,8 +504,8 @@ pair<int, int> MIDIMappingDialog::guess_offset(unsigned bus_idx, MIDIMappingDial
 		    spinner_group != this_spinner_group) {
 			continue;
 		}
-		if (spinner->value() == 0) {
-			if (source_spinner->value() != 0) {
+		if (spinner->value() == -1) {
+			if (source_spinner->value() != -1) {
 				// If the source value is e.g. 3, offset can't be less than -2 or larger than 124.
 				// Otherwise, we'd extrapolate values outside [1..127].
 				minimum_allowed_offset = max(minimum_allowed_offset, 1 - source_spinner->value());
@@ -513,7 +513,7 @@ pair<int, int> MIDIMappingDialog::guess_offset(unsigned bus_idx, MIDIMappingDial
 			}
 			continue;
 		}
-		if (source_spinner->value() == 0) {
+		if (source_spinner->value() == -1) {
 			// The bus has a controller set that the source bus doesn't set.
 			return not_found;
 		}
@@ -548,7 +548,7 @@ bool MIDIMappingDialog::bus_is_empty(unsigned bus_idx, SpinnerGroup spinner_grou
 		    spinner_group != this_spinner_group) {
 			continue;
 		}
-		if (spinner->value() != 0) {
+		if (spinner->value() != -1) {
 			return false;
 		}
 	}
