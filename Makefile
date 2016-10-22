@@ -66,7 +66,7 @@ DEPS=$(OBJS:.o=.d)
 -include $(DEPS)
 
 clean:
-	$(RM) $(OBJS) $(BM_OBJS) $(DEPS) nageru benchmark_audio_mixer ui_aboutdialog.h ui_mainwindow.h ui_display.h ui_about.h ui_audio_miniview.h ui_audio_expanded_view.h aboutdialog.moc.cpp correlation_meter.moc.cpp lrameter.moc.cpp vumeter.moc.cpp glwidget.moc.cpp mainwindow.moc.cpp window.moc.cpp chain-*.frag *.dot
+	$(RM) $(OBJS) $(BM_OBJS) $(DEPS) nageru benchmark_audio_mixer ui_aboutdialog.h ui_mainwindow.h ui_display.h ui_about.h ui_audio_miniview.h ui_audio_expanded_view.h aboutdialog.moc.cpp correlation_meter.moc.cpp lrameter.moc.cpp vumeter.moc.cpp glwidget.moc.cpp mainwindow.moc.cpp window.moc.cpp chain-*.frag *.dot *.pb.cc *.pb.h
 
 PREFIX=/usr/local
 install:
