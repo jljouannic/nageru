@@ -45,7 +45,6 @@ MIDIMapper::MIDIMapper(ControllerReceiver *receiver)
 {
 	should_quit_fd = eventfd(/*initval=*/0, /*flags=*/0);
 	assert(should_quit_fd != -1);
-	refresh_highlights();
 }
 
 MIDIMapper::~MIDIMapper()

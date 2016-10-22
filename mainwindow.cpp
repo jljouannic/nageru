@@ -249,6 +249,8 @@ MainWindow::MainWindow()
 		}
 		midi_mapper.set_midi_mapping(midi_mapping);
 	}
+	midi_mapper.refresh_highlights();
+	midi_mapper.refresh_lights();
 	midi_mapper.start_thread();
 }
 
