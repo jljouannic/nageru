@@ -14,8 +14,10 @@ endif
 LDLIBS=$(shell pkg-config --libs $(PKG_MODULES)) -pthread -lva -lva-drm -lva-x11 -lX11 -lavformat -lavcodec -lavutil -lswscale -lavresample -lzita-resampler -lasound -ldl
 
 # Qt objects
-OBJS=glwidget.o main.o mainwindow.o vumeter.o lrameter.o compression_reduction_meter.o vu_common.o correlation_meter.o aboutdialog.o input_mapping_dialog.o midi_mapping_dialog.o nonlinear_fader.o piecewise_interpolator.o
-OBJS += glwidget.moc.o mainwindow.moc.o vumeter.moc.o lrameter.moc.o compression_reduction_meter.moc.o correlation_meter.moc.o aboutdialog.moc.o ellipsis_label.moc.o input_mapping_dialog.moc.o midi_mapping_dialog.moc.o nonlinear_fader.moc.o clickable_label.moc.o
+OBJS_WITH_MOC = glwidget.o mainwindow.o vumeter.o lrameter.o compression_reduction_meter.o correlation_meter.o aboutdialog.o input_mapping_dialog.o midi_mapping_dialog.o nonlinear_fader.o
+OBJS += $(OBJS_WITH_MOC)
+OBJS += $(OBJS_WITH_MOC:.o=.moc.o) ellipsis_label.moc.o clickable_label.moc.o
+OBJS += vu_common.o piecewise_interpolator.o main.o
 OBJS += midi_mapper.o midi_mapping.pb.o
 
 # Mixer objects
@@ -62,11 +64,13 @@ aboutdialog.o: aboutdialog.cpp ui_aboutdialog.h
 
 input_mapping_dialog.o: input_mapping_dialog.cpp ui_input_mapping.h
 
+midi_mapping_dialog.o: midi_mapping_dialog.cpp ui_midi_mapping.h midi_mapping.pb.h
+
 DEPS=$(OBJS:.o=.d)
 -include $(DEPS)
 
 clean:
-	$(RM) $(OBJS) $(BM_OBJS) $(DEPS) nageru benchmark_audio_mixer ui_aboutdialog.h ui_mainwindow.h ui_display.h ui_about.h ui_audio_miniview.h ui_audio_expanded_view.h aboutdialog.moc.cpp correlation_meter.moc.cpp lrameter.moc.cpp vumeter.moc.cpp glwidget.moc.cpp mainwindow.moc.cpp window.moc.cpp chain-*.frag *.dot *.pb.cc *.pb.h
+	$(RM) $(OBJS) $(BM_OBJS) $(DEPS) nageru benchmark_audio_mixer ui_aboutdialog.h ui_mainwindow.h ui_display.h ui_about.h ui_audio_miniview.h ui_audio_expanded_view.h chain-*.frag *.dot *.pb.cc *.pb.h $(OBJS_WITH_MOC:.o=.moc.cpp) ellipsis_label.moc.cpp clickable_label.moc.cpp
 
 PREFIX=/usr/local
 install:
