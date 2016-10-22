@@ -20,6 +20,7 @@
 
 #include "midi_mapper.h"
 #include "midi_mapping.pb.h"
+#include "post_to_main_thread.h"
 #include "ui_midi_mapping.h"
 
 class QObject;
@@ -445,28 +446,32 @@ void MIDIMappingDialog::fill_controls_from_mapping(const MIDIMappingProto &mappi
 
 void MIDIMappingDialog::controller_changed(unsigned controller)
 {
-	for (const InstantiatedSpinner &is : controller_spinners) {
-		if (is.spinner->hasFocus()) {
-			is.spinner->setValue(controller);
-			is.spinner->selectAll();
+	post_to_main_thread([=]{
+		for (const InstantiatedSpinner &is : controller_spinners) {
+			if (is.spinner->hasFocus()) {
+				is.spinner->setValue(controller);
+				is.spinner->selectAll();
+			}
 		}
-	}
+	});
 }
 
 void MIDIMappingDialog::note_on(unsigned note)
 {
-	for (const InstantiatedSpinner &is : button_spinners) {
-		if (is.spinner->hasFocus()) {
-			is.spinner->setValue(note);
-			is.spinner->selectAll();
+	post_to_main_thread([=]{
+		for (const InstantiatedSpinner &is : button_spinners) {
+			if (is.spinner->hasFocus()) {
+				is.spinner->setValue(note);
+				is.spinner->selectAll();
+			}
 		}
-	}
-	for (const InstantiatedSpinner &is : light_spinners) {
-		if (is.spinner->hasFocus()) {
-			is.spinner->setValue(note);
-			is.spinner->selectAll();
+		for (const InstantiatedSpinner &is : light_spinners) {
+			if (is.spinner->hasFocus()) {
+				is.spinner->setValue(note);
+				is.spinner->selectAll();
+			}
 		}
-	}
+	});
 }
 
 pair<int, int> MIDIMappingDialog::guess_offset(unsigned bus_idx, MIDIMappingDialog::SpinnerGroup spinner_group)
