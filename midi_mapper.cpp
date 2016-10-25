@@ -51,7 +51,10 @@ MIDIMapper::~MIDIMapper()
 {
 	should_quit = true;
 	const uint64_t one = 1;
-	write(should_quit_fd, &one, sizeof(one));
+	if (write(should_quit_fd, &one, sizeof(one)) != sizeof(one)) {
+		perror("write(should_quit_fd)");
+		exit(1);
+	}
 	midi_thread.join();
 	close(should_quit_fd);
 }
