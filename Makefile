@@ -58,13 +58,16 @@ nageru: $(OBJS)
 benchmark_audio_mixer: $(BM_OBJS)
 	$(CXX) -o $@ $^ $(LDFLAGS) $(LDLIBS)
 
-mainwindow.o: mainwindow.cpp ui_mainwindow.h ui_display.h ui_audio_miniview.h ui_audio_expanded_view.h ui_midi_mapping.h
-
-aboutdialog.o: aboutdialog.cpp ui_aboutdialog.h
-
-input_mapping_dialog.o: input_mapping_dialog.cpp ui_input_mapping.h
-
-midi_mapping_dialog.o: midi_mapping_dialog.cpp ui_midi_mapping.h midi_mapping.pb.h
+# Extra dependencies that need to be generated.
+aboutdialog.o: ui_aboutdialog.h
+alsa_pool.o: state.pb.h
+audio_mixer.o: state.pb.h
+input_mapping.o: state.pb.h
+input_mapping_dialog.o: ui_input_mapping.h
+mainwindow.o: ui_mainwindow.h ui_display.h ui_audio_miniview.h ui_audio_expanded_view.h ui_midi_mapping.h
+mainwindow.o: midi_mapping.pb.h
+midi_mapper.o: midi_mapping.pb.h
+midi_mapping_dialog.o: ui_midi_mapping.h midi_mapping.pb.h
 
 DEPS=$(OBJS:.o=.d)
 -include $(DEPS)
