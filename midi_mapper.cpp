@@ -346,6 +346,7 @@ void MIDIMapper::handle_event(snd_seq_t *seq, snd_seq_event_t *event)
 			bind(&ControllerReceiver::toggle_limiter, receiver));
 		match_button(note, MIDIMappingBusProto::kToggleAutoMakeupGainFieldNumber, MIDIMappingProto::kToggleAutoMakeupGainBankFieldNumber,
 			bind(&ControllerReceiver::toggle_auto_makeup_gain, receiver));
+		break;
 	}
 	case SND_SEQ_EVENT_PORT_START:
 		subscribe_to_port_lock_held(seq, event->data.addr);
