@@ -7,6 +7,7 @@ class QOpenGLContext;
 class QSurfaceFormat;
 class QGLWidget;
 
+extern bool using_egl;
 extern QGLWidget *global_share_widget;
 QSurface *create_surface(const QSurfaceFormat &format);
 QSurface *create_surface_with_same_format(const QSurface *surface);

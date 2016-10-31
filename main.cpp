@@ -28,6 +28,7 @@ int main(int argc, char *argv[])
 		// We normally use EGL for zerocopy, but if we use VA against DRM
 		// instead of against X11, we turn it off, and then don't need EGL.
 		setenv("QT_XCB_GL_INTEGRATION", "xcb_egl", 0);
+		using_egl = true;
 	}
 	setlinebuf(stdout);
 	av_register_all();

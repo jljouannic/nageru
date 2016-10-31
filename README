@@ -64,6 +64,8 @@ Nageru is in beta stage. It currently needs:
 
  - Lua, for driving the theme engine.
 
+ - libpci, for printing friendly PCI device names in an error message.
+
 
 If on Debian stretch or something similar, you can install everything you need
 with:
@@ -72,7 +74,7 @@ with:
     libusb-1.0-0-dev liblua5.2-dev libzita-resampler-dev libva-dev \
     libavcodec-dev libavformat-dev libswscale-dev libavresample-dev \
     libmovit-dev libegl1-mesa-dev libasound2-dev libx264-dev libbmusb-dev \
-    protobuf-compiler libprotobuf-dev
+    protobuf-compiler libprotobuf-dev libpci-dev
 
 Exceptions as of October 2016:
 
