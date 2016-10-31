@@ -1290,6 +1290,9 @@ void MainWindow::set_white_balance(int channel_number, int x, int y)
 void MainWindow::audio_state_changed()
 {
 	post_to_main_thread([this]{
+		if (global_audio_mixer->get_mapping_mode() == AudioMixer::MappingMode::SIMPLE) {
+			return;
+		}
 		InputMapping mapping = global_audio_mixer->get_input_mapping();
 		for (unsigned bus_index = 0; bus_index < mapping.buses.size(); ++bus_index) {
 			const InputMapping::Bus &bus = mapping.buses[bus_index];
