@@ -63,6 +63,8 @@ private:
 	HTTPD *httpd;
 	DiskSpaceEstimator *disk_space_estimator;
 
+	bool seen_sync_markers = false;
+
 	std::unique_ptr<Mux> stream_mux;  // To HTTP.
 	std::unique_ptr<AudioEncoder> stream_audio_encoder;
 	std::unique_ptr<X264Encoder> x264_encoder;  // nullptr if not using x264.

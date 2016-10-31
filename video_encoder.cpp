@@ -170,6 +170,14 @@ int VideoEncoder::write_packet2_thunk(void *opaque, uint8_t *buf, int buf_size, 
 
 int VideoEncoder::write_packet2(uint8_t *buf, int buf_size, AVIODataMarkerType type, int64_t time)
 {
+	if (type == AVIO_DATA_MARKER_SYNC_POINT || type == AVIO_DATA_MARKER_BOUNDARY_POINT) {
+		seen_sync_markers = true;
+	} else if (type == AVIO_DATA_MARKER_UNKNOWN && !seen_sync_markers) {
+		// We don't know if this is a keyframe or not (the muxer could
+		// avoid marking it), so we just have to make the best of it.
+		type = AVIO_DATA_MARKER_SYNC_POINT;
+	}
+
 	if (type == AVIO_DATA_MARKER_HEADER) {
 		stream_mux_header.append((char *)buf, buf_size);
 		httpd->set_header(stream_mux_header);
