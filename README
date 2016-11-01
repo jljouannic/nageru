@@ -37,7 +37,7 @@ Nageru is in beta stage. It currently needs:
  - Two or more Blackmagic USB3 or PCI cards, either HDMI or SDI.
    The PCI cards need Blackmagic's own drivers installed. The USB3 cards
    are driven through the “bmusb” driver, using libusb-1.0. If you want
-   zerocopy USB, you need libusb 1.0.21-rc1 or newer, as well as a recent
+   zerocopy USB, you need libusb 1.0.21 or newer, as well as a recent
    kernel (4.6.0 or newer). Zerocopy USB helps not only for performance,
    but also for stability.
 
@@ -76,10 +76,10 @@ with:
     libmovit-dev libegl1-mesa-dev libasound2-dev libx264-dev libbmusb-dev \
     protobuf-compiler libprotobuf-dev libpci-dev
 
-Exceptions as of October 2016:
+Exceptions as of November 2016:
 
-  - libusb 1.0.21-rc1 is not yet in stretch or sid; you need to fetch it
-    from experimental.
+  - libusb 1.0.21 is not yet in stretch; you need to fetch it from sid.
+    Same with a bmusb version built against it.
 
 
 The patches/ directory contains a patch that helps zita-resampler performance.
