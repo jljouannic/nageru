@@ -170,8 +170,6 @@ AudioMixer::AudioMixer(unsigned num_cards)
 	  limiter(OUTPUT_FREQUENCY),
 	  correlation(OUTPUT_FREQUENCY)
 {
-	global_audio_mixer = this;
-
 	for (unsigned bus_index = 0; bus_index < MAX_BUSES; ++bus_index) {
 		locut[bus_index].init(FILTER_HPF, 2);
 		eq[bus_index][EQ_BAND_BASS].init(FILTER_LOW_SHELF, 1);
@@ -184,7 +182,6 @@ AudioMixer::AudioMixer(unsigned num_cards)
 	}
 	set_limiter_enabled(global_flags.limiter_enabled);
 	set_final_makeup_gain_auto(global_flags.final_makeup_gain_auto);
-	alsa_pool.init();
 
 	if (!global_flags.input_mapping_filename.empty()) {
 		current_mapping_mode = MappingMode::MULTICHANNEL;
@@ -210,6 +207,9 @@ AudioMixer::AudioMixer(unsigned num_cards)
 	// hlen=16 is pretty low quality, but we use quite a bit of CPU otherwise,
 	// and there's a limit to how important the peak meter is.
 	peak_resampler.setup(OUTPUT_FREQUENCY, OUTPUT_FREQUENCY * 4, /*num_channels=*/2, /*hlen=*/16, /*frel=*/1.0);
+
+	global_audio_mixer = this;
+	alsa_pool.init();
 }
 
 void AudioMixer::reset_resampler(DeviceSpec device_spec)

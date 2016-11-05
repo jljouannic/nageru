@@ -251,7 +251,6 @@ MainWindow::MainWindow()
 	}
 	midi_mapper.refresh_highlights();
 	midi_mapper.refresh_lights();
-	midi_mapper.start_thread();
 }
 
 void MainWindow::resizeEvent(QResizeEvent* event)
@@ -366,6 +365,7 @@ void MainWindow::mixer_created(Mixer *mixer)
 
 	midi_mapper.refresh_highlights();
 	midi_mapper.refresh_lights();
+	midi_mapper.start_thread();
 
 	struct sigaction act;
 	memset(&act, 0, sizeof(act));
