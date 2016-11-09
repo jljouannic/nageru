@@ -11,7 +11,7 @@
    </rect>
   </property>
   <property name="windowTitle">
-   <string>Input mapping</string>
+   <string>MIDI controller setup</string>
   </property>
   <layout class="QVBoxLayout" name="verticalLayout">
    <item>
