@@ -194,6 +194,7 @@ void X264Encoder::encoder_thread_func()
 		// No exit; it's not fatal.
 	}
 	init_x264();
+	x264_init_done = true;
 
 	bool frames_left;
 

@@ -16,6 +16,7 @@
 #ifndef _X264ENCODE_H
 #define _X264ENCODE_H 1
 
+#include <sched.h>
 #include <stdint.h>
 #include <x264.h>
 #include <atomic>
@@ -48,7 +49,12 @@ public:
 	// Does not block.
 	void add_frame(int64_t pts, int64_t duration, const uint8_t *data);
 
-	std::string get_global_headers() const { return global_headers; }
+	std::string get_global_headers() const {
+		while (!x264_init_done) {
+			sched_yield();
+		}
+		return global_headers;
+	}
 
 	void change_bitrate(unsigned rate_kbit) {
 		new_bitrate_kbit = rate_kbit;
@@ -75,6 +81,7 @@ private:
 	std::string buffered_sei;  // Will be output before first frame, if any.
 
 	std::thread encoder_thread;
+	std::atomic<bool> x264_init_done{false};
 	std::atomic<bool> should_quit{false};
 	x264_t *x264;
 	std::unique_ptr<X264SpeedControl> speed_control;
