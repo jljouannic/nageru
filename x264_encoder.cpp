@@ -278,6 +278,8 @@ void X264Encoder::encode_frame(X264Encoder::QueuedFrame qf)
 		speed_control->after_frame();
 	}
 
+	if (num_nal == 0) return;
+
 	// We really need one AVPacket for the entire frame, it seems,
 	// so combine it all.
 	size_t num_bytes = buffered_sei.size();
