@@ -1,3 +1,8 @@
+Nageru 1.4.2, November 24th, 2016
+
+  - Fix a thread race that would sometimes cause x264 streaming to go awry.
+
+
 Nageru 1.4.1, November 6th, 2016
 
   - Various bugfixes.
