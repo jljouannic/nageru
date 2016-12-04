@@ -3,8 +3,6 @@
 
 #define OUTPUT_FREQUENCY 48000  // Currently needs to be exactly 48000, since bmusb outputs in that.
 #define MAX_FPS 60
-#define WIDTH 1280
-#define HEIGHT 720
 #define FAKE_FPS 25  // Must be an integer.
 #define MAX_VIDEO_CARDS 16
 #define MAX_ALSA_CARDS 16

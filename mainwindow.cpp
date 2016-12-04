@@ -857,7 +857,7 @@ void MainWindow::relayout()
 	// Allocate the height; the most important part is to keep the main displays
 	// at the right aspect if at all possible.
 	double me_width = ui->me_preview->width();
-	double me_height = me_width * double(HEIGHT) / double(WIDTH) + ui->label_preview->height() + ui->preview_vertical_layout->spacing();
+	double me_height = me_width * double(global_flags.height) / double(global_flags.width) + ui->label_preview->height() + ui->preview_vertical_layout->spacing();
 
 	// TODO: Scale the widths when we need to do this.
 	if (me_height / double(height) > 0.8) {
@@ -877,7 +877,7 @@ void MainWindow::relayout()
 	double preview_label_height = previews[0]->title_bar->geometry().height() +
 		previews[0]->main_vertical_layout->spacing();
 	int preview_total_width = ui->preview_displays->geometry().width() - (previews.size() - 1) * ui->preview_displays->spacing();
-	double preview_height = min(remaining_height - preview_label_height, (preview_total_width / double(previews.size())) * double(HEIGHT) / double(WIDTH));
+	double preview_height = min(remaining_height - preview_label_height, (preview_total_width / double(previews.size())) * double(global_flags.height) / double(global_flags.width));
 	remaining_height -= preview_height + preview_label_height + ui->vertical_layout->spacing();
 
 	ui->vertical_layout->setStretch(0, lrintf(me_height));
@@ -891,7 +891,7 @@ void MainWindow::relayout()
 	ui->compact_audio_layout->setStretch(2, lrintf(preview_height + preview_label_height));
 
 	// Set the widths for the previews.
-	double preview_width = preview_height * double(WIDTH) / double(HEIGHT);
+	double preview_width = preview_height * double(global_flags.width) / double(global_flags.height);
 	for (unsigned i = 0; i < previews.size(); ++i) {
 		ui->preview_displays->setStretch(i, lrintf(preview_width));
 	}

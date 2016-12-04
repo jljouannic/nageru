@@ -631,9 +631,9 @@ LiveInputWrapper::LiveInputWrapper(Theme *theme, EffectChain *chain, bool overri
 	}
 	for (unsigned i = 0; i < num_inputs; ++i) {
 		if (override_bounce) {
-			inputs.push_back(new NonBouncingYCbCrInput(inout_format, input_ycbcr_format, WIDTH, HEIGHT, YCBCR_INPUT_SPLIT_Y_AND_CBCR));
+			inputs.push_back(new NonBouncingYCbCrInput(inout_format, input_ycbcr_format, global_flags.width, global_flags.height, YCBCR_INPUT_SPLIT_Y_AND_CBCR));
 		} else {
-			inputs.push_back(new YCbCrInput(inout_format, input_ycbcr_format, WIDTH, HEIGHT, YCBCR_INPUT_SPLIT_Y_AND_CBCR));
+			inputs.push_back(new YCbCrInput(inout_format, input_ycbcr_format, global_flags.width, global_flags.height, YCBCR_INPUT_SPLIT_Y_AND_CBCR));
 		}
 		chain->add_input(inputs.back());
 	}

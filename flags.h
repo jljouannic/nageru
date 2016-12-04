@@ -8,6 +8,7 @@
 #include "defs.h"
 
 struct Flags {
+	int width = 1280, height = 720;
 	int num_cards = 2;
 	std::string va_display;
 	bool fake_cards_audio = false;

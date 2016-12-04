@@ -41,9 +41,9 @@ void update_vbv_settings(x264_param_t *param)
 X264Encoder::X264Encoder(AVOutputFormat *oformat)
 	: wants_global_headers(oformat->flags & AVFMT_GLOBALHEADER)
 {
-	frame_pool.reset(new uint8_t[WIDTH * HEIGHT * 2 * X264_QUEUE_LENGTH]);
+	frame_pool.reset(new uint8_t[global_flags.width * global_flags.height * 2 * X264_QUEUE_LENGTH]);
 	for (unsigned i = 0; i < X264_QUEUE_LENGTH; ++i) {
-		free_frames.push(frame_pool.get() + i * (WIDTH * HEIGHT * 2));
+		free_frames.push(frame_pool.get() + i * (global_flags.width * global_flags.height * 2));
 	}
 	encoder_thread = thread(&X264Encoder::encoder_thread_func, this);
 }
@@ -72,7 +72,7 @@ void X264Encoder::add_frame(int64_t pts, int64_t duration, const uint8_t *data)
 		free_frames.pop();
 	}
 
-	memcpy(qf.data, data, WIDTH * HEIGHT * 2);
+	memcpy(qf.data, data, global_flags.width * global_flags.height * 2);
 
 	{
 		lock_guard<mutex> lock(mu);
@@ -86,8 +86,8 @@ void X264Encoder::init_x264()
 	x264_param_t param;
 	x264_param_default_preset(&param, global_flags.x264_preset.c_str(), global_flags.x264_tune.c_str());
 
-	param.i_width = WIDTH;
-	param.i_height = HEIGHT;
+	param.i_width = global_flags.width;
+	param.i_height = global_flags.height;
 	param.i_csp = X264_CSP_NV12;
 	param.b_vfr_input = 1;
 	param.i_timebase_num = 1;
@@ -245,9 +245,9 @@ void X264Encoder::encode_frame(X264Encoder::QueuedFrame qf)
 		pic.img.i_csp = X264_CSP_NV12;
 		pic.img.i_plane = 2;
 		pic.img.plane[0] = qf.data;
-		pic.img.i_stride[0] = WIDTH;
-		pic.img.plane[1] = qf.data + WIDTH * HEIGHT;
-		pic.img.i_stride[1] = WIDTH / 2 * sizeof(uint16_t);
+		pic.img.i_stride[0] = global_flags.width;
+		pic.img.plane[1] = qf.data + global_flags.width * global_flags.height;
+		pic.img.i_stride[1] = global_flags.width / 2 * sizeof(uint16_t);
 		pic.opaque = reinterpret_cast<void *>(intptr_t(qf.duration));
 
 		input_pic = &pic;

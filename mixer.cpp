@@ -129,15 +129,15 @@ Mixer::Mixer(const QSurfaceFormat &format, unsigned num_cards)
 	inout_format.gamma_curve = GAMMA_sRGB;
 
 	// Display chain; shows the live output produced by the main chain (its RGBA version).
-	display_chain.reset(new EffectChain(WIDTH, HEIGHT, resource_pool.get()));
+	display_chain.reset(new EffectChain(global_flags.width, global_flags.height, resource_pool.get()));
 	check_error();
-	display_input = new FlatInput(inout_format, FORMAT_RGB, GL_UNSIGNED_BYTE, WIDTH, HEIGHT);  // FIXME: GL_UNSIGNED_BYTE is really wrong.
+	display_input = new FlatInput(inout_format, FORMAT_RGB, GL_UNSIGNED_BYTE, global_flags.width, global_flags.height);  // FIXME: GL_UNSIGNED_BYTE is really wrong.
 	display_chain->add_input(display_input);
 	display_chain->add_output(inout_format, OUTPUT_ALPHA_FORMAT_POSTMULTIPLIED);
 	display_chain->set_dither_bits(0);  // Don't bother.
 	display_chain->finalize();
 
-	video_encoder.reset(new VideoEncoder(resource_pool.get(), h264_encoder_surface, global_flags.va_display, WIDTH, HEIGHT, &httpd, global_disk_space_estimator));
+	video_encoder.reset(new VideoEncoder(resource_pool.get(), h264_encoder_surface, global_flags.va_display, global_flags.width, global_flags.height, &httpd, global_disk_space_estimator));
 
 	// Start listening for clients only once VideoEncoder has written its header, if any.
 	httpd.start(9095);
@@ -175,7 +175,7 @@ Mixer::Mixer(const QSurfaceFormat &format, unsigned num_cards)
 
 	unsigned num_fake_cards = 0;
 	for ( ; card_index < num_cards; ++card_index, ++num_fake_cards) {
-		FakeCapture *capture = new FakeCapture(WIDTH, HEIGHT, FAKE_FPS, OUTPUT_FREQUENCY, card_index, global_flags.fake_cards_audio);
+		FakeCapture *capture = new FakeCapture(global_flags.width, global_flags.height, FAKE_FPS, OUTPUT_FREQUENCY, card_index, global_flags.fake_cards_audio);
 		configure_card(card_index, capture, /*is_fake_capture=*/true);
 	}
 
@@ -270,7 +270,7 @@ void Mixer::configure_card(unsigned card_index, CaptureInterface *capture, bool 
 	card->is_fake_capture = is_fake_capture;
 	card->capture->set_frame_callback(bind(&Mixer::bm_frame, this, card_index, _1, _2, _3, _4, _5, _6, _7));
 	if (card->frame_allocator == nullptr) {
-		card->frame_allocator.reset(new PBOFrameAllocator(8 << 20, WIDTH, HEIGHT));  // 8 MB.
+		card->frame_allocator.reset(new PBOFrameAllocator(8 << 20, global_flags.width, global_flags.height));  // 8 MB.
 	}
 	card->capture->set_video_frame_allocator(card->frame_allocator.get());
 	if (card->surface == nullptr) {
@@ -711,7 +711,7 @@ void Mixer::handle_hotplugged_cards()
 		CaptureCard *card = &cards[card_index];
 		if (card->capture->get_disconnected()) {
 			fprintf(stderr, "Card %u went away, replacing with a fake card.\n", card_index);
-			FakeCapture *capture = new FakeCapture(WIDTH, HEIGHT, FAKE_FPS, OUTPUT_FREQUENCY, card_index, global_flags.fake_cards_audio);
+			FakeCapture *capture = new FakeCapture(global_flags.width, global_flags.height, FAKE_FPS, OUTPUT_FREQUENCY, card_index, global_flags.fake_cards_audio);
 			configure_card(card_index, capture, /*is_fake_capture=*/true);
 			card->queue_length_policy.reset(card_index);
 			card->capture->start_bm_capture();
@@ -788,7 +788,7 @@ void Mixer::schedule_audio_resampling_tasks(unsigned dropped_frames, int num_sam
 void Mixer::render_one_frame(int64_t duration)
 {
 	// Get the main chain from the theme, and set its state immediately.
-	Theme::Chain theme_main_chain = theme->get_chain(0, pts(), WIDTH, HEIGHT, input_state);
+	Theme::Chain theme_main_chain = theme->get_chain(0, pts(), global_flags.width, global_flags.height, input_state);
 	EffectChain *chain = theme_main_chain.chain;
 	theme_main_chain.setup_chain();
 	//theme_main_chain.chain->enable_phase_timing(true);
@@ -798,11 +798,11 @@ void Mixer::render_one_frame(int64_t duration)
 	assert(got_frame);
 
 	// Render main chain.
-	GLuint cbcr_full_tex = resource_pool->create_2d_texture(GL_RG8, WIDTH, HEIGHT);
-	GLuint rgba_tex = resource_pool->create_2d_texture(GL_RGB565, WIDTH, HEIGHT);  // Saves texture bandwidth, although dithering gets messed up.
+	GLuint cbcr_full_tex = resource_pool->create_2d_texture(GL_RG8, global_flags.width, global_flags.height);
+	GLuint rgba_tex = resource_pool->create_2d_texture(GL_RGB565, global_flags.width, global_flags.height);  // Saves texture bandwidth, although dithering gets messed up.
 	GLuint fbo = resource_pool->create_fbo(y_tex, cbcr_full_tex, rgba_tex);
 	check_error();
-	chain->render_to_fbo(fbo, WIDTH, HEIGHT);
+	chain->render_to_fbo(fbo, global_flags.width, global_flags.height);
 	resource_pool->release_fbo(fbo);
 
 	subsample_chroma(cbcr_full_tex, cbcr_tex);
@@ -833,7 +833,7 @@ void Mixer::render_one_frame(int64_t duration)
 	// Set up preview and any additional channels.
 	for (int i = 1; i < theme->get_num_channels() + 2; ++i) {
 		DisplayFrame display_frame;
-		Theme::Chain chain = theme->get_chain(i, pts(), WIDTH, HEIGHT, input_state);  // FIXME: dimensions
+		Theme::Chain chain = theme->get_chain(i, pts(), global_flags.width, global_flags.height, input_state);  // FIXME: dimensions
 		display_frame.chain = chain.chain;
 		display_frame.setup_chain = chain.setup_chain;
 		display_frame.ready_fence = fence;
@@ -885,7 +885,7 @@ void Mixer::subsample_chroma(GLuint src_tex, GLuint dst_tex)
 	// Extract Cb/Cr.
 	GLuint fbo = resource_pool->create_fbo(dst_tex);
 	glBindFramebuffer(GL_FRAMEBUFFER, fbo);
-	glViewport(0, 0, WIDTH/2, HEIGHT/2);
+	glViewport(0, 0, global_flags.width/2, global_flags.height/2);
 	check_error();
 
 	glUseProgram(cbcr_program_num);
@@ -902,7 +902,7 @@ void Mixer::subsample_chroma(GLuint src_tex, GLuint dst_tex)
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
 	check_error();
 
-	float chroma_offset_0[] = { -0.5f / WIDTH, 0.0f };
+	float chroma_offset_0[] = { -0.5f / global_flags.width, 0.0f };
 	set_uniform_vec2(cbcr_program_num, "foo", "chroma_offset_0", chroma_offset_0);
 
 	glBindBuffer(GL_ARRAY_BUFFER, cbcr_vbo);

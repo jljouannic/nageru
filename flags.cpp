@@ -13,7 +13,8 @@ Flags global_flags;
 
 // Long options that have no corresponding short option.
 enum LongOption {
-	OPTION_MULTICHANNEL = 1000,
+	OPTION_HELP = 1000,
+	OPTION_MULTICHANNEL,
 	OPTION_MIDI_MAPPING,
 	OPTION_FAKE_CARDS_AUDIO,
 	OPTION_HTTP_UNCOMPRESSED_VIDEO,
@@ -50,7 +51,9 @@ void usage()
 {
 	fprintf(stderr, "Usage: nageru [OPTION]...\n");
 	fprintf(stderr, "\n");
-	fprintf(stderr, "  -h, --help                      print usage information\n");
+	fprintf(stderr, "      --help                      print usage information\n");
+	fprintf(stderr, "  -w, --width                     output width in pixels (default 1280)\n");
+	fprintf(stderr, "  -h, --height                    output height in pixels (default 720)\n");
 	fprintf(stderr, "  -c, --num-cards                 set number of input cards (default 2)\n");
 	fprintf(stderr, "  -t, --theme=FILE                choose theme (default theme.lua)\n");
 	fprintf(stderr, "  -I, --theme-dir=DIR             search for theme in this directory (can be given multiple times)\n");
@@ -100,7 +103,9 @@ void usage()
 void parse_flags(int argc, char * const argv[])
 {
 	static const option long_options[] = {
-		{ "help", no_argument, 0, 'h' },
+		{ "help", no_argument, 0, OPTION_HELP },
+		{ "width", required_argument, 0, 'w' },
+		{ "height", required_argument, 0, 'h' },
 		{ "num-cards", required_argument, 0, 'c' },
 		{ "theme", required_argument, 0, 't' },
 		{ "theme-dir", required_argument, 0, 'I' },
@@ -143,12 +148,18 @@ void parse_flags(int argc, char * const argv[])
 	vector<string> theme_dirs;
 	for ( ;; ) {
 		int option_index = 0;
-		int c = getopt_long(argc, argv, "c:t:I:v:m:M:", long_options, &option_index);
+		int c = getopt_long(argc, argv, "c:t:I:v:m:M:w:h:", long_options, &option_index);
 
 		if (c == -1) {
 			break;
 		}
 		switch (c) {
+		case 'w':
+			global_flags.width = atoi(optarg);
+			break;
+		case 'h':
+			global_flags.height = atoi(optarg);
+			break;
 		case 'c':
 			global_flags.num_cards = atoi(optarg);
 			break;
@@ -281,7 +292,7 @@ void parse_flags(int argc, char * const argv[])
 		case OPTION_NO_FLUSH_PBOS:
 			global_flags.flush_pbos = false;
 			break;
-		case 'h':
+		case OPTION_HELP:
 			usage();
 			exit(0);
 		default:
@@ -311,6 +322,16 @@ void parse_flags(int argc, char * const argv[])
 	}
 	if (!theme_dirs.empty()) {
 		global_flags.theme_dirs = theme_dirs;
+	}
+
+	// In reality, we could probably do with any even value (we subsample
+	// by two in some places), but it's better to be on the safe side
+	// wrt. video codecs and such. (I'd set 16 if I could, but 1080 isn't
+	// divisible by 16.)
+	if (global_flags.width <= 0 || (global_flags.width % 8) != 0 ||
+	    global_flags.height <= 0 || (global_flags.height % 8) != 0) {
+		fprintf(stderr, "ERROR: --width and --height must be positive integers divisible by 8\n");
+		exit(1);
 	}
 
 	for (pair<int, int> mapping : global_flags.default_stream_mapping) {
