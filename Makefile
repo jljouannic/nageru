@@ -22,7 +22,7 @@ OBJS += midi_mapper.o midi_mapping.pb.o
 
 # Mixer objects
 AUDIO_MIXER_OBJS = audio_mixer.o alsa_input.o alsa_pool.o ebu_r128_proc.o stereocompressor.o resampling_queue.o flags.o correlation_measurer.o filter.o input_mapping.o state.pb.o
-OBJS += mixer.o pbo_frame_allocator.o context.o ref_counted_frame.o theme.o httpd.o flags.o image_input.o alsa_output.o disk_space_estimator.o $(AUDIO_MIXER_OBJS)
+OBJS += mixer.o pbo_frame_allocator.o context.o ref_counted_frame.o theme.o httpd.o flags.o image_input.o alsa_output.o disk_space_estimator.o print_latency.o $(AUDIO_MIXER_OBJS)
 
 # Streaming and encoding objects
 OBJS += quicksync_encoder.o x264_encoder.o x264_speed_control.o video_encoder.o metacube2.o mux.o audio_encoder.o ffmpeg_raii.o

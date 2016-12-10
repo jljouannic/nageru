@@ -511,6 +511,7 @@ void Mixer::bm_frame(unsigned card_index, uint16_t timecode,
 			new_frame.interlaced = video_format.interlaced;
 			new_frame.upload_func = upload_func;
 			new_frame.dropped_frames = dropped_frames;
+			new_frame.received_timestamp = video_frame.received_timestamp;  // Ignore the audio timestamp.
 			card->new_frames.push(move(new_frame));
 			card->new_frames_changed.notify_all();
 		}

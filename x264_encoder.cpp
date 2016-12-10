@@ -1,5 +1,6 @@
 #include "x264_encoder.h"
 
+#include <assert.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -10,6 +11,7 @@
 #include "defs.h"
 #include "flags.h"
 #include "mux.h"
+#include "print_latency.h"
 #include "timebase.h"
 #include "x264_speed_control.h"
 
@@ -19,6 +21,7 @@ extern "C" {
 }
 
 using namespace std;
+using namespace std::chrono;
 
 namespace {
 
@@ -55,11 +58,12 @@ X264Encoder::~X264Encoder()
 	encoder_thread.join();
 }
 
-void X264Encoder::add_frame(int64_t pts, int64_t duration, const uint8_t *data)
+void X264Encoder::add_frame(int64_t pts, int64_t duration, const uint8_t *data, const ReceivedTimestamps &received_ts)
 {
 	QueuedFrame qf;
 	qf.pts = pts;
 	qf.duration = duration;
+	qf.received_ts = received_ts;
 
 	{
 		lock_guard<mutex> lock(mu);
@@ -251,6 +255,8 @@ void X264Encoder::encode_frame(X264Encoder::QueuedFrame qf)
 		pic.opaque = reinterpret_cast<void *>(intptr_t(qf.duration));
 
 		input_pic = &pic;
+
+		frames_being_encoded[qf.pts] = qf.received_ts;
 	}
 
 	// See if we have a new bitrate to change to.
@@ -279,6 +285,18 @@ void X264Encoder::encode_frame(X264Encoder::QueuedFrame qf)
 	}
 
 	if (num_nal == 0) return;
+
+	if (frames_being_encoded.count(pic.i_pts)) {
+		ReceivedTimestamps received_ts = frames_being_encoded[pic.i_pts];
+		frames_being_encoded.erase(pic.i_pts);
+
+		static int frameno = 0;
+		print_latency("Current x264 latency (video inputs → network mux):",
+			received_ts, (pic.i_type == X264_TYPE_B || pic.i_type == X264_TYPE_BREF),
+			&frameno);
+	} else {
+		assert(false);
+	}
 
 	// We really need one AVPacket for the entire frame, it seems,
 	// so combine it all.

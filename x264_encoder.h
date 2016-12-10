@@ -20,16 +20,20 @@
 #include <stdint.h>
 #include <x264.h>
 #include <atomic>
+#include <chrono>
 #include <condition_variable>
 #include <memory>
 #include <mutex>
 #include <queue>
 #include <string>
 #include <thread>
+#include <unordered_map>
 
 extern "C" {
 #include <libavformat/avformat.h>
 }
+
+#include "print_latency.h"
 
 class Mux;
 class X264SpeedControl;
@@ -47,7 +51,7 @@ public:
 
 	// <data> is taken to be raw NV12 data of WIDTHxHEIGHT resolution.
 	// Does not block.
-	void add_frame(int64_t pts, int64_t duration, const uint8_t *data);
+	void add_frame(int64_t pts, int64_t duration, const uint8_t *data, const ReceivedTimestamps &received_ts);
 
 	std::string get_global_headers() const {
 		while (!x264_init_done) {
@@ -64,6 +68,7 @@ private:
 	struct QueuedFrame {
 		int64_t pts, duration;
 		uint8_t *data;
+		ReceivedTimestamps received_ts;
 	};
 	void encoder_thread_func();
 	void init_x264();
@@ -101,6 +106,9 @@ private:
 
 	// Whenever the state of <queued_frames> changes.
 	std::condition_variable queued_frames_nonempty;
+
+	// Key is the pts of the frame.
+	std::unordered_map<int64_t, ReceivedTimestamps> frames_being_encoded;
 };
 
 #endif  // !defined(_X264ENCODE_H)

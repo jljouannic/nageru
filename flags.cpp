@@ -44,7 +44,8 @@ enum LongOption {
 	OPTION_DISABLE_MAKEUP_GAIN_AUTO,
 	OPTION_ENABLE_MAKEUP_GAIN_AUTO,
 	OPTION_DISABLE_ALSA_OUTPUT,
-	OPTION_NO_FLUSH_PBOS
+	OPTION_NO_FLUSH_PBOS,
+	OPTION_PRINT_VIDEO_LATENCY
 };
 
 void usage()
@@ -98,6 +99,7 @@ void usage()
 	fprintf(stderr, "      --no-flush-pbos             do not explicitly signal texture data uploads\n");
 	fprintf(stderr, "                                    (will give display corruption, but makes it\n");
 	fprintf(stderr, "                                    possible to run with apitrace in real time)\n");
+	fprintf(stderr, "      --print-video-latency       print out measurements of video latency on stdout\n");
 }
 
 void parse_flags(int argc, char * const argv[])
@@ -143,6 +145,7 @@ void parse_flags(int argc, char * const argv[])
 		{ "enable-makeup-gain-auto", no_argument, 0, OPTION_ENABLE_MAKEUP_GAIN_AUTO },
 		{ "disable-alsa-output", no_argument, 0, OPTION_DISABLE_ALSA_OUTPUT },
 		{ "no-flush-pbos", no_argument, 0, OPTION_NO_FLUSH_PBOS },
+		{ "print-video-latency", no_argument, 0, OPTION_PRINT_VIDEO_LATENCY },
 		{ 0, 0, 0, 0 }
 	};
 	vector<string> theme_dirs;
@@ -291,6 +294,9 @@ void parse_flags(int argc, char * const argv[])
 			break;
 		case OPTION_NO_FLUSH_PBOS:
 			global_flags.flush_pbos = false;
+			break;
+		case OPTION_PRINT_VIDEO_LATENCY:
+			global_flags.print_video_latency = true;
 			break;
 		case OPTION_HELP:
 			usage();

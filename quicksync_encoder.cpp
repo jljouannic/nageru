@@ -18,6 +18,7 @@
 #include <va/va_enc_h264.h>
 #include <va/va_x11.h>
 #include <algorithm>
+#include <chrono>
 #include <condition_variable>
 #include <cstddef>
 #include <cstdint>
@@ -47,11 +48,13 @@ extern "C" {
 #include "ffmpeg_raii.h"
 #include "flags.h"
 #include "mux.h"
+#include "print_latency.h"
 #include "ref_counted_frame.h"
 #include "timebase.h"
 #include "x264_encoder.h"
 
 using namespace std;
+using namespace std::chrono;
 using namespace std::placeholders;
 
 class QOpenGLContext;
@@ -142,6 +145,7 @@ public:
 	struct Frame {
 		int64_t pts, duration;
 		uint8_t *data;
+		ReceivedTimestamps received_ts;
 
 		// Invert to get the smallest pts first.
 		bool operator< (const Frame &other) const { return pts > other.pts; }
@@ -151,7 +155,7 @@ public:
 	// Does _not_ take ownership of data; a copy is taken if needed.
 	// The returned pointer is valid until the next call to reorder_frame, or destruction.
 	// As a special case, if queue_length == 0, will just return pts and data (no reordering needed).
-	Frame reorder_frame(int64_t pts, int64_t duration, uint8_t *data);
+	Frame reorder_frame(int64_t pts, int64_t duration, uint8_t *data, const ReceivedTimestamps &received_ts);
 
 	// The same as reorder_frame, but without inserting anything. Used to empty the queue.
 	Frame get_first_frame();
@@ -179,22 +183,22 @@ FrameReorderer::FrameReorderer(unsigned queue_length, int width, int height)
 	}
 }
 
-FrameReorderer::Frame FrameReorderer::reorder_frame(int64_t pts, int64_t duration, uint8_t *data)
+FrameReorderer::Frame FrameReorderer::reorder_frame(int64_t pts, int64_t duration, uint8_t *data, const ReceivedTimestamps &received_ts)
 {
 	if (queue_length == 0) {
-		return Frame{pts, duration, data};
+		return Frame{pts, duration, data, received_ts};
 	}
 
 	assert(!freelist.empty());
 	uint8_t *storage = freelist.top();
 	freelist.pop();
 	memcpy(storage, data, width * height * 2);
-	frames.push(Frame{pts, duration, storage});
+	frames.push(Frame{pts, duration, storage, received_ts});
 
 	if (frames.size() >= queue_length) {
 		return get_first_frame();
 	} else {
-		return Frame{-1, -1, nullptr};
+		return Frame{-1, -1, nullptr, steady_clock::time_point::min(), steady_clock::time_point::min()};
 	}
 }
 
@@ -232,6 +236,7 @@ private:
 		int frame_type;
 		vector<float> audio;
 		int64_t pts, dts, duration;
+		ReceivedTimestamps received_ts;
 	};
 	struct PendingFrame {
 		RefCountedGLsync fence;
@@ -1630,6 +1635,10 @@ void QuickSyncEncoderImpl::save_codeddata(storage_task task)
 	}
 	vaUnmapBuffer(va_dpy, gl_surfaces[task.display_order % SURFACE_NUM].coded_buf);
 
+	static int frameno = 0;
+	print_latency("Current QuickSync latency (video inputs → disk mux):",
+		task.received_ts, (task.frame_type == FRAME_B), &frameno);
+
 	{
 		// Add video.
 		AVPacket pkt;
@@ -2034,7 +2043,7 @@ void QuickSyncEncoderImpl::encode_remaining_frames_as_p(int encoding_frame_num, 
 				add_packet_for_uncompressed_frame(output_frame.pts, output_frame.duration, output_frame.data);
 			} else {
 				assert(global_flags.x264_video_to_http);
-				x264_encoder->add_frame(output_frame.pts, output_frame.duration, output_frame.data);
+				x264_encoder->add_frame(output_frame.pts, output_frame.duration, output_frame.data, output_frame.received_ts);
 			}
 		}
 	}
@@ -2081,6 +2090,20 @@ void QuickSyncEncoderImpl::encode_frame(QuickSyncEncoderImpl::PendingFrame frame
 	} while (sync_status == GL_TIMEOUT_EXPIRED);
 	assert(sync_status != GL_WAIT_FAILED);
 
+	// Find min and max timestamp of all input frames that have a timestamp.
+	steady_clock::time_point min_ts = steady_clock::time_point::max(), max_ts = steady_clock::time_point::min();
+	for (const RefCountedFrame &input_frame : frame.input_frames) {
+		if (input_frame && input_frame->received_timestamp > steady_clock::time_point::min()) {
+			min_ts = min(min_ts, input_frame->received_timestamp);
+			max_ts = max(max_ts, input_frame->received_timestamp);
+		}
+	}
+	const ReceivedTimestamps received_ts{ min_ts, max_ts };
+
+	static int frameno = 0;
+	print_latency("Current mixer latency (video inputs → ready for encode):",
+		received_ts, (frame_type == FRAME_B), &frameno);
+
 	// Release back any input frames we needed to render this frame.
 	frame.input_frames.clear();
 
@@ -2109,13 +2132,13 @@ void QuickSyncEncoderImpl::encode_frame(QuickSyncEncoderImpl::PendingFrame frame
 		    global_flags.x264_video_to_http) {
 			// Add uncompressed video. (Note that pts == dts here.)
 			// Delay needs to match audio.
-			FrameReorderer::Frame output_frame = reorderer->reorder_frame(pts + global_delay(), duration, reinterpret_cast<uint8_t *>(surf->y_ptr));
+			FrameReorderer::Frame output_frame = reorderer->reorder_frame(pts + global_delay(), duration, reinterpret_cast<uint8_t *>(surf->y_ptr), received_ts);
 			if (output_frame.data != nullptr) {
 				if (global_flags.uncompressed_video_to_http) {
 					add_packet_for_uncompressed_frame(output_frame.pts, output_frame.duration, output_frame.data);
 				} else {
 					assert(global_flags.x264_video_to_http);
-					x264_encoder->add_frame(output_frame.pts, output_frame.duration, output_frame.data);
+					x264_encoder->add_frame(output_frame.pts, output_frame.duration, output_frame.data, output_frame.received_ts);
 				}
 			}
 		}
@@ -2156,6 +2179,7 @@ void QuickSyncEncoderImpl::encode_frame(QuickSyncEncoderImpl::PendingFrame frame
 	tmp.pts = pts;
 	tmp.dts = dts;
 	tmp.duration = duration;
+	tmp.received_ts = received_ts;
 	storage_task_enqueue(move(tmp));
 
 	update_ReferenceFrames(frame_type);

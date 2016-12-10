@@ -336,6 +336,7 @@ private:
 			unsigned field;  // Which field (0 or 1) of the frame to use. Always 0 for progressive.
 			std::function<void()> upload_func;  // Needs to be called to actually upload the texture to OpenGL.
 			unsigned dropped_frames = 0;  // Number of dropped frames before this one.
+			std::chrono::steady_clock::time_point received_timestamp = std::chrono::steady_clock::time_point::min();
 		};
 		std::queue<NewFrame> new_frames;
 		bool should_quit = false;

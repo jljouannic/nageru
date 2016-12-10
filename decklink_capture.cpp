@@ -12,6 +12,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <chrono>
 #include <cstdint>
 #include <utility>
 #include <vector>
@@ -21,6 +22,7 @@
 #define FRAME_SIZE (8 << 20)  // 8 MB.
 
 using namespace std;
+using namespace std::chrono;
 using namespace std::placeholders;
 using namespace bmusb;
 
@@ -353,6 +355,8 @@ HRESULT STDMETHODCALLTYPE DeckLinkCapture::VideoInputFrameArrived(
 
 			video_format.width = width;
 			video_format.height = height;
+
+			current_video_frame.received_timestamp = steady_clock::now();
 		}
 	}
 
@@ -369,6 +373,8 @@ HRESULT STDMETHODCALLTYPE DeckLinkCapture::VideoInputFrameArrived(
 
 			audio_format.bits_per_sample = 32;
 			audio_format.num_channels = 2;
+
+			current_audio_frame.received_timestamp = steady_clock::now();
 		}
 	}
 

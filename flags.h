@@ -40,6 +40,7 @@ struct Flags {
 	bool multichannel_mapping_mode = false;  // Implicitly true if input_mapping_filename is nonempty.
 	std::string input_mapping_filename;  // Empty for none.
 	std::string midi_mapping_filename;  // Empty for none.
+	bool print_video_latency = false;
 };
 extern Flags global_flags;
 
