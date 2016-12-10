@@ -2100,10 +2100,6 @@ void QuickSyncEncoderImpl::encode_frame(QuickSyncEncoderImpl::PendingFrame frame
 	}
 	const ReceivedTimestamps received_ts{ min_ts, max_ts };
 
-	static int frameno = 0;
-	print_latency("Current mixer latency (video inputs → ready for encode):",
-		received_ts, (frame_type == FRAME_B), &frameno);
-
 	// Release back any input frames we needed to render this frame.
 	frame.input_frames.clear();
 
@@ -2143,6 +2139,10 @@ void QuickSyncEncoderImpl::encode_frame(QuickSyncEncoderImpl::PendingFrame frame
 			}
 		}
 	}
+
+	static int frameno = 0;
+	print_latency("Current mixer latency (video inputs → ready for encode):",
+		received_ts, (frame_type == FRAME_B), &frameno);
 
 	va_status = vaDestroyImage(va_dpy, surf->surface_image.image_id);
 	CHECK_VASTATUS(va_status, "vaDestroyImage");
