@@ -118,44 +118,6 @@ static constexpr int rc_default_modes[] = {  // Priority list of modes.
     
 using namespace std;
 
-FrameReorderer::FrameReorderer(unsigned queue_length, int width, int height)
-    : queue_length(queue_length), width(width), height(height)
-{
-	for (unsigned i = 0; i < queue_length; ++i) {
-		owner.emplace_back(new uint8_t[width * height * 2]);
-		freelist.push(owner.back().get());
-	}
-}
-
-FrameReorderer::Frame FrameReorderer::reorder_frame(int64_t pts, int64_t duration, uint8_t *data, const ReceivedTimestamps &received_ts)
-{
-	if (queue_length == 0) {
-		return Frame{pts, duration, data, received_ts};
-	}
-
-	assert(!freelist.empty());
-	uint8_t *storage = freelist.top();
-	freelist.pop();
-	memcpy(storage, data, width * height * 2);
-	frames.push(Frame{pts, duration, storage, received_ts});
-
-	if (frames.size() >= queue_length) {
-		return get_first_frame();
-	} else {
-		return Frame{-1, -1, nullptr, steady_clock::time_point::min(), steady_clock::time_point::min()};
-	}
-}
-
-FrameReorderer::Frame FrameReorderer::get_first_frame()
-{
-	assert(!frames.empty());
-	Frame storage = frames.top();
-	frames.pop();
-	freelist.push(storage.data);
-	return storage;
-}
-
-
 // Supposedly vaRenderPicture() is supposed to destroy the buffer implicitly,
 // but if we don't delete it here, we get leaks. The GStreamer implementation
 // does the same.
@@ -1543,10 +1505,6 @@ QuickSyncEncoderImpl::QuickSyncEncoderImpl(const std::string &filename, movit::R
 
 	//print_input();
 
-	if (global_flags.uncompressed_video_to_http ||
-	    global_flags.x264_video_to_http) {
-		reorderer.reset(new FrameReorderer(ip_period - 1, frame_width, frame_height));
-	}
 	if (global_flags.x264_video_to_http) {
 		assert(x264_encoder != nullptr);
 	} else {
@@ -1701,7 +1659,7 @@ RefCountedGLsync QuickSyncEncoderImpl::end_frame(int64_t pts, int64_t duration, 
 
 	{
 		unique_lock<mutex> lock(frame_queue_mutex);
-		pending_video_frames[current_storage_frame] = PendingFrame{ fence, input_frames, pts, duration };
+		pending_video_frames.push(PendingFrame{ fence, input_frames, pts, duration });
 		++current_storage_frame;
 	}
 	frame_queue_nonempty.notify_all();
@@ -1762,58 +1720,76 @@ void QuickSyncEncoderImpl::encode_thread_func()
 {
 	int64_t last_dts = -1;
 	int gop_start_display_frame_num = 0;
-	for (int encoding_frame_num = 0; ; ++encoding_frame_num) {
+	for (int display_frame_num = 0; ; ++display_frame_num) {
+		// Wait for the frame to be in the queue. Note that this only means
+		// we started rendering it.
 		PendingFrame frame;
-		int pts_lag;
-		int frame_type, display_frame_num;
-		encoding2display_order(encoding_frame_num, intra_period, intra_idr_period, ip_period,
-				       &display_frame_num, &frame_type, &pts_lag);
-		if (frame_type == FRAME_IDR) {
-			numShortTerm = 0;
-			current_frame_num = 0;
-			gop_start_display_frame_num = display_frame_num;
-		}
-
 		{
 			unique_lock<mutex> lock(frame_queue_mutex);
-			frame_queue_nonempty.wait(lock, [this, display_frame_num]{
-				return encode_thread_should_quit || pending_video_frames.count(display_frame_num) != 0;
+			frame_queue_nonempty.wait(lock, [this]{
+				return encode_thread_should_quit || !pending_video_frames.empty();
 			});
-			if (encode_thread_should_quit && pending_video_frames.count(display_frame_num) == 0) {
-				// We have queued frames that were supposed to be B-frames,
-				// but will be no P-frame to encode them against. Encode them all
-				// as P-frames instead. Note that this happens under the mutex,
+			if (encode_thread_should_quit && pending_video_frames.empty()) {
+				// We may have queued frames left in the reorder buffer
+				// that were supposed to be B-frames, but have no P-frame
+				// to be encoded against. If so, encode them all as
+				// P-frames instead. Note that this happens under the mutex,
 				// but nobody else uses it at this point, since we're shutting down,
 				// so there's no contention.
-				encode_remaining_frames_as_p(encoding_frame_num, gop_start_display_frame_num, last_dts);
+				encode_remaining_frames_as_p(quicksync_encoding_frame_num, gop_start_display_frame_num, last_dts);
 				return;
 			} else {
-				frame = move(pending_video_frames[display_frame_num]);
-				pending_video_frames.erase(display_frame_num);
+				frame = move(pending_video_frames.front());
+				pending_video_frames.pop();
 			}
 		}
 
-		// Determine the dts of this frame.
-		int64_t dts;
-		if (pts_lag == -1) {
-			assert(last_dts != -1);
-			dts = last_dts + (TIMEBASE / MAX_FPS);
-		} else {
-			dts = frame.pts - pts_lag;
-		}
-		last_dts = dts;
+		// Pass the frame on to x264 (or uncompressed to HTTP) as needed.
+		// Note that this implicitly waits for the frame to be done rendering.
+		pass_frame(frame, display_frame_num, frame.pts, frame.duration);
+		reorder_buffer[display_frame_num] = move(frame);
 
-		encode_frame(frame, encoding_frame_num, display_frame_num, gop_start_display_frame_num, frame_type, frame.pts, dts, frame.duration);
+		// Now encode as many QuickSync frames as we can using the frames we have available.
+		// (It could be zero, or it could be multiple.) FIXME: make a function.
+		for ( ;; ) {
+			int pts_lag;
+			int frame_type, quicksync_display_frame_num;
+			encoding2display_order(quicksync_encoding_frame_num, intra_period, intra_idr_period, ip_period,
+			                       &quicksync_display_frame_num, &frame_type, &pts_lag);
+			if (!reorder_buffer.count(quicksync_display_frame_num)) {
+				break;
+			}
+
+			if (frame_type == FRAME_IDR) {
+				numShortTerm = 0;
+				current_frame_num = 0;
+				gop_start_display_frame_num = quicksync_display_frame_num;
+			}
+
+			// Determine the dts of this frame.
+			int64_t dts;
+			if (pts_lag == -1) {
+				assert(last_dts != -1);
+				dts = last_dts + (TIMEBASE / MAX_FPS);
+			} else {
+				dts = frame.pts - pts_lag;
+			}
+			last_dts = dts;
+
+			encode_frame(reorder_buffer[quicksync_display_frame_num], quicksync_encoding_frame_num, quicksync_display_frame_num, gop_start_display_frame_num, frame_type, frame.pts, dts, frame.duration);
+			reorder_buffer.erase(quicksync_display_frame_num);
+			++quicksync_encoding_frame_num;
+		}
 	}
 }
 
 void QuickSyncEncoderImpl::encode_remaining_frames_as_p(int encoding_frame_num, int gop_start_display_frame_num, int64_t last_dts)
 {
-	if (pending_video_frames.empty()) {
+	if (reorder_buffer.empty()) {
 		return;
 	}
 
-	for (auto &pending_frame : pending_video_frames) {
+	for (auto &pending_frame : reorder_buffer) {
 		int display_frame_num = pending_frame.first;
 		assert(display_frame_num > 0);
 		PendingFrame frame = move(pending_frame.second);
@@ -1821,20 +1797,6 @@ void QuickSyncEncoderImpl::encode_remaining_frames_as_p(int encoding_frame_num, 
 		printf("Finalizing encode: Encoding leftover frame %d as P-frame instead of B-frame.\n", display_frame_num);
 		encode_frame(frame, encoding_frame_num++, display_frame_num, gop_start_display_frame_num, FRAME_P, frame.pts, dts, frame.duration);
 		last_dts = dts;
-	}
-
-	if (global_flags.uncompressed_video_to_http ||
-	    global_flags.x264_video_to_http) {
-		// Add frames left in reorderer.
-		while (!reorderer->empty()) {
-			FrameReorderer::Frame output_frame = reorderer->get_first_frame();
-			if (global_flags.uncompressed_video_to_http) {
-				add_packet_for_uncompressed_frame(output_frame.pts, output_frame.duration, output_frame.data);
-			} else {
-				assert(global_flags.x264_video_to_http);
-				x264_encoder->add_frame(output_frame.pts, output_frame.duration, output_frame.data, output_frame.received_ts);
-			}
-		}
 	}
 }
 
@@ -1866,10 +1828,22 @@ void memcpy_with_pitch(uint8_t *dst, const uint8_t *src, size_t src_width, size_
 	}
 }
 
+ReceivedTimestamps find_received_timestamp(const vector<RefCountedFrame> &input_frames)
+{
+	// Find min and max timestamp of all input frames that have a timestamp.
+	steady_clock::time_point min_ts = steady_clock::time_point::max(), max_ts = steady_clock::time_point::min();
+	for (const RefCountedFrame &input_frame : input_frames) {
+		if (input_frame && input_frame->received_timestamp > steady_clock::time_point::min()) {
+			min_ts = min(min_ts, input_frame->received_timestamp);
+			max_ts = max(max_ts, input_frame->received_timestamp);
+		}
+	}
+	return { min_ts, max_ts };
+}
+
 }  // namespace
 
-void QuickSyncEncoderImpl::encode_frame(QuickSyncEncoderImpl::PendingFrame frame, int encoding_frame_num, int display_frame_num, int gop_start_display_frame_num,
-                                   int frame_type, int64_t pts, int64_t dts, int64_t duration)
+void QuickSyncEncoderImpl::pass_frame(QuickSyncEncoderImpl::PendingFrame frame, int display_frame_num, int64_t pts, int64_t duration)
 {
 	// Wait for the GPU to be done with the frame.
 	GLenum sync_status;
@@ -1879,18 +1853,27 @@ void QuickSyncEncoderImpl::encode_frame(QuickSyncEncoderImpl::PendingFrame frame
 	} while (sync_status == GL_TIMEOUT_EXPIRED);
 	assert(sync_status != GL_WAIT_FAILED);
 
-	// Find min and max timestamp of all input frames that have a timestamp.
-	steady_clock::time_point min_ts = steady_clock::time_point::max(), max_ts = steady_clock::time_point::min();
-	for (const RefCountedFrame &input_frame : frame.input_frames) {
-		if (input_frame && input_frame->received_timestamp > steady_clock::time_point::min()) {
-			min_ts = min(min_ts, input_frame->received_timestamp);
-			max_ts = max(max_ts, input_frame->received_timestamp);
-		}
-	}
-	const ReceivedTimestamps received_ts{ min_ts, max_ts };
+	ReceivedTimestamps received_ts = find_received_timestamp(frame.input_frames);
+	static int frameno = 0;
+	print_latency("Current mixer latency (video inputs → ready for encode):",
+		received_ts, false, &frameno);
 
 	// Release back any input frames we needed to render this frame.
 	frame.input_frames.clear();
+
+	GLSurface *surf = &gl_surfaces[display_frame_num % SURFACE_NUM];
+	uint8_t *data = reinterpret_cast<uint8_t *>(surf->y_ptr);
+	if (global_flags.uncompressed_video_to_http) {
+		add_packet_for_uncompressed_frame(pts, duration, data);
+	} else if (global_flags.x264_video_to_http) {
+		x264_encoder->add_frame(pts, duration, data, received_ts);
+	}
+}
+
+void QuickSyncEncoderImpl::encode_frame(QuickSyncEncoderImpl::PendingFrame frame, int encoding_frame_num, int display_frame_num, int gop_start_display_frame_num,
+                                        int frame_type, int64_t pts, int64_t dts, int64_t duration)
+{
+	const ReceivedTimestamps received_ts = find_received_timestamp(frame.input_frames);
 
 	GLSurface *surf = &gl_surfaces[display_frame_num % SURFACE_NUM];
 	VAStatus va_status;
@@ -1901,6 +1884,7 @@ void QuickSyncEncoderImpl::encode_frame(QuickSyncEncoderImpl::PendingFrame frame
 		va_status = vaReleaseBufferHandle(va_dpy, surf->surface_image.buf);
 		CHECK_VASTATUS(va_status, "vaReleaseBufferHandle");
 	} else {
+		// Upload the frame to VA-API.
 		unsigned char *surface_p = nullptr;
 		vaMapBuffer(va_dpy, surf->surface_image.buf, (void **)&surface_p);
 
@@ -1912,26 +1896,7 @@ void QuickSyncEncoderImpl::encode_frame(QuickSyncEncoderImpl::PendingFrame frame
 
 		va_status = vaUnmapBuffer(va_dpy, surf->surface_image.buf);
 		CHECK_VASTATUS(va_status, "vaUnmapBuffer");
-
-		if (global_flags.uncompressed_video_to_http ||
-		    global_flags.x264_video_to_http) {
-			// Add uncompressed video. (Note that pts == dts here.)
-			// Delay needs to match audio.
-			FrameReorderer::Frame output_frame = reorderer->reorder_frame(pts + global_delay(), duration, reinterpret_cast<uint8_t *>(surf->y_ptr), received_ts);
-			if (output_frame.data != nullptr) {
-				if (global_flags.uncompressed_video_to_http) {
-					add_packet_for_uncompressed_frame(output_frame.pts, output_frame.duration, output_frame.data);
-				} else {
-					assert(global_flags.x264_video_to_http);
-					x264_encoder->add_frame(output_frame.pts, output_frame.duration, output_frame.data, output_frame.received_ts);
-				}
-			}
-		}
 	}
-
-	static int frameno = 0;
-	print_latency("Current mixer latency (video inputs → ready for encode):",
-		received_ts, (frame_type == FRAME_B), &frameno);
 
 	va_status = vaDestroyImage(va_dpy, surf->surface_image.image_id);
 	CHECK_VASTATUS(va_status, "vaDestroyImage");

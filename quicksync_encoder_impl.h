@@ -29,54 +29,6 @@ struct __bitstream {
 };
 typedef struct __bitstream bitstream;
 
-// H.264 video comes out in encoding order (e.g. with two B-frames:
-// 0, 3, 1, 2, 6, 4, 5, etc.), but uncompressed video needs to
-// come in the right order. Since we do everything, including waiting
-// for the frames to come out of OpenGL, in encoding order, we need
-// a reordering buffer for uncompressed frames so that they come out
-// correctly. We go the super-lazy way of not making it understand
-// anything about the true order (which introduces some extra latency,
-// though); we know that for N B-frames we need at most (N-1) frames
-// in the reorder buffer, and can just sort on that.
-//
-// The class also deals with keeping a freelist as needed.
-class FrameReorderer {
-public:
-	FrameReorderer(unsigned queue_length, int width, int height);
-
-	struct Frame {
-		int64_t pts, duration;
-		uint8_t *data;
-		ReceivedTimestamps received_ts;
-
-		// Invert to get the smallest pts first.
-		bool operator< (const Frame &other) const { return pts > other.pts; }
-	};
-
-	// Returns the next frame to insert with its pts, if any. Otherwise -1 and nullptr.
-	// Does _not_ take ownership of data; a copy is taken if needed.
-	// The returned pointer is valid until the next call to reorder_frame, or destruction.
-	// As a special case, if queue_length == 0, will just return pts and data (no reordering needed).
-	Frame reorder_frame(int64_t pts, int64_t duration, uint8_t *data, const ReceivedTimestamps &received_ts);
-
-	// The same as reorder_frame, but without inserting anything. Used to empty the queue.
-	Frame get_first_frame();
-
-	bool empty() const { return frames.empty(); }
-
-private:
-	unsigned queue_length;
-	int width, height;
-
-	std::priority_queue<Frame> frames;
-	std::stack<uint8_t *> freelist;  // Includes the last value returned from reorder_frame.
-
-	// Owns all the pointers. Normally, freelist and frames could do this themselves,
-	// except priority_queue doesn't work well with movable-only types.
-	std::vector<std::unique_ptr<uint8_t[]>> owner;
-};
-
-
 class QuickSyncEncoderImpl {
 public:
 	QuickSyncEncoderImpl(const std::string &filename, movit::ResourcePool *resource_pool, QSurface *surface, const std::string &va_display, int width, int height, AVOutputFormat *oformat, X264Encoder *x264_encoder, DiskSpaceEstimator *disk_space_estimator);
@@ -114,6 +66,7 @@ private:
 	void encode_thread_func();
 	void encode_remaining_frames_as_p(int encoding_frame_num, int gop_start_display_frame_num, int64_t last_dts);
 	void add_packet_for_uncompressed_frame(int64_t pts, int64_t duration, const uint8_t *data);
+	void pass_frame(PendingFrame frame, int display_frame_num, int64_t pts, int64_t duration);
 	void encode_frame(PendingFrame frame, int encoding_frame_num, int display_frame_num, int gop_start_display_frame_num,
 	                  int frame_type, int64_t pts, int64_t dts, int64_t duration);
 	void storage_task_thread();
@@ -160,13 +113,18 @@ private:
 
 	int current_storage_frame;
 
-	std::map<int, PendingFrame> pending_video_frames;  // under frame_queue_mutex
+	std::queue<PendingFrame> pending_video_frames;  // under frame_queue_mutex
 	movit::ResourcePool *resource_pool;
 	QSurface *surface;
 
+	// Frames that are done rendering and passed on to x264 (if enabled),
+	// but have not been encoded by Quick Sync yet, and thus also not freed.
+	// The key is the display frame number.
+	std::map<int, PendingFrame> reorder_buffer;
+	int quicksync_encoding_frame_num = 0;
+
 	std::unique_ptr<AudioEncoder> file_audio_encoder;
 
-	std::unique_ptr<FrameReorderer> reorderer;
 	X264Encoder *x264_encoder;  // nullptr if not using x264.
 
 	Mux* stream_mux = nullptr;  // To HTTP.
