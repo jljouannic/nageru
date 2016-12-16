@@ -192,6 +192,57 @@ Mixer::Mixer(const QSurfaceFormat &format, unsigned num_cards)
 	}
 
 	// Set up stuff for NV12 conversion.
+	//
+	// Note: Due to the horizontally co-sited chroma/luma samples in H.264
+	// (chrome position is left for horizontal and center for vertical),
+	// we need to be a bit careful in our subsampling. A diagram will make
+	// this clearer, showing some luma and chroma samples:
+	//
+	//     a   b   c   d
+	//   +---+---+---+---+
+	//   |   |   |   |   |
+	//   | Y | Y | Y | Y |
+	//   |   |   |   |   |
+	//   +---+---+---+---+
+	//
+	// +-------+-------+
+	// |       |       |
+	// |   C   |   C   |
+	// |       |       |
+	// +-------+-------+
+	//
+	// Clearly, the rightmost chroma sample here needs to be equivalent to
+	// b/4 + c/2 + d/4. (We could also implement more sophisticated filters,
+	// of course, but as long as the upsampling is not going to be equally
+	// sophisticated, it's probably not worth it.) If we sample once with
+	// no mipmapping, we get just c, ie., no actual filtering in the
+	// horizontal direction. (For the vertical direction, we can just
+	// sample in the middle to get the right filtering.) One could imagine
+	// we could use mipmapping (assuming we can create mipmaps cheaply),
+	// but then, what we'd get is this:
+	//
+	//    (a+b)/2 (c+d)/2
+	//   +-------+-------+
+	//   |       |       |
+	//   |   Y   |   Y   |
+	//   |       |       |
+	//   +-------+-------+
+	//
+	// +-------+-------+
+	// |       |       |
+	// |   C   |   C   |
+	// |       |       |
+	// +-------+-------+
+	//
+	// which ends up sampling equally from a and b, which clearly isn't right. Instead,
+	// we need to do two (non-mipmapped) chroma samples, both hitting exactly in-between
+	// source pixels.
+	//
+	// Sampling in-between b and c gives us the sample (b+c)/2, and similarly for c and d.
+	// Taking the average of these gives of (b+c)/4 + (c+d)/4 = b/4 + c/2 + d/4, which is
+	// exactly what we want.
+	//
+	// See also http://www.poynton.com/PDFs/Merging_RGB_and_422.pdf, pages 6–7.
 
 	// Cb/Cr shader.
 	string cbcr_vert_shader =
@@ -199,8 +250,9 @@ Mixer::Mixer(const QSurfaceFormat &format, unsigned num_cards)
 		" \n"
 		"in vec2 position; \n"
 		"in vec2 texcoord; \n"
-		"out vec2 tc0; \n"
+		"out vec2 tc0, tc1; \n"
 		"uniform vec2 foo_chroma_offset_0; \n"
+		"uniform vec2 foo_chroma_offset_1; \n"
 		" \n"
 		"void main() \n"
 		"{ \n"
@@ -213,14 +265,15 @@ Mixer::Mixer(const QSurfaceFormat &format, unsigned num_cards)
 		"    gl_Position = vec4(2.0 * position.x - 1.0, 2.0 * position.y - 1.0, -1.0, 1.0); \n"
 		"    vec2 flipped_tc = texcoord; \n"
 		"    tc0 = flipped_tc + foo_chroma_offset_0; \n"
+		"    tc1 = flipped_tc + foo_chroma_offset_1; \n"
 		"} \n";
 	string cbcr_frag_shader =
 		"#version 130 \n"
-		"in vec2 tc0; \n"
+		"in vec2 tc0, tc1; \n"
 		"uniform sampler2D cbcr_tex; \n"
 		"out vec4 FragColor; \n"
 		"void main() { \n"
-		"    FragColor = texture(cbcr_tex, tc0); \n"
+		"    FragColor = 0.5 * (texture(cbcr_tex, tc0) + texture(cbcr_tex, tc1)); \n"
 		"} \n";
 	vector<string> frag_shader_outputs;
 	cbcr_program_num = resource_pool->compile_glsl_program(cbcr_vert_shader, cbcr_frag_shader, frag_shader_outputs);
@@ -904,8 +957,10 @@ void Mixer::subsample_chroma(GLuint src_tex, GLuint dst_tex)
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
 	check_error();
 
-	float chroma_offset_0[] = { -0.5f / global_flags.width, 0.0f };
+	float chroma_offset_0[] = { -1.0f / global_flags.width, 0.0f };
+	float chroma_offset_1[] = { -0.0f / global_flags.width, 0.0f };
 	set_uniform_vec2(cbcr_program_num, "foo", "chroma_offset_0", chroma_offset_0);
+	set_uniform_vec2(cbcr_program_num, "foo", "chroma_offset_1", chroma_offset_1);
 
 	glUniform1i(cbcr_texture_sampler_uniform, 0);
 
