@@ -310,6 +310,7 @@ private:
 	std::atomic<unsigned> master_clock_channel{0};
 	std::unique_ptr<movit::EffectChain> display_chain;
 	GLuint cbcr_program_num;  // Owned by <resource_pool>.
+	GLuint cbcr_texture_sampler_uniform;
 	GLuint cbcr_vbo;  // Holds position and texcoord data.
 	GLuint cbcr_position_attribute_index, cbcr_texcoord_attribute_index;
 	std::unique_ptr<VideoEncoder> video_encoder;

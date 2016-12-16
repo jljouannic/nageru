@@ -231,6 +231,7 @@ Mixer::Mixer(const QSurfaceFormat &format, unsigned num_cards)
 		2.0f, 0.0f
 	};
 	cbcr_vbo = generate_vbo(2, GL_FLOAT, sizeof(vertices), vertices);
+	cbcr_texture_sampler_uniform = glGetUniformLocation(cbcr_program_num, "cbcr_tex");
 	cbcr_position_attribute_index = glGetAttribLocation(cbcr_program_num, "position");
 	cbcr_texcoord_attribute_index = glGetAttribLocation(cbcr_program_num, "texcoord");
 
@@ -905,6 +906,8 @@ void Mixer::subsample_chroma(GLuint src_tex, GLuint dst_tex)
 
 	float chroma_offset_0[] = { -0.5f / global_flags.width, 0.0f };
 	set_uniform_vec2(cbcr_program_num, "foo", "chroma_offset_0", chroma_offset_0);
+
+	glUniform1i(cbcr_texture_sampler_uniform, 0);
 
 	glBindBuffer(GL_ARRAY_BUFFER, cbcr_vbo);
 	check_error();
