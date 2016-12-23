@@ -1759,6 +1759,8 @@ void QuickSyncEncoderImpl::encode_thread_func()
 			if (!reorder_buffer.count(quicksync_display_frame_num)) {
 				break;
 			}
+			frame = move(reorder_buffer[quicksync_display_frame_num]);
+			reorder_buffer.erase(quicksync_display_frame_num);
 
 			if (frame_type == FRAME_IDR) {
 				numShortTerm = 0;
@@ -1776,8 +1778,7 @@ void QuickSyncEncoderImpl::encode_thread_func()
 			}
 			last_dts = dts;
 
-			encode_frame(reorder_buffer[quicksync_display_frame_num], quicksync_encoding_frame_num, quicksync_display_frame_num, gop_start_display_frame_num, frame_type, frame.pts, dts, frame.duration);
-			reorder_buffer.erase(quicksync_display_frame_num);
+			encode_frame(frame, quicksync_encoding_frame_num, quicksync_display_frame_num, gop_start_display_frame_num, frame_type, frame.pts, dts, frame.duration);
 			++quicksync_encoding_frame_num;
 		}
 	}
