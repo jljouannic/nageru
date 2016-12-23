@@ -186,9 +186,8 @@ Mixer::Mixer(const QSurfaceFormat &format, unsigned num_cards)
 	BMUSBCapture::set_card_connected_callback(bind(&Mixer::bm_hotplug_add, this, _1));
 	BMUSBCapture::start_bm_thread();
 
-	for (card_index = 0; card_index < num_cards; ++card_index) {
+	for (unsigned card_index = 0; card_index < num_cards; ++card_index) {
 		cards[card_index].queue_length_policy.reset(card_index);
-		cards[card_index].capture->start_bm_capture();
 	}
 
 	// Set up stuff for NV12 conversion.
@@ -590,6 +589,12 @@ void Mixer::thread_func()
 	if (!make_current(context, mixer_surface)) {
 		printf("oops\n");
 		exit(1);
+	}
+
+	// Start the actual capture. (We don't want to do it before we're actually ready
+	// to process output frames.)
+	for (unsigned card_index = 0; card_index < num_cards; ++card_index) {
+		cards[card_index].capture->start_bm_capture();
 	}
 
 	steady_clock::time_point start, now;
