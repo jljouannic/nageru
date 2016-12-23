@@ -48,7 +48,7 @@
 class ResamplingQueue {
 public:
 	// card_num is for debugging outputs only.
-	ResamplingQueue(unsigned card_num, unsigned freq_in, unsigned freq_out, unsigned num_channels = 2);
+	ResamplingQueue(unsigned card_num, unsigned freq_in, unsigned freq_out, unsigned num_channels, double expected_delay_seconds);
 
 	// If policy is DO_NOT_ADJUST_RATE, the resampling rate will not be changed.
 	// This is primarily useful if you have an extraordinary situation, such as
@@ -92,7 +92,7 @@ private:
 	// How much delay we are expected to have, in input samples.
 	// If actual delay drifts too much away from this, we will start
 	// changing the resampling ratio to compensate.
-	double expected_delay = OUTPUT_FREQUENCY * 0.1;  // 100 ms.
+	double expected_delay;
 
 	// Input samples not yet fed into the resampler.
 	// TODO: Use a circular buffer instead, for efficiency.

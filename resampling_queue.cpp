@@ -29,9 +29,9 @@
 
 using namespace std;
 
-ResamplingQueue::ResamplingQueue(unsigned card_num, unsigned freq_in, unsigned freq_out, unsigned num_channels)
+ResamplingQueue::ResamplingQueue(unsigned card_num, unsigned freq_in, unsigned freq_out, unsigned num_channels, double expected_delay_seconds)
 	: card_num(card_num), freq_in(freq_in), freq_out(freq_out), num_channels(num_channels),
-	  ratio(double(freq_out) / double(freq_in))
+	  ratio(double(freq_out) / double(freq_in)), expected_delay(expected_delay_seconds * OUTPUT_FREQUENCY)
 {
 	vresampler.setup(ratio, num_channels, /*hlen=*/32);
 

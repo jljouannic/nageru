@@ -45,7 +45,8 @@ enum LongOption {
 	OPTION_ENABLE_MAKEUP_GAIN_AUTO,
 	OPTION_DISABLE_ALSA_OUTPUT,
 	OPTION_NO_FLUSH_PBOS,
-	OPTION_PRINT_VIDEO_LATENCY
+	OPTION_PRINT_VIDEO_LATENCY,
+	OPTION_AUDIO_QUEUE_LENGTH_MS
 };
 
 void usage()
@@ -100,6 +101,7 @@ void usage()
 	fprintf(stderr, "                                    (will give display corruption, but makes it\n");
 	fprintf(stderr, "                                    possible to run with apitrace in real time)\n");
 	fprintf(stderr, "      --print-video-latency       print out measurements of video latency on stdout\n");
+	fprintf(stderr, "      --audio-queue-length-ms     length of audio resampling queue (default 100.0)\n");
 }
 
 void parse_flags(int argc, char * const argv[])
@@ -146,6 +148,7 @@ void parse_flags(int argc, char * const argv[])
 		{ "disable-alsa-output", no_argument, 0, OPTION_DISABLE_ALSA_OUTPUT },
 		{ "no-flush-pbos", no_argument, 0, OPTION_NO_FLUSH_PBOS },
 		{ "print-video-latency", no_argument, 0, OPTION_PRINT_VIDEO_LATENCY },
+		{ "audio-queue-length-ms", required_argument, 0, OPTION_AUDIO_QUEUE_LENGTH_MS },
 		{ 0, 0, 0, 0 }
 	};
 	vector<string> theme_dirs;
@@ -297,6 +300,9 @@ void parse_flags(int argc, char * const argv[])
 			break;
 		case OPTION_PRINT_VIDEO_LATENCY:
 			global_flags.print_video_latency = true;
+			break;
+		case OPTION_AUDIO_QUEUE_LENGTH_MS:
+			global_flags.audio_queue_length_ms = atof(optarg);
 			break;
 		case OPTION_HELP:
 			usage();

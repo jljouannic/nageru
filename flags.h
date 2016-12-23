@@ -41,6 +41,7 @@ struct Flags {
 	std::string input_mapping_filename;  // Empty for none.
 	std::string midi_mapping_filename;  // Empty for none.
 	bool print_video_latency = false;
+	double audio_queue_length_ms = 100.0;
 };
 extern Flags global_flags;
 
