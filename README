@@ -76,10 +76,6 @@ with:
     libmovit-dev libegl1-mesa-dev libasound2-dev libx264-dev libbmusb-dev \
     protobuf-compiler libprotobuf-dev libpci-dev
 
-Exceptions as of December 2016:
-
-  - bmusb 0.5.3 is not yet in sid.
-
 
 The patches/ directory contains a patch that helps zita-resampler performance.
 It is meant for upstream, but was not in at the time Nageru was released.
