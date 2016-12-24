@@ -330,7 +330,6 @@ void Mixer::configure_card(unsigned card_index, CaptureInterface *capture, bool 
 		card->surface = create_surface_with_same_format(mixer_surface);
 	}
 	while (!card->new_frames.empty()) card->new_frames.pop();
-	card->fractional_samples = 0;
 	card->last_timecode = -1;
 	card->capture->configure_card();
 
@@ -606,14 +605,13 @@ void Mixer::thread_func()
 	while (!should_quit) {
 		CaptureCard::NewFrame new_frames[MAX_VIDEO_CARDS];
 		bool has_new_frame[MAX_VIDEO_CARDS] = { false };
-		int num_samples[MAX_VIDEO_CARDS] = { 0 };
 
 		unsigned master_card_index = theme->map_signal(master_clock_channel);
 		assert(master_card_index < num_cards);
 
-		get_one_frame_from_each_card(master_card_index, new_frames, has_new_frame, num_samples);
-		schedule_audio_resampling_tasks(new_frames[master_card_index].dropped_frames, num_samples[master_card_index], new_frames[master_card_index].length);
-		stats_dropped_frames += new_frames[master_card_index].dropped_frames;
+		OutputFrameInfo	output_frame_info = get_one_frame_from_each_card(master_card_index, new_frames, has_new_frame);
+		schedule_audio_resampling_tasks(output_frame_info.dropped_frames, output_frame_info.num_samples, output_frame_info.frame_duration);
+		stats_dropped_frames += output_frame_info.dropped_frames;
 
 		handle_hotplugged_cards();
 
@@ -654,7 +652,7 @@ void Mixer::thread_func()
 			}
 		}
 
-		int64_t frame_duration = new_frames[master_card_index].length;
+		int64_t frame_duration = output_frame_info.frame_duration;
 		render_one_frame(frame_duration);
 		++frame;
 		pts_int += frame_duration;
@@ -715,8 +713,10 @@ void Mixer::thread_func()
 	resource_pool->clean_context();
 }
 
-void Mixer::get_one_frame_from_each_card(unsigned master_card_index, CaptureCard::NewFrame new_frames[MAX_VIDEO_CARDS], bool has_new_frame[MAX_VIDEO_CARDS], int num_samples[MAX_VIDEO_CARDS])
+Mixer::OutputFrameInfo Mixer::get_one_frame_from_each_card(unsigned master_card_index, CaptureCard::NewFrame new_frames[MAX_VIDEO_CARDS], bool has_new_frame[MAX_VIDEO_CARDS])
 {
+	OutputFrameInfo output_frame_info;
+
 start:
 	// The first card is the master timer, so wait for it to have a new frame.
 	// TODO: Add a timeout.
@@ -743,11 +743,6 @@ start:
 		card->new_frames.pop();
 		card->new_frames_changed.notify_all();
 
-		int num_samples_times_timebase = OUTPUT_FREQUENCY * new_frames[card_index].length + card->fractional_samples;
-		num_samples[card_index] = num_samples_times_timebase / TIMEBASE;
-		card->fractional_samples = num_samples_times_timebase % TIMEBASE;
-		assert(num_samples[card_index] >= 0);
-
 		if (card_index == master_card_index) {
 			// We don't use the queue length policy for the master card,
 			// but we will if it stops being the master. Thus, clear out
@@ -762,6 +757,18 @@ start:
 			}
 		}
 	}
+
+	output_frame_info.dropped_frames = new_frames[master_card_index].dropped_frames;
+	output_frame_info.frame_duration = new_frames[master_card_index].length;
+
+	// This might get off by a fractional sample when changing master card
+	// between ones with different frame rates, but that's fine.
+	int num_samples_times_timebase = OUTPUT_FREQUENCY * output_frame_info.frame_duration + fractional_samples;
+	output_frame_info.num_samples = num_samples_times_timebase / TIMEBASE;
+	fractional_samples = num_samples_times_timebase % TIMEBASE;
+	assert(output_frame_info.num_samples >= 0);
+
+	return output_frame_info;
 }
 
 void Mixer::handle_hotplugged_cards()

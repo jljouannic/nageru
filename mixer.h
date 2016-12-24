@@ -320,6 +320,10 @@ private:
 
 	int64_t pts_int = 0;  // In TIMEBASE units.
 
+	// Accumulated errors in number of 1/TIMEBASE audio samples. If OUTPUT_FREQUENCY divided by
+	// frame rate is integer, will always stay zero.
+	unsigned fractional_samples = 0;
+
 	std::mutex bmusb_mutex;
 	bool has_bmusb_thread = false;
 	struct CaptureCard {
@@ -345,15 +349,16 @@ private:
 
 		QueueLengthPolicy queue_length_policy;  // Refers to the "new_frames" queue.
 
-		// Accumulated errors in number of 1/TIMEBASE samples. If OUTPUT_FREQUENCY divided by
-		// frame rate is integer, will always stay zero.
-		unsigned fractional_samples = 0;
-
 		int last_timecode = -1;  // Unwrapped.
 	};
 	CaptureCard cards[MAX_VIDEO_CARDS];  // protected by <bmusb_mutex>
 	AudioMixer audio_mixer;  // Same as global_audio_mixer (see audio_mixer.h).
-	void get_one_frame_from_each_card(unsigned master_card_index, CaptureCard::NewFrame new_frames[MAX_VIDEO_CARDS], bool has_new_frame[MAX_VIDEO_CARDS], int num_samples[MAX_VIDEO_CARDS]);
+	struct OutputFrameInfo {
+		int dropped_frames;  // Since last frame.
+		int num_samples;  // Audio samples needed for this output frame.
+		int64_t frame_duration;  // In TIMEBASE units.
+	};
+	OutputFrameInfo get_one_frame_from_each_card(unsigned master_card_index, CaptureCard::NewFrame new_frames[MAX_VIDEO_CARDS], bool has_new_frame[MAX_VIDEO_CARDS]);
 
 	InputState input_state;
 
