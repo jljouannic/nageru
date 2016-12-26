@@ -680,10 +680,15 @@ void Mixer::thread_func()
 					assert(false);
 				}
 
-				printf(", using %ld / %ld MB lockable memory (%.1f%%)",
-					long(used.ru_maxrss / 1024),
-					long(limit.rlim_cur / 1048576),
-					float(100.0 * (used.ru_maxrss * 1024.0) / limit.rlim_cur));
+				if (limit.rlim_cur == 0) {
+					printf(", using %ld MB memory (locked)",
+						long(used.ru_maxrss / 1024));
+				} else {
+					printf(", using %ld / %ld MB lockable memory (%.1f%%)",
+						long(used.ru_maxrss / 1024),
+						long(limit.rlim_cur / 1048576),
+						float(100.0 * (used.ru_maxrss * 1024.0) / limit.rlim_cur));
+				}
 			} else {
 				printf(", using %ld MB memory (not locked)",
 					long(used.ru_maxrss / 1024));
