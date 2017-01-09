@@ -12,6 +12,8 @@ using namespace std;
 ChromaSubsampler::ChromaSubsampler(ResourcePool *resource_pool)
 	: resource_pool(resource_pool)
 {
+	vector<string> frag_shader_outputs;
+
 	// Set up stuff for NV12 conversion.
 	//
 	// Note: Due to the horizontally co-sited chroma/luma samples in H.264
@@ -96,22 +98,76 @@ ChromaSubsampler::ChromaSubsampler(ResourcePool *resource_pool)
 		"void main() { \n"
 		"    FragColor = 0.5 * (texture(cbcr_tex, tc0) + texture(cbcr_tex, tc1)); \n"
 		"} \n";
-	vector<string> frag_shader_outputs;
 	cbcr_program_num = resource_pool->compile_glsl_program(cbcr_vert_shader, cbcr_frag_shader, frag_shader_outputs);
 	check_error();
 
-	float vertices[] = {
-		0.0f, 2.0f,
-		0.0f, 0.0f,
-		2.0f, 0.0f
-	};
-	cbcr_vbo = generate_vbo(2, GL_FLOAT, sizeof(vertices), vertices);
-	check_error();
 	cbcr_texture_sampler_uniform = glGetUniformLocation(cbcr_program_num, "cbcr_tex");
 	check_error();
 	cbcr_position_attribute_index = glGetAttribLocation(cbcr_program_num, "position");
 	check_error();
 	cbcr_texcoord_attribute_index = glGetAttribLocation(cbcr_program_num, "texcoord");
+	check_error();
+
+	// Same, for UYVY conversion.
+	string uyvy_vert_shader =
+		"#version 130 \n"
+		" \n"
+		"in vec2 position; \n"
+		"in vec2 texcoord; \n"
+		"out vec2 y_tc0, y_tc1, cbcr_tc0, cbcr_tc1; \n"
+		"uniform vec2 foo_luma_offset_0; \n"
+		"uniform vec2 foo_luma_offset_1; \n"
+		"uniform vec2 foo_chroma_offset_0; \n"
+		"uniform vec2 foo_chroma_offset_1; \n"
+		" \n"
+		"void main() \n"
+		"{ \n"
+		"    // The result of glOrtho(0.0, 1.0, 0.0, 1.0, 0.0, 1.0) is: \n"
+		"    // \n"
+		"    //   2.000  0.000  0.000 -1.000 \n"
+		"    //   0.000  2.000  0.000 -1.000 \n"
+		"    //   0.000  0.000 -2.000 -1.000 \n"
+		"    //   0.000  0.000  0.000  1.000 \n"
+		"    gl_Position = vec4(2.0 * position.x - 1.0, 2.0 * position.y - 1.0, -1.0, 1.0); \n"
+		"    vec2 flipped_tc = texcoord; \n"
+		"    y_tc0 = flipped_tc + foo_luma_offset_0; \n"
+		"    y_tc1 = flipped_tc + foo_luma_offset_1; \n"
+		"    cbcr_tc0 = flipped_tc + foo_chroma_offset_0; \n"
+		"    cbcr_tc1 = flipped_tc + foo_chroma_offset_1; \n"
+		"} \n";
+	string uyvy_frag_shader =
+		"#version 130 \n"
+		"in vec2 y_tc0, y_tc1, cbcr_tc0, cbcr_tc1; \n"
+		"uniform sampler2D y_tex, cbcr_tex; \n"
+		"out vec4 FragColor; \n"
+		"void main() { \n"
+		"    float y0 = texture(y_tex, y_tc0).r; \n"
+		"    float y1 = texture(y_tex, y_tc1).r; \n"
+		"    vec2 cbcr0 = texture(cbcr_tex, cbcr_tc0).rg; \n"
+		"    vec2 cbcr1 = texture(cbcr_tex, cbcr_tc1).rg; \n"
+		"    vec2 cbcr = 0.5 * (cbcr0 + cbcr1); \n"
+		"    FragColor = vec4(cbcr.g, y0, cbcr.r, y1); \n"  // FIXME: swap y0 and y1?
+		"} \n";
+
+	uyvy_program_num = resource_pool->compile_glsl_program(uyvy_vert_shader, uyvy_frag_shader, frag_shader_outputs);
+	check_error();
+
+	uyvy_y_texture_sampler_uniform = glGetUniformLocation(uyvy_program_num, "y_tex");
+	check_error();
+	uyvy_cbcr_texture_sampler_uniform = glGetUniformLocation(uyvy_program_num, "cbcr_tex");
+	check_error();
+	uyvy_position_attribute_index = glGetAttribLocation(uyvy_program_num, "position");
+	check_error();
+	uyvy_texcoord_attribute_index = glGetAttribLocation(uyvy_program_num, "texcoord");
+	check_error();
+
+	// Shared between the two.
+	float vertices[] = {
+		0.0f, 2.0f,
+		0.0f, 0.0f,
+		2.0f, 0.0f
+	};
+	vbo = generate_vbo(2, GL_FLOAT, sizeof(vertices), vertices);
 	check_error();
 }
 
@@ -119,7 +175,9 @@ ChromaSubsampler::~ChromaSubsampler()
 {
 	resource_pool->release_glsl_program(cbcr_program_num);
 	check_error();
-	glDeleteBuffers(1, &cbcr_vbo);
+	resource_pool->release_glsl_program(uyvy_program_num);
+	check_error();
+	glDeleteBuffers(1, &vbo);
 	check_error();
 }
 
@@ -159,7 +217,7 @@ void ChromaSubsampler::subsample_chroma(GLuint cbcr_tex, unsigned width, unsigne
 
 	glUniform1i(cbcr_texture_sampler_uniform, 0);
 
-	glBindBuffer(GL_ARRAY_BUFFER, cbcr_vbo);
+	glBindBuffer(GL_ARRAY_BUFFER, vbo);
 	check_error();
 
 	for (GLint attr_index : { cbcr_position_attribute_index, cbcr_texcoord_attribute_index }) {
@@ -185,4 +243,88 @@ void ChromaSubsampler::subsample_chroma(GLuint cbcr_tex, unsigned width, unsigne
 	resource_pool->release_fbo(fbo);
 	glDeleteVertexArrays(1, &vao);
 	check_error();
+}
+
+void ChromaSubsampler::create_uyvy(GLuint y_tex, GLuint cbcr_tex, unsigned width, unsigned height, GLuint dst_tex)
+{
+	GLuint vao;
+	glGenVertexArrays(1, &vao);
+	check_error();
+
+	glBindVertexArray(vao);
+	check_error();
+
+	GLuint fbo = resource_pool->create_fbo(dst_tex);
+	glBindFramebuffer(GL_FRAMEBUFFER, fbo);
+	glViewport(0, 0, width/2, height);
+	check_error();
+
+	glUseProgram(uyvy_program_num);
+	check_error();
+
+	glUniform1i(uyvy_y_texture_sampler_uniform, 0);
+	check_error();
+	glUniform1i(uyvy_cbcr_texture_sampler_uniform, 1);
+	check_error();
+
+	glActiveTexture(GL_TEXTURE0);
+	check_error();
+	glBindTexture(GL_TEXTURE_2D, y_tex);
+	check_error();
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+	check_error();
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+	check_error();
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+	check_error();
+
+	glActiveTexture(GL_TEXTURE1);
+	check_error();
+	glBindTexture(GL_TEXTURE_2D, cbcr_tex);
+	check_error();
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+	check_error();
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+	check_error();
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+	check_error();
+
+	float y_offset_0[] = { -0.5f / width, 0.0f };
+	float y_offset_1[] = {  0.5f / width, 0.0f };
+	float cbcr_offset0[] = { -1.0f / width, 0.0f };
+	float cbcr_offset1[] = { -0.0f / width, 0.0f };
+	set_uniform_vec2(uyvy_program_num, "foo", "luma_offset_0", y_offset_0);
+	set_uniform_vec2(uyvy_program_num, "foo", "luma_offset_1", y_offset_1);
+	set_uniform_vec2(uyvy_program_num, "foo", "chroma_offset_0", cbcr_offset0);
+	set_uniform_vec2(uyvy_program_num, "foo", "chroma_offset_1", cbcr_offset1);
+
+	glBindBuffer(GL_ARRAY_BUFFER, vbo);
+	check_error();
+
+	for (GLint attr_index : { uyvy_position_attribute_index, uyvy_texcoord_attribute_index }) {
+		if (attr_index == -1) continue;
+		glEnableVertexAttribArray(attr_index);
+		check_error();
+		glVertexAttribPointer(attr_index, 2, GL_FLOAT, GL_FALSE, 0, BUFFER_OFFSET(0));
+		check_error();
+	}
+
+	glDrawArrays(GL_TRIANGLES, 0, 3);
+	check_error();
+
+	for (GLint attr_index : { uyvy_position_attribute_index, uyvy_texcoord_attribute_index }) {
+		if (attr_index == -1) continue;
+		glDisableVertexAttribArray(attr_index);
+		check_error();
+	}
+
+	glActiveTexture(GL_TEXTURE0);
+	check_error();
+	glUseProgram(0);
+	check_error();
+	glBindFramebuffer(GL_FRAMEBUFFER, 0);
+	check_error();
+
+	resource_pool->release_fbo(fbo);
+	glDeleteVertexArrays(1, &vao);
 }
