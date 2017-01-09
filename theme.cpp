@@ -262,7 +262,7 @@ int EffectChain_finalize(lua_State* L)
 	if (is_main_chain) {
 		YCbCrFormat output_ycbcr_format;
 		// We actually output 4:2:0 in the end, but chroma subsampling
-		// happens in a pass not run by Movit (see Mixer::subsample_chroma()).
+		// happens in a pass not run by Movit (see ChromaSubsampler::subsample_chroma()).
 		output_ycbcr_format.chroma_subsampling_x = 1;
 		output_ycbcr_format.chroma_subsampling_y = 1;
 

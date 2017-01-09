@@ -37,7 +37,9 @@
 #include "video_encoder.h"
 
 class ALSAOutput;
+class ChromaSubsampler;
 class QSurface;
+class QSurfaceFormat;
 
 namespace movit {
 class Effect;
@@ -45,7 +47,6 @@ class EffectChain;
 class FlatInput;
 class ResourcePool;
 }  // namespace movit
-class QSurfaceFormat;
 
 // For any card that's not the master (where we pick out the frames as they
 // come, as fast as we can process), there's going to be a queue. The question
@@ -296,7 +297,6 @@ private:
 	void schedule_audio_resampling_tasks(unsigned dropped_frames, int num_samples_per_frame, int length_per_frame);
 	void render_one_frame(int64_t duration);
 	void audio_thread_func();
-	void subsample_chroma(GLuint src_tex, GLuint dst_dst);
 	void release_display_frame(DisplayFrame *frame);
 	double pts() { return double(pts_int) / TIMEBASE; }
 
@@ -309,10 +309,7 @@ private:
 	std::atomic<unsigned> audio_source_channel{0};
 	std::atomic<unsigned> master_clock_channel{0};
 	std::unique_ptr<movit::EffectChain> display_chain;
-	GLuint cbcr_program_num;  // Owned by <resource_pool>.
-	GLuint cbcr_texture_sampler_uniform;
-	GLuint cbcr_vbo;  // Holds position and texcoord data.
-	GLuint cbcr_position_attribute_index, cbcr_texcoord_attribute_index;
+	std::unique_ptr<ChromaSubsampler> chroma_subsampler;
 	std::unique_ptr<VideoEncoder> video_encoder;
 
 	// Effects part of <display_chain>. Owned by <display_chain>.
