@@ -7,6 +7,9 @@
 
 #include <chrono>
 #include <string>
+#include <vector>
+
+#include "ref_counted_frame.h"
 
 // Since every output frame is based on multiple input frames, we need
 // more than one start timestamp. For now, we keep just the smallest
@@ -15,6 +18,8 @@
 struct ReceivedTimestamps {
 	std::chrono::steady_clock::time_point min_ts, max_ts;
 };
+
+ReceivedTimestamps find_received_timestamp(const std::vector<RefCountedFrame> &input_frames);
 
 void print_latency(const std::string &header, const ReceivedTimestamps &received_ts, bool is_b_frame, int *frameno);
 

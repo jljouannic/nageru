@@ -1,4 +1,5 @@
 #include "print_latency.h"
+
 #include "flags.h"
 
 #include <stdio.h>
@@ -7,6 +8,19 @@
 
 using namespace std;
 using namespace std::chrono;
+
+ReceivedTimestamps find_received_timestamp(const vector<RefCountedFrame> &input_frames)
+{
+	// Find min and max timestamp of all input frames that have a timestamp.
+	steady_clock::time_point min_ts = steady_clock::time_point::max(), max_ts = steady_clock::time_point::min();
+	for (const RefCountedFrame &input_frame : input_frames) {
+		if (input_frame && input_frame->received_timestamp > steady_clock::time_point::min()) {
+			min_ts = min(min_ts, input_frame->received_timestamp);
+			max_ts = max(max_ts, input_frame->received_timestamp);
+		}
+	}
+	return { min_ts, max_ts };
+}
 
 void print_latency(const string &header, const ReceivedTimestamps &received_ts, bool is_b_frame, int *frameno)
 {

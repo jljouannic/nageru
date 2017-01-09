@@ -1829,19 +1829,6 @@ void memcpy_with_pitch(uint8_t *dst, const uint8_t *src, size_t src_width, size_
 	}
 }
 
-ReceivedTimestamps find_received_timestamp(const vector<RefCountedFrame> &input_frames)
-{
-	// Find min and max timestamp of all input frames that have a timestamp.
-	steady_clock::time_point min_ts = steady_clock::time_point::max(), max_ts = steady_clock::time_point::min();
-	for (const RefCountedFrame &input_frame : input_frames) {
-		if (input_frame && input_frame->received_timestamp > steady_clock::time_point::min()) {
-			min_ts = min(min_ts, input_frame->received_timestamp);
-			max_ts = max(max_ts, input_frame->received_timestamp);
-		}
-	}
-	return { min_ts, max_ts };
-}
-
 }  // namespace
 
 void QuickSyncEncoderImpl::pass_frame(QuickSyncEncoderImpl::PendingFrame frame, int display_frame_num, int64_t pts, int64_t duration)
