@@ -203,7 +203,7 @@ Mixer::~Mixer()
 
 	for (unsigned card_index = 0; card_index < num_cards; ++card_index) {
 		{
-			unique_lock<mutex> lock(bmusb_mutex);
+			unique_lock<mutex> lock(card_mutex);
 			cards[card_index].should_quit = true;  // Unblock thread.
 			cards[card_index].new_frames_changed.notify_all();
 		}
@@ -347,7 +347,7 @@ void Mixer::bm_frame(unsigned card_index, uint16_t timecode,
 		// Still send on the information that we _had_ a frame, even though it's corrupted,
 		// so that pts can go up accordingly.
 		{
-			unique_lock<mutex> lock(bmusb_mutex);
+			unique_lock<mutex> lock(card_mutex);
 			CaptureCard::NewFrame new_frame;
 			new_frame.frame = RefCountedFrame(FrameAllocator::Frame());
 			new_frame.length = frame_length;
@@ -483,7 +483,7 @@ void Mixer::bm_frame(unsigned card_index, uint16_t timecode,
 		}
 
 		{
-			unique_lock<mutex> lock(bmusb_mutex);
+			unique_lock<mutex> lock(card_mutex);
 			CaptureCard::NewFrame new_frame;
 			new_frame.frame = frame;
 			new_frame.length = frame_length;
@@ -653,7 +653,7 @@ Mixer::OutputFrameInfo Mixer::get_one_frame_from_each_card(unsigned master_card_
 start:
 	// The first card is the master timer, so wait for it to have a new frame.
 	// TODO: Add a timeout.
-	unique_lock<mutex> lock(bmusb_mutex);
+	unique_lock<mutex> lock(card_mutex);
 	cards[master_card_index].new_frames_changed.wait(lock, [this, master_card_index]{ return !cards[master_card_index].new_frames.empty() || cards[master_card_index].capture->get_disconnected(); });
 
 	if (cards[master_card_index].new_frames.empty()) {

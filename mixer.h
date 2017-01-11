@@ -321,7 +321,7 @@ private:
 	// frame rate is integer, will always stay zero.
 	unsigned fractional_samples = 0;
 
-	std::mutex bmusb_mutex;
+	std::mutex card_mutex;
 	bool has_bmusb_thread = false;
 	struct CaptureCard {
 		bmusb::CaptureInterface *capture = nullptr;
@@ -348,7 +348,7 @@ private:
 
 		int last_timecode = -1;  // Unwrapped.
 	};
-	CaptureCard cards[MAX_VIDEO_CARDS];  // protected by <bmusb_mutex>
+	CaptureCard cards[MAX_VIDEO_CARDS];  // Protected by <card_mutex>.
 	AudioMixer audio_mixer;  // Same as global_audio_mixer (see audio_mixer.h).
 	struct OutputFrameInfo {
 		int dropped_frames;  // Since last frame.
