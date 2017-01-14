@@ -126,6 +126,7 @@ private:
 	IDeckLinkInput *input = nullptr;
 	BMDTimeValue frame_duration;
 	BMDTimeScale time_scale;
+	bool running = false;
 
 	std::map<uint32_t, bmusb::VideoMode> video_modes;
 	BMDDisplayMode current_video_mode;

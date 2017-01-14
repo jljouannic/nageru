@@ -254,11 +254,6 @@ DeckLinkCapture::DeckLinkCapture(IDeckLink *card, int card_index)
 
 	set_video_mode_no_restart(bmdModeHD720p5994);
 
-	if (input->EnableAudioInput(48000, bmdAudioSampleType32bitInteger, 2) != S_OK) {
-		fprintf(stderr, "Failed to enable audio input for card %d\n", card_index);
-		exit(1);
-	}
-
 	input->SetCallback(this);
 }
 
@@ -404,18 +399,44 @@ void DeckLinkCapture::configure_card()
 
 void DeckLinkCapture::start_bm_capture()
 {
+	if (running) {
+		return;
+	}
+	if (input->EnableVideoInput(current_video_mode, bmdFormat8BitYUV, 0) != S_OK) {
+		fprintf(stderr, "Failed to set video mode 0x%04x for card %d\n", current_video_mode, card_index);
+		exit(1);
+	}
+	if (input->EnableAudioInput(48000, bmdAudioSampleType32bitInteger, 2) != S_OK) {
+		fprintf(stderr, "Failed to enable audio input for card %d\n", card_index);
+		exit(1);
+	}
+
 	if (input->StartStreams() != S_OK) {
 		fprintf(stderr, "StartStreams failed\n");
 		exit(1);
 	}
+	running = true;
 }
 
 void DeckLinkCapture::stop_dequeue_thread()
 {
-	if (input->StopStreams() != S_OK) {
-		fprintf(stderr, "StopStreams failed\n");
+	if (!running) {
+		return;
+	}
+	HRESULT result = input->StopStreams();
+	if (result != S_OK) {
+		fprintf(stderr, "StopStreams failed with error 0x%x\n", result);
 		exit(1);
 	}
+	if (input->DisableVideoInput() != S_OK) {
+		fprintf(stderr, "Failed to disable video input for card %d\n", card_index);
+		exit(1);
+	}
+	if (input->DisableAudioInput() != S_OK) {
+		fprintf(stderr, "Failed to disable audio input for card %d\n", card_index);
+		exit(1);
+	}
+	running = false;
 }
 
 void DeckLinkCapture::set_video_mode(uint32_t video_mode_id)
@@ -452,9 +473,11 @@ void DeckLinkCapture::set_video_mode_no_restart(uint32_t video_mode_id)
 		exit(1);
 	}
 
-	if (input->EnableVideoInput(video_mode_id, bmdFormat8BitYUV, 0) != S_OK) {
-		fprintf(stderr, "Failed to set video mode 0x%04x for card %d\n", video_mode_id, card_index);
-		exit(1);
+	if (running) {
+		if (input->EnableVideoInput(video_mode_id, bmdFormat8BitYUV, 0) != S_OK) {
+			fprintf(stderr, "Failed to set video mode 0x%04x for card %d\n", video_mode_id, card_index);
+			exit(1);
+		}
 	}
 
 	current_video_mode = video_mode_id;
