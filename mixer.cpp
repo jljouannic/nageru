@@ -236,6 +236,8 @@ void Mixer::configure_card(unsigned card_index, CaptureInterface *capture, bool 
 	card->last_timecode = -1;
 	card->capture->configure_card();
 
+	// NOTE: start_bm_capture() happens in thread_func().
+
 	DeviceSpec device{InputSourceType::CAPTURE_CARD, card_index};
 	audio_mixer.reset_resampler(device);
 	audio_mixer.set_display_name(device, card->capture->get_description());
