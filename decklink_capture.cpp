@@ -294,6 +294,7 @@ HRESULT STDMETHODCALLTYPE DeckLinkCapture::VideoInputFormatChanged(
 		fprintf(stderr, "Could not get new frame rate\n");
 		exit(1);
 	}
+	field_dominance = display_mode->GetFieldDominance();
 	return S_OK;
 }
 
@@ -314,6 +315,9 @@ HRESULT STDMETHODCALLTYPE DeckLinkCapture::VideoInputFrameArrived(
 
 	video_format.frame_rate_nom = time_scale;
 	video_format.frame_rate_den = frame_duration;
+	// TODO: Respect the TFF/BFF flag.
+	video_format.interlaced = (field_dominance == bmdLowerFieldFirst || field_dominance == bmdUpperFieldFirst);
+	video_format.second_field_start = 1;
 
 	if (video_frame) {
 		video_format.has_signal = !(video_frame->GetFlags() & bmdFrameHasNoInputSource);
@@ -472,6 +476,8 @@ void DeckLinkCapture::set_video_mode_no_restart(uint32_t video_mode_id)
 		fprintf(stderr, "Could not get frame rate for card %d\n", card_index);
 		exit(1);
 	}
+
+	field_dominance = display_mode->GetFieldDominance();
 
 	if (running) {
 		if (input->EnableVideoInput(video_mode_id, bmdFormat8BitYUV, 0) != S_OK) {

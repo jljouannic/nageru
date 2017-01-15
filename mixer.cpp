@@ -363,6 +363,7 @@ void Mixer::bm_frame(unsigned card_index, uint16_t timecode,
 
 	unsigned num_fields = video_format.interlaced ? 2 : 1;
 	steady_clock::time_point frame_upload_start;
+	bool interlaced_stride = false;
 	if (video_format.interlaced) {
 		// Send the two fields along as separate frames; the other side will need to add
 		// a deinterlacer to actually get this right.
@@ -371,6 +372,9 @@ void Mixer::bm_frame(unsigned card_index, uint16_t timecode,
 		assert(frame_length % 2 == 0);
 		frame_length /= 2;
 		num_fields = 2;
+		if (video_format.second_field_start == 1) {
+			interlaced_stride = true;
+		}
 		frame_upload_start = steady_clock::now();
 	}
 	userdata->last_interlaced = video_format.interlaced;
@@ -394,8 +398,13 @@ void Mixer::bm_frame(unsigned card_index, uint16_t timecode,
 		// Note that this means we must hold on to the actual frame data in <userdata>
 		// until the upload command is run, but we hold on to <frame> much longer than that
 		// (in fact, all the way until we no longer use the texture in rendering).
-		auto upload_func = [field, video_format, y_offset, cbcr_offset, cbcr_width, userdata]() {
-			unsigned field_start_line = (field == 1) ? video_format.second_field_start : video_format.extra_lines_top + field * (video_format.height + 22);
+		auto upload_func = [field, video_format, y_offset, cbcr_offset, cbcr_width, interlaced_stride, userdata]() {
+			unsigned field_start_line;
+			if (field == 1) {
+				field_start_line = video_format.second_field_start;
+			} else {
+				field_start_line = video_format.extra_lines_top;
+			}
 
 			if (userdata->tex_y[field] == 0 ||
 			    userdata->tex_cbcr[field] == 0 ||
@@ -433,15 +442,31 @@ void Mixer::bm_frame(unsigned card_index, uint16_t timecode,
 
 			glBindTexture(GL_TEXTURE_2D, userdata->tex_cbcr[field]);
 			check_error();
+			if (interlaced_stride) {
+				glPixelStorei(GL_UNPACK_ROW_LENGTH, cbcr_width * 2);
+				check_error();
+			} else {
+				glPixelStorei(GL_UNPACK_ROW_LENGTH, 0);
+				check_error();
+			}
 			glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, cbcr_width, video_format.height, GL_RG, GL_UNSIGNED_BYTE, BUFFER_OFFSET(field_cbcr_start));
 			check_error();
 			glBindTexture(GL_TEXTURE_2D, userdata->tex_y[field]);
 			check_error();
+			if (interlaced_stride) {
+				glPixelStorei(GL_UNPACK_ROW_LENGTH, video_format.width * 2);
+				check_error();
+			} else {
+				glPixelStorei(GL_UNPACK_ROW_LENGTH, 0);
+				check_error();
+			}
 			glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, video_format.width, video_format.height, GL_RED, GL_UNSIGNED_BYTE, BUFFER_OFFSET(field_y_start));
 			check_error();
 			glBindTexture(GL_TEXTURE_2D, 0);
 			check_error();
 			glBindBuffer(GL_PIXEL_UNPACK_BUFFER, 0);
+			check_error();
+			glPixelStorei(GL_UNPACK_ROW_LENGTH, 0);
 			check_error();
 		};
 
