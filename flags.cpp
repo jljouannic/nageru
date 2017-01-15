@@ -46,7 +46,8 @@ enum LongOption {
 	OPTION_DISABLE_ALSA_OUTPUT,
 	OPTION_NO_FLUSH_PBOS,
 	OPTION_PRINT_VIDEO_LATENCY,
-	OPTION_AUDIO_QUEUE_LENGTH_MS
+	OPTION_AUDIO_QUEUE_LENGTH_MS,
+	OPTION_OUTPUT_YCBCR_COEFFICIENTS
 };
 
 void usage()
@@ -102,6 +103,8 @@ void usage()
 	fprintf(stderr, "                                    possible to run with apitrace in real time)\n");
 	fprintf(stderr, "      --print-video-latency       print out measurements of video latency on stdout\n");
 	fprintf(stderr, "      --audio-queue-length-ms     length of audio resampling queue (default 100.0)\n");
+	fprintf(stderr, "      --output-ycbcr-coefficients={rec601,rec709}\n");
+	fprintf(stderr, "                                  Y'CbCr coefficient standard of output (default rec601)\n");
 }
 
 void parse_flags(int argc, char * const argv[])
@@ -149,9 +152,11 @@ void parse_flags(int argc, char * const argv[])
 		{ "no-flush-pbos", no_argument, 0, OPTION_NO_FLUSH_PBOS },
 		{ "print-video-latency", no_argument, 0, OPTION_PRINT_VIDEO_LATENCY },
 		{ "audio-queue-length-ms", required_argument, 0, OPTION_AUDIO_QUEUE_LENGTH_MS },
+		{ "output-ycbcr-coefficients", required_argument, 0, OPTION_OUTPUT_YCBCR_COEFFICIENTS },
 		{ 0, 0, 0, 0 }
 	};
 	vector<string> theme_dirs;
+	string output_ycbcr_coefficients = "rec601";
 	for ( ;; ) {
 		int option_index = 0;
 		int c = getopt_long(argc, argv, "c:t:I:v:m:M:w:h:", long_options, &option_index);
@@ -304,6 +309,9 @@ void parse_flags(int argc, char * const argv[])
 		case OPTION_AUDIO_QUEUE_LENGTH_MS:
 			global_flags.audio_queue_length_ms = atof(optarg);
 			break;
+		case OPTION_OUTPUT_YCBCR_COEFFICIENTS:
+			output_ycbcr_coefficients = optarg;
+			break;
 		case OPTION_HELP:
 			usage();
 			exit(0);
@@ -352,5 +360,14 @@ void parse_flags(int argc, char * const argv[])
 				mapping.first, mapping.second);
 			exit(1);
 		}
+	}
+
+	if (output_ycbcr_coefficients == "rec709") {
+		global_flags.ycbcr_rec709_coefficients = true;
+	} else if (output_ycbcr_coefficients == "rec601") {
+		global_flags.ycbcr_rec709_coefficients = false;
+	} else {
+		fprintf(stderr, "ERROR: --output-ycbcr-coefficients must be “rec601” or “rec709”\n");
+		exit(1);
 	}
 }

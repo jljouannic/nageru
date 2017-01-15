@@ -101,13 +101,16 @@ void X264Encoder::init_x264()
 		param.i_frame_reference = 16;  // Because speedcontrol is never allowed to change this above what we set at start.
 	}
 
-	// NOTE: These should be in sync with the ones in h264encode.cpp (sbs_rbsp()).
+	// NOTE: These should be in sync with the ones in quicksync_encoder.cpp (sps_rbsp()).
 	param.vui.i_vidformat = 5;  // Unspecified.
 	param.vui.b_fullrange = 0;
 	param.vui.i_colorprim = 1;  // BT.709.
 	param.vui.i_transfer = 2;  // Unspecified (since we use sRGB).
-	param.vui.i_colmatrix = 6;  // BT.601/SMPTE 170M.
-
+	if (global_flags.ycbcr_rec709_coefficients) {
+		param.vui.i_colmatrix = 1;  // BT.709.
+	} else {
+		param.vui.i_colmatrix = 6;  // BT.601/SMPTE 170M.
+	}
 
 	param.rc.i_rc_method = X264_RC_ABR;
 	param.rc.i_bitrate = global_flags.x264_bitrate;

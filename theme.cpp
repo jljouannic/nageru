@@ -265,13 +265,11 @@ int EffectChain_finalize(lua_State* L)
 		// happens in a pass not run by Movit (see ChromaSubsampler::subsample_chroma()).
 		output_ycbcr_format.chroma_subsampling_x = 1;
 		output_ycbcr_format.chroma_subsampling_y = 1;
-
-		// Rec. 709 would be the sane thing to do, but it seems many players
-		// (e.g. MPlayer and VLC) just default to BT.601 coefficients no matter
-		// what (see discussions in e.g. https://trac.ffmpeg.org/ticket/4978).
-		// We _do_ set the right flags, though, so that a player that works
-		// properly doesn't have to guess.
-		output_ycbcr_format.luma_coefficients = YCBCR_REC_601;
+		if (global_flags.ycbcr_rec709_coefficients) {
+			output_ycbcr_format.luma_coefficients = YCBCR_REC_709;
+		} else {
+			output_ycbcr_format.luma_coefficients = YCBCR_REC_601;
+		}
 		output_ycbcr_format.full_range = false;
 		output_ycbcr_format.num_levels = 256;
 

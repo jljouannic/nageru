@@ -322,6 +322,7 @@ void QuickSyncEncoderImpl::sps_rbsp(bitstream *bs)
     if ( false ) {
         bitstream_put_ui(bs, 0, 1); /* vui_parameters_present_flag */
     } else {
+        // See H.264 annex E for the definition of this header.
         bitstream_put_ui(bs, 1, 1); /* vui_parameters_present_flag */
         bitstream_put_ui(bs, 0, 1); /* aspect_ratio_info_present_flag */
         bitstream_put_ui(bs, 0, 1); /* overscan_info_present_flag */
@@ -333,7 +334,11 @@ void QuickSyncEncoderImpl::sps_rbsp(bitstream *bs)
             {
                 bitstream_put_ui(bs, 1, 8);  /* colour_primaries (1 = BT.709) */
                 bitstream_put_ui(bs, 2, 8);  /* transfer_characteristics (2 = unspecified, since we use sRGB) */
-                bitstream_put_ui(bs, 6, 8);  /* matrix_coefficients (6 = BT.601/SMPTE 170M) */
+                if (global_flags.ycbcr_rec709_coefficients) {
+                    bitstream_put_ui(bs, 1, 8);  /* matrix_coefficients (1 = BT.709) */
+                } else {
+                    bitstream_put_ui(bs, 6, 8);  /* matrix_coefficients (6 = BT.601/SMPTE 170M) */
+                }
             }
         }
         bitstream_put_ui(bs, 0, 1); /* chroma_loc_info_present_flag */
