@@ -269,7 +269,7 @@ void Mixer::bm_frame(unsigned card_index, uint16_t timecode,
 			// Found a stable signal, so stop scanning.
 			is_mode_scanning[card_index] = false;
 		} else {
-			static constexpr double switch_time_s = 0.5;  // Should be enough time for the signal to stabilize.
+			static constexpr double switch_time_s = 0.1;  // Should be enough time for the signal to stabilize.
 			steady_clock::time_point now = steady_clock::now();
 			double sec_since_last_switch = duration<double>(steady_clock::now() - last_mode_scan_change[card_index]).count();
 			if (sec_since_last_switch > switch_time_s) {
