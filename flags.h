@@ -43,6 +43,9 @@ struct Flags {
 	bool print_video_latency = false;
 	double audio_queue_length_ms = 100.0;
 	bool ycbcr_rec709_coefficients = false;
+	int output_card = -1;
+	double output_buffer_frames = 6.0;
+	double output_slop_frames = 0.5;
 };
 extern Flags global_flags;
 

@@ -47,7 +47,9 @@ enum LongOption {
 	OPTION_NO_FLUSH_PBOS,
 	OPTION_PRINT_VIDEO_LATENCY,
 	OPTION_AUDIO_QUEUE_LENGTH_MS,
-	OPTION_OUTPUT_YCBCR_COEFFICIENTS
+	OPTION_OUTPUT_YCBCR_COEFFICIENTS,
+	OUTPUT_BUFFER_FRAMES,
+	OUTPUT_SLOP_FRAMES,
 };
 
 void usage()
@@ -58,6 +60,7 @@ void usage()
 	fprintf(stderr, "  -w, --width                     output width in pixels (default 1280)\n");
 	fprintf(stderr, "  -h, --height                    output height in pixels (default 720)\n");
 	fprintf(stderr, "  -c, --num-cards                 set number of input cards (default 2)\n");
+	fprintf(stderr, "  -o, --output-card=CARD          also output signal to the given card (default none)\n");
 	fprintf(stderr, "  -t, --theme=FILE                choose theme (default theme.lua)\n");
 	fprintf(stderr, "  -I, --theme-dir=DIR             search for theme in this directory (can be given multiple times)\n");
 	fprintf(stderr, "  -v, --va-display=SPEC           VA-API device for H.264 encoding\n");
@@ -102,9 +105,17 @@ void usage()
 	fprintf(stderr, "                                    (will give display corruption, but makes it\n");
 	fprintf(stderr, "                                    possible to run with apitrace in real time)\n");
 	fprintf(stderr, "      --print-video-latency       print out measurements of video latency on stdout\n");
-	fprintf(stderr, "      --audio-queue-length-ms     length of audio resampling queue (default 100.0)\n");
-	fprintf(stderr, "      --output-ycbcr-coefficients={rec601,rec709}\n");
-	fprintf(stderr, "                                  Y'CbCr coefficient standard of output (default rec601)\n");
+	fprintf(stderr, "      --audio-queue-length-ms=MS  length of audio resampling queue (default 100.0)\n");
+	fprintf(stderr, "      --output-ycbcr-coefficients={rec601,rec709,auto}\n");
+	fprintf(stderr, "                                  Y'CbCr coefficient standard of output (default auto)\n");
+	fprintf(stderr, "                                    auto is rec709 if and only if --output-card is used\n");
+	fprintf(stderr, "                                    and a HD resolution is set\n");
+	fprintf(stderr, "      --output-buffer-frames=NUM  number of frames in output buffer for --output-card,\n");
+	fprintf(stderr, "                                    can be fractional (default 6.0); note also\n");
+	fprintf(stderr, "                                    the audio queue can't be much longer than this\n");
+	fprintf(stderr, "      --output-slop-frames=NUM    if more less than this number of frames behind for\n");
+	fprintf(stderr, "                                    --output-card, try to submit anyway instead of\n");
+	fprintf(stderr, "                                    dropping the frame (default 0.5)\n");
 }
 
 void parse_flags(int argc, char * const argv[])
@@ -114,6 +125,7 @@ void parse_flags(int argc, char * const argv[])
 		{ "width", required_argument, 0, 'w' },
 		{ "height", required_argument, 0, 'h' },
 		{ "num-cards", required_argument, 0, 'c' },
+		{ "output-card", required_argument, 0, 'o' },
 		{ "theme", required_argument, 0, 't' },
 		{ "theme-dir", required_argument, 0, 'I' },
 		{ "map-signal", required_argument, 0, 'm' },
@@ -153,10 +165,12 @@ void parse_flags(int argc, char * const argv[])
 		{ "print-video-latency", no_argument, 0, OPTION_PRINT_VIDEO_LATENCY },
 		{ "audio-queue-length-ms", required_argument, 0, OPTION_AUDIO_QUEUE_LENGTH_MS },
 		{ "output-ycbcr-coefficients", required_argument, 0, OPTION_OUTPUT_YCBCR_COEFFICIENTS },
+		{ "output-buffer-frames", required_argument, 0, OUTPUT_BUFFER_FRAMES },
+		{ "output-slop-frames", required_argument, 0, OUTPUT_SLOP_FRAMES },
 		{ 0, 0, 0, 0 }
 	};
 	vector<string> theme_dirs;
-	string output_ycbcr_coefficients = "rec601";
+	string output_ycbcr_coefficients = "auto";
 	for ( ;; ) {
 		int option_index = 0;
 		int c = getopt_long(argc, argv, "c:t:I:v:m:M:w:h:", long_options, &option_index);
@@ -173,6 +187,9 @@ void parse_flags(int argc, char * const argv[])
 			break;
 		case 'c':
 			global_flags.num_cards = atoi(optarg);
+			break;
+		case 'o':
+			global_flags.output_card = atoi(optarg);
 			break;
 		case 't':
 			global_flags.theme_filename = optarg;
@@ -312,6 +329,12 @@ void parse_flags(int argc, char * const argv[])
 		case OPTION_OUTPUT_YCBCR_COEFFICIENTS:
 			output_ycbcr_coefficients = optarg;
 			break;
+		case OUTPUT_BUFFER_FRAMES:
+			global_flags.output_buffer_frames = atof(optarg);
+			break;
+		case OUTPUT_SLOP_FRAMES:
+			global_flags.output_slop_frames = atof(optarg);
+			break;
 		case OPTION_HELP:
 			usage();
 			exit(0);
@@ -330,6 +353,11 @@ void parse_flags(int argc, char * const argv[])
 	}
 	if (global_flags.num_cards <= 0) {
 		fprintf(stderr, "ERROR: --num-cards must be at least 1\n");
+		exit(1);
+	}
+	if (global_flags.output_card < -1 ||
+	    global_flags.output_card >= global_flags.num_cards) {
+		fprintf(stderr, "ERROR: --output-card points to a nonexistant card\n");
 		exit(1);
 	}
 	if (global_flags.x264_speedcontrol) {
@@ -362,12 +390,45 @@ void parse_flags(int argc, char * const argv[])
 		}
 	}
 
-	if (output_ycbcr_coefficients == "rec709") {
+	// Rec. 709 would be the sane thing to do, but it seems many players
+	// just default to BT.601 coefficients no matter what. We _do_ set
+	// the right flags, so that a player that works properly doesn't have
+	// to guess, but it's frequently ignored. See discussions
+	// in e.g. https://trac.ffmpeg.org/ticket/4978; the situation with
+	// browsers is complicated and depends on things like hardware acceleration
+	// (https://bugs.chromium.org/p/chromium/issues/detail?id=333619 for
+	// extensive discussion). VLC generally fixed this as part of 3.0.0
+	// (see e.g. https://github.com/videolan/vlc/commit/bc71288b2e38c07d6921472824b92eef1aa85f7e
+	// and https://github.com/videolan/vlc/commit/c3fc2683a9cde1d42674ebf9935dced05733a215),
+	// but earlier versions were pretty random.
+	//
+	// On the other hand, HDMI/SDI output typically requires Rec. 709 for
+	// HD resolutions (with no way of signaling anything else), which is
+	// a conflicting demand. In this case, we typically let the HDMI/SDI
+	// output win, but the user can override this.
+	if (output_ycbcr_coefficients == "auto") {
+		if (global_flags.output_card >= 0 && global_flags.width >= 1280) {
+			global_flags.ycbcr_rec709_coefficients = true;
+		} else {
+			global_flags.ycbcr_rec709_coefficients = false;
+		}
+	} else if (output_ycbcr_coefficients == "rec709") {
 		global_flags.ycbcr_rec709_coefficients = true;
 	} else if (output_ycbcr_coefficients == "rec601") {
 		global_flags.ycbcr_rec709_coefficients = false;
 	} else {
-		fprintf(stderr, "ERROR: --output-ycbcr-coefficients must be “rec601” or “rec709”\n");
+		fprintf(stderr, "ERROR: --output-ycbcr-coefficients must be “rec601”, “rec709” or “auto”\n");
+		exit(1);
+	}
+
+	if (global_flags.output_buffer_frames < 0.0f) {
+		// Actually, even zero probably won't make sense; there is some internal
+		// delay to the card.
+		fprintf(stderr, "ERROR: --output-buffer-frames can't be negative.\n");
+		exit(1);
+	}
+	if (global_flags.output_slop_frames < 0.0f) {
+		fprintf(stderr, "ERROR: --output-slop-frames can't be negative.\n");
 		exit(1);
 	}
 }

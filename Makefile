@@ -28,7 +28,7 @@ OBJS += chroma_subsampler.o mixer.o pbo_frame_allocator.o context.o ref_counted_
 OBJS += quicksync_encoder.o x264_encoder.o x264_speed_control.o video_encoder.o metacube2.o mux.o audio_encoder.o ffmpeg_raii.o
 
 # DeckLink
-OBJS += decklink_capture.o decklink_util.o decklink/DeckLinkAPIDispatch.o
+OBJS += decklink_capture.o decklink_util.o decklink_output.o decklink/DeckLinkAPIDispatch.o
 
 # bmusb
 ifeq ($(EMBEDDED_BMUSB),yes)

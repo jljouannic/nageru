@@ -38,6 +38,7 @@
 
 class ALSAOutput;
 class ChromaSubsampler;
+class DeckLinkOutput;
 class QSurface;
 class QSurfaceFormat;
 
@@ -285,7 +286,8 @@ public:
 	}
 
 private:
-	void configure_card(unsigned card_index, bmusb::CaptureInterface *capture, bool is_fake_capture);
+	void configure_card(unsigned card_index, bmusb::CaptureInterface *capture, bool is_fake_capture, DeckLinkOutput *output);
+	void set_output_card(int card_index); // -1 = no output, just stream.
 	void bm_frame(unsigned card_index, uint16_t timecode,
 		bmusb::FrameAllocator::Frame video_frame, size_t video_offset, bmusb::VideoFormat video_format,
 		bmusb::FrameAllocator::Frame audio_frame, size_t audio_offset, bmusb::AudioFormat audio_format);
@@ -303,11 +305,12 @@ private:
 	HTTPD httpd;
 	unsigned num_cards;
 
-	QSurface *mixer_surface, *h264_encoder_surface;
+	QSurface *mixer_surface, *h264_encoder_surface, *decklink_output_surface;
 	std::unique_ptr<movit::ResourcePool> resource_pool;
 	std::unique_ptr<Theme> theme;
 	std::atomic<unsigned> audio_source_channel{0};
-	std::atomic<unsigned> master_clock_channel{0};
+	std::atomic<int> master_clock_channel{0};  // Gets overridden by <output_card_index> if set.
+	std::atomic<int> output_card_index{-1};  // -1 for none.
 	std::unique_ptr<movit::EffectChain> display_chain;
 	std::unique_ptr<ChromaSubsampler> chroma_subsampler;
 	std::unique_ptr<VideoEncoder> video_encoder;
@@ -326,6 +329,15 @@ private:
 	struct CaptureCard {
 		bmusb::CaptureInterface *capture = nullptr;
 		bool is_fake_capture;
+		DeckLinkOutput *output = nullptr;
+
+		// If this card is used for output (ie., output_card_index points to it),
+		// it cannot simultaneously be uesd for capture, so <capture> gets replaced
+		// by a FakeCapture. However, since reconstructing the real capture object
+		// with all its state can be annoying, it is not being deleted, just stopped
+		// and moved here.
+		bmusb::CaptureInterface *parked_capture = nullptr;
+
 		std::unique_ptr<PBOFrameAllocator> frame_allocator;
 
 		// Stuff for the OpenGL context (for texture uploading).
@@ -350,12 +362,13 @@ private:
 	};
 	CaptureCard cards[MAX_VIDEO_CARDS];  // Protected by <card_mutex>.
 	AudioMixer audio_mixer;  // Same as global_audio_mixer (see audio_mixer.h).
+	bool input_card_is_master_clock(unsigned card_index, unsigned master_card_index) const;
 	struct OutputFrameInfo {
 		int dropped_frames;  // Since last frame.
 		int num_samples;  // Audio samples needed for this output frame.
 		int64_t frame_duration;  // In TIMEBASE units.
 	};
-	OutputFrameInfo get_one_frame_from_each_card(unsigned master_card_index, CaptureCard::NewFrame new_frames[MAX_VIDEO_CARDS], bool has_new_frame[MAX_VIDEO_CARDS]);
+	OutputFrameInfo get_one_frame_from_each_card(unsigned master_card_index, bool master_card_is_output, CaptureCard::NewFrame new_frames[MAX_VIDEO_CARDS], bool has_new_frame[MAX_VIDEO_CARDS]);
 
 	InputState input_state;
 

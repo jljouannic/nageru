@@ -35,6 +35,7 @@
 #include "chroma_subsampler.h"
 #include "context.h"
 #include "decklink_capture.h"
+#include "decklink_output.h"
 #include "defs.h"
 #include "disk_space_estimator.h"
 #include "flags.h"
@@ -108,6 +109,7 @@ Mixer::Mixer(const QSurfaceFormat &format, unsigned num_cards)
 	  num_cards(num_cards),
 	  mixer_surface(create_surface(format)),
 	  h264_encoder_surface(create_surface(format)),
+	  decklink_output_surface(create_surface(format)),
 	  audio_mixer(num_cards)
 {
 	CHECK(init_movit(MOVIT_SHADER_DIR, MOVIT_DEBUG_OFF));
@@ -156,7 +158,10 @@ Mixer::Mixer(const QSurfaceFormat &format, unsigned num_cards)
 					break;
 				}
 
-				configure_card(card_index, new DeckLinkCapture(decklink, card_index), /*is_fake_capture=*/false);
+				DeckLinkCapture *capture = new DeckLinkCapture(decklink, card_index);
+				DeckLinkOutput *output = new DeckLinkOutput(resource_pool.get(), decklink_output_surface, global_flags.width, global_flags.height, card_index);
+				output->set_device(decklink);
+				configure_card(card_index, capture, /*is_fake_capture=*/false, output);
 				++num_pci_devices;
 			}
 			decklink_iterator->Release();
@@ -165,18 +170,19 @@ Mixer::Mixer(const QSurfaceFormat &format, unsigned num_cards)
 			fprintf(stderr, "DeckLink drivers not found. Probing for USB cards only.\n");
 		}
 	}
+
 	unsigned num_usb_devices = BMUSBCapture::num_cards();
 	for (unsigned usb_card_index = 0; usb_card_index < num_usb_devices && card_index < num_cards; ++usb_card_index, ++card_index) {
 		BMUSBCapture *capture = new BMUSBCapture(usb_card_index);
 		capture->set_card_disconnected_callback(bind(&Mixer::bm_hotplug_remove, this, card_index));
-		configure_card(card_index, capture, /*is_fake_capture=*/false);
+		configure_card(card_index, capture, /*is_fake_capture=*/false, /*output=*/nullptr);
 	}
 	fprintf(stderr, "Found %u USB card(s).\n", num_usb_devices);
 
 	unsigned num_fake_cards = 0;
 	for ( ; card_index < num_cards; ++card_index, ++num_fake_cards) {
 		FakeCapture *capture = new FakeCapture(global_flags.width, global_flags.height, FAKE_FPS, OUTPUT_FREQUENCY, card_index, global_flags.fake_cards_audio);
-		configure_card(card_index, capture, /*is_fake_capture=*/true);
+		configure_card(card_index, capture, /*is_fake_capture=*/true, /*output=*/nullptr);
 	}
 
 	if (num_fake_cards > 0) {
@@ -194,6 +200,9 @@ Mixer::Mixer(const QSurfaceFormat &format, unsigned num_cards)
 
 	if (global_flags.enable_alsa_output) {
 		alsa.reset(new ALSAOutput(OUTPUT_FREQUENCY, /*num_channels=*/2));
+	}
+	if (global_flags.output_card != -1) {
+		set_output_card(global_flags.output_card);
 	}
 }
 
@@ -213,7 +222,7 @@ Mixer::~Mixer()
 	video_encoder.reset(nullptr);
 }
 
-void Mixer::configure_card(unsigned card_index, CaptureInterface *capture, bool is_fake_capture)
+void Mixer::configure_card(unsigned card_index, CaptureInterface *capture, bool is_fake_capture, DeckLinkOutput *output)
 {
 	printf("Configuring card %d...\n", card_index);
 
@@ -224,6 +233,7 @@ void Mixer::configure_card(unsigned card_index, CaptureInterface *capture, bool 
 	}
 	card->capture = capture;
 	card->is_fake_capture = is_fake_capture;
+	card->output = output;
 	card->capture->set_frame_callback(bind(&Mixer::bm_frame, this, card_index, _1, _2, _3, _4, _5, _6, _7));
 	if (card->frame_allocator == nullptr) {
 		card->frame_allocator.reset(new PBOFrameAllocator(8 << 20, global_flags.width, global_flags.height));  // 8 MB.
@@ -244,6 +254,36 @@ void Mixer::configure_card(unsigned card_index, CaptureInterface *capture, bool 
 	audio_mixer.trigger_state_changed_callback();
 }
 
+void Mixer::set_output_card(int card_index)
+{
+	if (card_index == output_card_index) {
+		return;
+	}
+	unique_lock<mutex> lock(card_mutex);
+	if (output_card_index != -1) {
+		// Switch the old card from output to input.
+		CaptureCard *old_card = &cards[output_card_index];
+		old_card->output->end_output();
+
+		old_card->capture->stop_dequeue_thread();
+		delete old_card->capture;
+
+		old_card->capture = old_card->parked_capture;
+		old_card->is_fake_capture = false;
+		old_card->parked_capture = nullptr;
+		old_card->capture->start_bm_capture();
+	}
+
+	CaptureCard *card = &cards[card_index];
+	card->capture->stop_dequeue_thread();
+	card->parked_capture = card->capture;
+	FakeCapture *capture = new FakeCapture(global_flags.width, global_flags.height, FAKE_FPS, OUTPUT_FREQUENCY, card_index, global_flags.fake_cards_audio);
+	configure_card(card_index, capture, /*is_fake_capture=*/true, card->output);
+	card->queue_length_policy.reset(card_index);
+	card->capture->start_bm_capture();
+	card->output->start_output(bmdModeHD720p5994, pts_int);  // FIXME
+	output_card_index = card_index;
+}
 
 namespace {
 
@@ -523,7 +563,9 @@ void Mixer::thread_func()
 	// Start the actual capture. (We don't want to do it before we're actually ready
 	// to process output frames.)
 	for (unsigned card_index = 0; card_index < num_cards; ++card_index) {
-		cards[card_index].capture->start_bm_capture();
+		if (int(card_index) != output_card_index) {
+			cards[card_index].capture->start_bm_capture();
+		}
 	}
 
 	steady_clock::time_point start, now;
@@ -536,10 +578,18 @@ void Mixer::thread_func()
 		CaptureCard::NewFrame new_frames[MAX_VIDEO_CARDS];
 		bool has_new_frame[MAX_VIDEO_CARDS] = { false };
 
-		unsigned master_card_index = theme->map_signal(master_clock_channel);
-		assert(master_card_index < num_cards);
+		bool master_card_is_output;
+		unsigned master_card_index;
+		if (output_card_index != -1) {
+			master_card_is_output = true;
+			master_card_index = output_card_index;
+		} else {
+			master_card_is_output = false;
+			master_card_index = theme->map_signal(master_clock_channel);
+			assert(master_card_index < num_cards);
+		}
 
-		OutputFrameInfo	output_frame_info = get_one_frame_from_each_card(master_card_index, new_frames, has_new_frame);
+		OutputFrameInfo	output_frame_info = get_one_frame_from_each_card(master_card_index, master_card_is_output, new_frames, has_new_frame);
 		schedule_audio_resampling_tasks(output_frame_info.dropped_frames, output_frame_info.num_samples, output_frame_info.frame_duration);
 		stats_dropped_frames += output_frame_info.dropped_frames;
 
@@ -560,7 +610,7 @@ void Mixer::thread_func()
 
 		// If the first card is reporting a corrupted or otherwise dropped frame,
 		// just increase the pts (skipping over this frame) and don't try to compute anything new.
-		if (new_frames[master_card_index].frame->len == 0) {
+		if (!master_card_is_output && new_frames[master_card_index].frame->len == 0) {
 			++stats_dropped_frames;
 			pts_int += new_frames[master_card_index].length;
 			continue;
@@ -648,17 +698,35 @@ void Mixer::thread_func()
 	resource_pool->clean_context();
 }
 
-Mixer::OutputFrameInfo Mixer::get_one_frame_from_each_card(unsigned master_card_index, CaptureCard::NewFrame new_frames[MAX_VIDEO_CARDS], bool has_new_frame[MAX_VIDEO_CARDS])
+bool Mixer::input_card_is_master_clock(unsigned card_index, unsigned master_card_index) const
+{
+	if (output_card_index != -1) {
+		// The output card (ie., cards[output_card_index].output) is the master clock,
+		// so no input card (ie., cards[card_index].capture) is.
+		return false;
+	}
+	return (card_index == master_card_index);
+}
+
+Mixer::OutputFrameInfo Mixer::get_one_frame_from_each_card(unsigned master_card_index, bool master_card_is_output, CaptureCard::NewFrame new_frames[MAX_VIDEO_CARDS], bool has_new_frame[MAX_VIDEO_CARDS])
 {
 	OutputFrameInfo output_frame_info;
-
 start:
-	// The first card is the master timer, so wait for it to have a new frame.
-	// TODO: Add a timeout.
-	unique_lock<mutex> lock(card_mutex);
-	cards[master_card_index].new_frames_changed.wait(lock, [this, master_card_index]{ return !cards[master_card_index].new_frames.empty() || cards[master_card_index].capture->get_disconnected(); });
+	unique_lock<mutex> lock(card_mutex, defer_lock);
+	if (master_card_is_output) {
+		// Clocked to the output, so wait for it to be ready for the next frame.
+		cards[master_card_index].output->wait_for_frame(pts_int, &output_frame_info.dropped_frames, &output_frame_info.frame_duration);
+		lock.lock();
+	} else {
+		// Wait for the master card to have a new frame.
+		// TODO: Add a timeout.
+		lock.lock();
+		cards[master_card_index].new_frames_changed.wait(lock, [this, master_card_index]{ return !cards[master_card_index].new_frames.empty() || cards[master_card_index].capture->get_disconnected(); });
+	}
 
-	if (cards[master_card_index].new_frames.empty()) {
+	if (master_card_is_output) {
+		handle_hotplugged_cards();
+	} else if (cards[master_card_index].new_frames.empty()) {
 		// We were woken up, but not due to a new frame. Deal with it
 		// and then restart.
 		assert(cards[master_card_index].capture->get_disconnected());
@@ -669,7 +737,7 @@ start:
 	for (unsigned card_index = 0; card_index < num_cards; ++card_index) {
 		CaptureCard *card = &cards[card_index];
 		if (card->new_frames.empty()) {
-			assert(card_index != master_card_index);
+			assert(!input_card_is_master_clock(card_index, master_card_index));
 			card->queue_length_policy.update_policy(-1);
 			continue;
 		}
@@ -678,7 +746,7 @@ start:
 		card->new_frames.pop();
 		card->new_frames_changed.notify_all();
 
-		if (card_index == master_card_index) {
+		if (input_card_is_master_clock(card_index, master_card_index)) {
 			// We don't use the queue length policy for the master card,
 			// but we will if it stops being the master. Thus, clear out
 			// the policy in case we switch in the future.
@@ -693,8 +761,10 @@ start:
 		}
 	}
 
-	output_frame_info.dropped_frames = new_frames[master_card_index].dropped_frames;
-	output_frame_info.frame_duration = new_frames[master_card_index].length;
+	if (!master_card_is_output) {
+		output_frame_info.dropped_frames = new_frames[master_card_index].dropped_frames;
+		output_frame_info.frame_duration = new_frames[master_card_index].length;
+	}
 
 	// This might get off by a fractional sample when changing master card
 	// between ones with different frame rates, but that's fine.
@@ -714,7 +784,7 @@ void Mixer::handle_hotplugged_cards()
 		if (card->capture->get_disconnected()) {
 			fprintf(stderr, "Card %u went away, replacing with a fake card.\n", card_index);
 			FakeCapture *capture = new FakeCapture(global_flags.width, global_flags.height, FAKE_FPS, OUTPUT_FREQUENCY, card_index, global_flags.fake_cards_audio);
-			configure_card(card_index, capture, /*is_fake_capture=*/true);
+			configure_card(card_index, capture, /*is_fake_capture=*/true, /*output=*/nullptr);
 			card->queue_length_policy.reset(card_index);
 			card->capture->start_bm_capture();
 		}
@@ -731,7 +801,7 @@ void Mixer::handle_hotplugged_cards()
 		int free_card_index = -1;
 		for (unsigned card_index = 0; card_index < num_cards; ++card_index) {
 			if (cards[card_index].is_fake_capture) {
-				free_card_index = int(card_index);
+				free_card_index = card_index;
 				break;
 			}
 		}
@@ -744,7 +814,7 @@ void Mixer::handle_hotplugged_cards()
 			fprintf(stderr, "New card plugged in, choosing slot %d.\n", free_card_index);
 			CaptureCard *card = &cards[free_card_index];
 			BMUSBCapture *capture = new BMUSBCapture(free_card_index, new_dev);
-			configure_card(free_card_index, capture, /*is_fake_capture=*/false);
+			configure_card(free_card_index, capture, /*is_fake_capture=*/false, /*output=*/nullptr);
 			card->queue_length_policy.reset(free_card_index);
 			capture->set_card_disconnected_callback(bind(&Mixer::bm_hotplug_remove, this, free_card_index));
 			capture->start_bm_capture();
@@ -808,6 +878,9 @@ void Mixer::render_one_frame(int64_t duration)
 	resource_pool->release_fbo(fbo);
 
 	chroma_subsampler->subsample_chroma(cbcr_full_tex, global_flags.width, global_flags.height, cbcr_tex);
+	if (output_card_index != -1) {
+		cards[output_card_index].output->send_frame(y_tex, cbcr_full_tex, theme_main_chain.input_frames, pts_int, duration);
+	}
 	resource_pool->release_2d_texture(cbcr_full_tex);
 
 	// Set the right state for rgba_tex.
@@ -871,7 +944,10 @@ void Mixer::audio_thread_func()
 		if (alsa) {
 			alsa->write(samples_out);
 		}
-		decklink_output->send_audio(task.pts_int, samples_out);
+		if (output_card_index != -1) {
+			const int64_t av_delay = lrint(global_flags.audio_queue_length_ms * 0.001 * TIMEBASE);  // Corresponds to the delay in ResamplingQueue.
+			cards[output_card_index].output->send_audio(task.pts_int + av_delay, samples_out);
+		}
 		video_encoder->add_audio(task.pts_int, move(samples_out));
 	}
 }
