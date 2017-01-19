@@ -213,7 +213,9 @@ DeckLinkCapture::DeckLinkCapture(IDeckLink *card, int card_index)
 		exit(1);
 	}
 
-	set_video_input(bmdVideoConnectionHDMI);
+	BMDVideoConnection connection = pick_default_video_connection(card, BMDDeckLinkVideoInputConnections, card_index);
+
+	set_video_input(connection);
 	set_audio_input(bmdAudioConnectionEmbedded);
 
 	IDeckLinkDisplayModeIterator *mode_it;

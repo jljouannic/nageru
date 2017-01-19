@@ -52,6 +52,12 @@ void DeckLinkOutput::set_device(IDeckLink *decklink)
 	}
 
 	mode_it->Release();
+
+	// HDMI or SDI generally mean “both HDMI and SDI at the same time” on DeckLink cards
+	// that support both; pick_default_video_connection() will generally pick one of those
+	// if they exist. We're not very likely to need analog outputs, so we don't need a way
+	// to change beyond that.
+	video_connection = pick_default_video_connection(decklink, BMDDeckLinkVideoOutputConnections, card_index);
 }
 
 void DeckLinkOutput::start_output(uint32_t mode, int64_t base_pts)
@@ -71,9 +77,7 @@ void DeckLinkOutput::start_output(uint32_t mode, int64_t base_pts)
 		fprintf(stderr, "Failed to set low latency output\n");
 		exit(1);
 	}
-	// HDMI or SDI generally mean “both HDMI and SDI at the same time” on DeckLink cards.
-	// We're not very likely to need analog outputs.
-	if (config->SetInt(bmdDeckLinkConfigVideoOutputConnection, bmdVideoConnectionHDMI) != S_OK) {
+	if (config->SetInt(bmdDeckLinkConfigVideoOutputConnection, video_connection) != S_OK) {
 		fprintf(stderr, "Failed to set video output connection for card %u\n", card_index);
 		exit(1);
 	}

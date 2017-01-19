@@ -122,6 +122,7 @@ private:
 
 	movit::ResourcePool *resource_pool;
 	IDeckLinkOutput *output = nullptr;
+	BMDVideoConnection video_connection;
 	QSurface *surface;
 	unsigned width, height;
 	unsigned card_index;
