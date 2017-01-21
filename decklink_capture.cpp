@@ -205,6 +205,16 @@ DeckLinkCapture::DeckLinkCapture(IDeckLink *card, int card_index)
 		}
 	}
 
+	// If there's more than one subdevice on this card, label them.
+	int64_t num_subdevices, subdevice_idx;
+	if (attr->GetInt(BMDDeckLinkNumberOfSubDevices, &num_subdevices) == S_OK && num_subdevices > 1) {
+		if (attr->GetInt(BMDDeckLinkSubDeviceIndex, &subdevice_idx) == S_OK) {
+			char buf[256];
+			snprintf(buf, sizeof(buf), " (subdevice %d)", int(subdevice_idx));
+			description += buf;
+		}
+	}
+
 	attr->Release();
 
 	/* Set up the video and audio sources. */
