@@ -217,6 +217,10 @@ Mixer::~Mixer()
 			cards[card_index].new_frames_changed.notify_all();
 		}
 		cards[card_index].capture->stop_dequeue_thread();
+		if (cards[card_index].output) {
+			cards[card_index].output->end_output();
+			delete cards[card_index].output;
+		}
 	}
 
 	video_encoder.reset(nullptr);

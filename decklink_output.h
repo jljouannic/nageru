@@ -117,7 +117,7 @@ private:
 	std::queue<std::unique_ptr<Frame>> frame_freelist;  // Under <frame_queue_mutex>.
 	int num_frames_in_flight = 0;  // Number of frames allocated but not on the freelist. Under <frame_queue_mutex>.
 	std::condition_variable frame_queues_changed;
-	bool playback_started = false;
+	bool playback_initiated = false, playback_started = false;
 	int64_t base_pts, frame_duration;
 
 	movit::ResourcePool *resource_pool;

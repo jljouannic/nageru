@@ -63,8 +63,10 @@ void DeckLinkOutput::set_device(IDeckLink *decklink)
 void DeckLinkOutput::start_output(uint32_t mode, int64_t base_pts)
 {
 	assert(output);
+	assert(!playback_initiated);
 
 	should_quit = false;
+	playback_initiated = true;
 	playback_started = false;
 	this->base_pts = base_pts;
 
@@ -153,9 +155,14 @@ void DeckLinkOutput::start_output(uint32_t mode, int64_t base_pts)
 
 void DeckLinkOutput::end_output()
 {
+	if (!playback_initiated) {
+		return;
+	}
+
 	should_quit = true;
 	frame_queues_changed.notify_all();
 	present_thread.join();
+	playback_initiated = false;
 
 	output->StopScheduledPlayback(0, nullptr, 0);
 	output->DisableVideoOutput();
