@@ -443,8 +443,12 @@ void DeckLinkCapture::stop_dequeue_thread()
 
 void DeckLinkCapture::set_video_mode(uint32_t video_mode_id)
 {
-	if (input->StopStreams() != S_OK) {
-		fprintf(stderr, "StopStreams failed\n");
+	if (input->PauseStreams() != S_OK) {
+		fprintf(stderr, "PauseStreams failed\n");
+		exit(1);
+	}
+	if (input->FlushStreams() != S_OK) {
+		fprintf(stderr, "FlushStreams failed\n");
 		exit(1);
 	}
 
