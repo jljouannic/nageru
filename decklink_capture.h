@@ -128,6 +128,7 @@ private:
 	BMDTimeScale time_scale;
 	BMDFieldDominance field_dominance;
 	bool running = false;
+	bool supports_autodetect = false;
 
 	std::map<uint32_t, bmusb::VideoMode> video_modes;
 	BMDDisplayMode current_video_mode;

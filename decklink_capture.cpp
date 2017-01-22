@@ -205,6 +205,12 @@ DeckLinkCapture::DeckLinkCapture(IDeckLink *card, int card_index)
 		}
 	}
 
+	// Check if we the card supports input autodetection.
+	if (attr->GetFlag(BMDDeckLinkSupportsInputFormatDetection, &supports_autodetect) != S_OK) {
+		fprintf(stderr, "Warning: Failed to ask card %d whether it supports input format autodetection\n", card_index);
+		supports_autodetect = false;
+	}
+
 	// If there's more than one subdevice on this card, label them.
 	int64_t num_subdevices, subdevice_idx;
 	if (attr->GetInt(BMDDeckLinkNumberOfSubDevices, &num_subdevices) == S_OK && num_subdevices > 1) {
@@ -273,8 +279,15 @@ ULONG STDMETHODCALLTYPE DeckLinkCapture::Release(void)
 HRESULT STDMETHODCALLTYPE DeckLinkCapture::VideoInputFormatChanged(
 	BMDVideoInputFormatChangedEvents,
 	IDeckLinkDisplayMode* display_mode,
-	BMDDetectedVideoInputFormatFlags)
+	BMDDetectedVideoInputFormatFlags format_flags)
 {
+	if (format_flags & bmdDetectedVideoInputRGB444) {
+		fprintf(stderr, "WARNING: Input detected as 4:4:4 RGB, but Nageru can't consume that yet.\n");
+		fprintf(stderr, "Doing hardware conversion to 4:2:2 Y'CbCr.\n");
+	}
+	if (supports_autodetect && display_mode->GetDisplayMode() != current_video_mode) {
+		set_video_mode(display_mode->GetDisplayMode());
+	}
 	if (display_mode->GetFrameRate(&frame_duration, &time_scale) != S_OK) {
 		fprintf(stderr, "Could not get new frame rate\n");
 		exit(1);
@@ -391,7 +404,7 @@ void DeckLinkCapture::start_bm_capture()
 	if (running) {
 		return;
 	}
-	if (input->EnableVideoInput(current_video_mode, bmdFormat8BitYUV, 0) != S_OK) {
+	if (input->EnableVideoInput(current_video_mode, bmdFormat8BitYUV, supports_autodetect ? bmdVideoInputEnableFormatDetection : 0) != S_OK) {
 		fprintf(stderr, "Failed to set video mode 0x%04x for card %d\n", current_video_mode, card_index);
 		exit(1);
 	}
@@ -465,7 +478,7 @@ void DeckLinkCapture::set_video_mode_no_restart(uint32_t video_mode_id)
 	field_dominance = display_mode->GetFieldDominance();
 
 	if (running) {
-		if (input->EnableVideoInput(video_mode_id, bmdFormat8BitYUV, 0) != S_OK) {
+		if (input->EnableVideoInput(video_mode_id, bmdFormat8BitYUV, supports_autodetect ? bmdVideoInputEnableFormatDetection : 0) != S_OK) {
 			fprintf(stderr, "Failed to set video mode 0x%04x for card %d\n", video_mode_id, card_index);
 			exit(1);
 		}
