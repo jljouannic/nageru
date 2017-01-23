@@ -963,12 +963,28 @@ int Theme::map_signal(int signal_num)
 	if (signal_to_card_mapping.count(signal_num)) {
 		return signal_to_card_mapping[signal_num];
 	}
-	if (signal_num >= int(num_cards)) {
-		fprintf(stderr, "WARNING: Theme asked for input %d, but we only have %u card(s).\n", signal_num, num_cards);
-		fprintf(stderr, "Mapping to card %d instead.\n", signal_num % num_cards);
+
+	int card_index;
+	if (global_flags.output_card != -1 && num_cards > 1) {
+		// Try to exclude the output card from the default card_index.
+		card_index = signal_num % (num_cards - 1);
+		if (card_index >= global_flags.output_card) {
+			 ++card_index;
+		}
+		if (signal_num >= int(num_cards - 1)) {
+			fprintf(stderr, "WARNING: Theme asked for input %d, but we only have %u input card(s) (card %d is busy with output).\n",
+				signal_num, num_cards - 1, global_flags.output_card);
+			fprintf(stderr, "Mapping to card %d instead.\n", card_index);
+		}
+	} else {
+		card_index = signal_num % num_cards;
+		if (signal_num >= int(num_cards)) {
+			fprintf(stderr, "WARNING: Theme asked for input %d, but we only have %u card(s).\n", signal_num, num_cards);
+			fprintf(stderr, "Mapping to card %d instead.\n", card_index);
+		}
 	}
-	signal_to_card_mapping[signal_num] = signal_num % num_cards;
-	return signal_num % num_cards;
+	signal_to_card_mapping[signal_num] = card_index;
+	return card_index;
 }
 
 void Theme::set_signal_mapping(int signal_num, int card_num)
