@@ -146,7 +146,7 @@ ChromaSubsampler::ChromaSubsampler(ResourcePool *resource_pool)
 		"    vec2 cbcr0 = texture(cbcr_tex, cbcr_tc0).rg; \n"
 		"    vec2 cbcr1 = texture(cbcr_tex, cbcr_tc1).rg; \n"
 		"    vec2 cbcr = 0.5 * (cbcr0 + cbcr1); \n"
-		"    FragColor = vec4(cbcr.g, y0, cbcr.r, y1); \n"  // FIXME: swap y0 and y1?
+		"    FragColor = vec4(cbcr.g, y0, cbcr.r, y1); \n"
 		"} \n";
 
 	uyvy_program_num = resource_pool->compile_glsl_program(uyvy_vert_shader, uyvy_frag_shader, frag_shader_outputs);
