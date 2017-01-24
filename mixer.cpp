@@ -281,6 +281,7 @@ void Mixer::set_output_card(int card_index)
 	CaptureCard *card = &cards[card_index];
 	card->capture->stop_dequeue_thread();
 	card->parked_capture = card->capture;
+	card->capture = nullptr;
 	FakeCapture *capture = new FakeCapture(global_flags.width, global_flags.height, FAKE_FPS, OUTPUT_FREQUENCY, card_index, global_flags.fake_cards_audio);
 	configure_card(card_index, capture, /*is_fake_capture=*/true, card->output);
 	card->queue_length_policy.reset(card_index);
