@@ -281,18 +281,19 @@ void Mixer::set_output_card(int card_index)
 		old_card->is_fake_capture = false;
 		old_card->capture->start_bm_capture();
 	}
-
-	CaptureCard *card = &cards[card_index];
-	bmusb::CaptureInterface *capture = card->capture.get();
-	lock.unlock();
-	capture->stop_dequeue_thread();
-	lock.lock();
-	card->parked_capture = move(card->capture);
-	bmusb::CaptureInterface *fake_capture = new FakeCapture(global_flags.width, global_flags.height, FAKE_FPS, OUTPUT_FREQUENCY, card_index, global_flags.fake_cards_audio);
-	configure_card(card_index, fake_capture, /*is_fake_capture=*/true, card->output.release());
-	card->queue_length_policy.reset(card_index);
-	card->capture->start_bm_capture();
-	card->output->start_output(bmdModeHD720p5994, pts_int);  // FIXME
+	if (card_index != -1) {
+		CaptureCard *card = &cards[card_index];
+		bmusb::CaptureInterface *capture = card->capture.get();
+		lock.unlock();
+		capture->stop_dequeue_thread();
+		lock.lock();
+		card->parked_capture = move(card->capture);
+		bmusb::CaptureInterface *fake_capture = new FakeCapture(global_flags.width, global_flags.height, FAKE_FPS, OUTPUT_FREQUENCY, card_index, global_flags.fake_cards_audio);
+		configure_card(card_index, fake_capture, /*is_fake_capture=*/true, card->output.release());
+		card->queue_length_policy.reset(card_index);
+		card->capture->start_bm_capture();
+		card->output->start_output(bmdModeHD720p5994, pts_int);  // FIXME
+	}
 	output_card_index = card_index;
 }
 
