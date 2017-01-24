@@ -270,17 +270,26 @@ void Mixer::set_output_card(int card_index)
 		CaptureCard *old_card = &cards[output_card_index];
 		old_card->output->end_output();
 
-		old_card->capture->stop_dequeue_thread();
+		// Stop the fake card that we put into place.
+		// This needs to _not_ happen under the mutex, to avoid deadlock
+		// (delivering the last frame needs to take the mutex).
+		bmusb::CaptureInterface *fake_capture = old_card->capture.get();
+		lock.unlock();
+		fake_capture->stop_dequeue_thread();
+		lock.lock();
 		old_card->capture = move(old_card->parked_capture);
 		old_card->is_fake_capture = false;
 		old_card->capture->start_bm_capture();
 	}
 
 	CaptureCard *card = &cards[card_index];
-	card->capture->stop_dequeue_thread();
+	bmusb::CaptureInterface *capture = card->capture.get();
+	lock.unlock();
+	capture->stop_dequeue_thread();
+	lock.lock();
 	card->parked_capture = move(card->capture);
-	FakeCapture *capture = new FakeCapture(global_flags.width, global_flags.height, FAKE_FPS, OUTPUT_FREQUENCY, card_index, global_flags.fake_cards_audio);
-	configure_card(card_index, capture, /*is_fake_capture=*/true, card->output.release());
+	bmusb::CaptureInterface *fake_capture = new FakeCapture(global_flags.width, global_flags.height, FAKE_FPS, OUTPUT_FREQUENCY, card_index, global_flags.fake_cards_audio);
+	configure_card(card_index, fake_capture, /*is_fake_capture=*/true, card->output.release());
 	card->queue_length_policy.reset(card_index);
 	card->capture->start_bm_capture();
 	card->output->start_output(bmdModeHD720p5994, pts_int);  // FIXME
