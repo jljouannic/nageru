@@ -327,16 +327,16 @@ private:
 	std::mutex card_mutex;
 	bool has_bmusb_thread = false;
 	struct CaptureCard {
-		bmusb::CaptureInterface *capture = nullptr;
+		std::unique_ptr<bmusb::CaptureInterface> capture;
 		bool is_fake_capture;
-		DeckLinkOutput *output = nullptr;
+		std::unique_ptr<DeckLinkOutput> output;
 
 		// If this card is used for output (ie., output_card_index points to it),
 		// it cannot simultaneously be uesd for capture, so <capture> gets replaced
 		// by a FakeCapture. However, since reconstructing the real capture object
 		// with all its state can be annoying, it is not being deleted, just stopped
 		// and moved here.
-		bmusb::CaptureInterface *parked_capture = nullptr;
+		std::unique_ptr<bmusb::CaptureInterface> parked_capture;
 
 		std::unique_ptr<PBOFrameAllocator> frame_allocator;
 

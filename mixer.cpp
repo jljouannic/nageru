@@ -219,7 +219,7 @@ Mixer::~Mixer()
 		cards[card_index].capture->stop_dequeue_thread();
 		if (cards[card_index].output) {
 			cards[card_index].output->end_output();
-			delete cards[card_index].output;
+			cards[card_index].output.reset();
 		}
 	}
 
@@ -233,11 +233,12 @@ void Mixer::configure_card(unsigned card_index, CaptureInterface *capture, bool 
 	CaptureCard *card = &cards[card_index];
 	if (card->capture != nullptr) {
 		card->capture->stop_dequeue_thread();
-		delete card->capture;
 	}
-	card->capture = capture;
+	card->capture.reset(capture);
 	card->is_fake_capture = is_fake_capture;
-	card->output = output;
+	if (card->output.get() != output) {
+		card->output.reset(output);
+	}
 	card->capture->set_frame_callback(bind(&Mixer::bm_frame, this, card_index, _1, _2, _3, _4, _5, _6, _7));
 	if (card->frame_allocator == nullptr) {
 		card->frame_allocator.reset(new PBOFrameAllocator(8 << 20, global_flags.width, global_flags.height));  // 8 MB.
@@ -270,20 +271,16 @@ void Mixer::set_output_card(int card_index)
 		old_card->output->end_output();
 
 		old_card->capture->stop_dequeue_thread();
-		delete old_card->capture;
-
-		old_card->capture = old_card->parked_capture;
+		old_card->capture = move(old_card->parked_capture);
 		old_card->is_fake_capture = false;
-		old_card->parked_capture = nullptr;
 		old_card->capture->start_bm_capture();
 	}
 
 	CaptureCard *card = &cards[card_index];
 	card->capture->stop_dequeue_thread();
-	card->parked_capture = card->capture;
-	card->capture = nullptr;
+	card->parked_capture = move(card->capture);
 	FakeCapture *capture = new FakeCapture(global_flags.width, global_flags.height, FAKE_FPS, OUTPUT_FREQUENCY, card_index, global_flags.fake_cards_audio);
-	configure_card(card_index, capture, /*is_fake_capture=*/true, card->output);
+	configure_card(card_index, capture, /*is_fake_capture=*/true, card->output.release());
 	card->queue_length_policy.reset(card_index);
 	card->capture->start_bm_capture();
 	card->output->start_output(bmdModeHD720p5994, pts_int);  // FIXME
