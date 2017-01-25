@@ -181,6 +181,8 @@ void DeckLinkOutput::end_output()
 
 void DeckLinkOutput::send_frame(GLuint y_tex, GLuint cbcr_tex, const vector<RefCountedFrame> &input_frames, int64_t pts, int64_t duration)
 {
+	assert(!should_quit);
+
 	unique_ptr<Frame> frame = move(get_frame());
 	chroma_subsampler->create_uyvy(y_tex, cbcr_tex, width, height, frame->uyvy_tex);
 
@@ -242,6 +244,8 @@ void DeckLinkOutput::send_audio(int64_t pts, const std::vector<float> &samples)
 
 void DeckLinkOutput::wait_for_frame(int64_t pts, int *dropped_frames, int64_t *frame_duration)
 {
+	assert(!should_quit);
+
 	*dropped_frames = 0;
 	*frame_duration = this->frame_duration;
 

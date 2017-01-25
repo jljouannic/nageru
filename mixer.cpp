@@ -203,7 +203,7 @@ Mixer::Mixer(const QSurfaceFormat &format, unsigned num_cards)
 		alsa.reset(new ALSAOutput(OUTPUT_FREQUENCY, /*num_channels=*/2));
 	}
 	if (global_flags.output_card != -1) {
-		set_output_card(global_flags.output_card);
+		set_output_card_internal(global_flags.output_card);
 	}
 }
 
@@ -260,11 +260,11 @@ void Mixer::configure_card(unsigned card_index, CaptureInterface *capture, bool 
 	audio_mixer.trigger_state_changed_callback();
 }
 
-void Mixer::set_output_card(int card_index)
+void Mixer::set_output_card_internal(int card_index)
 {
-	if (card_index == output_card_index) {
-		return;
-	}
+	// We don't really need to take card_mutex, since we're in the mixer
+	// thread and don't mess with any queues (which is the only thing that happens
+	// from other threads), but it's probably the safest in the long run.
 	unique_lock<mutex> lock(card_mutex);
 	if (output_card_index != -1) {
 		// Switch the old card from output to input.
@@ -285,6 +285,9 @@ void Mixer::set_output_card(int card_index)
 	if (card_index != -1) {
 		CaptureCard *card = &cards[card_index];
 		bmusb::CaptureInterface *capture = card->capture.get();
+		// TODO: DeckLinkCapture::stop_dequeue_thread can actually take
+		// several seconds to complete (blocking on DisableVideoInput);
+		// see if we can maybe do it asynchronously.
 		lock.unlock();
 		capture->stop_dequeue_thread();
 		lock.lock();
@@ -590,6 +593,10 @@ void Mixer::thread_func()
 	int stats_dropped_frames = 0;
 
 	while (!should_quit) {
+		if (desired_output_card_index != output_card_index) {
+			set_output_card_internal(desired_output_card_index);
+		}
+
 		CaptureCard::NewFrame new_frames[MAX_VIDEO_CARDS];
 		bool has_new_frame[MAX_VIDEO_CARDS] = { false };
 

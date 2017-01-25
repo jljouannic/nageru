@@ -234,6 +234,25 @@ public:
 		return cards[card_index].capture->get_description();
 	}
 
+	// The difference between this and the previous function is that if a card
+	// is used as the current output, get_card_description() will return the
+	// fake card that's replacing it for input, whereas this function will return
+	// the card's actual name.
+	std::string get_output_card_description(unsigned card_index) const {
+		assert(card_can_be_used_as_output(card_index));
+		assert(card_index < num_cards);
+		if (cards[card_index].parked_capture) {
+			return cards[card_index].parked_capture->get_description();
+		} else {
+			return cards[card_index].capture->get_description();
+		}
+	}
+
+	bool card_can_be_used_as_output(unsigned card_index) const {
+		assert(card_index < num_cards);
+		return cards[card_index].output != nullptr;
+	}
+
 	std::map<uint32_t, bmusb::VideoMode> get_available_video_modes(unsigned card_index) const {
 		assert(card_index < num_cards);
 		return cards[card_index].capture->get_available_video_modes();
@@ -285,9 +304,17 @@ public:
 		video_encoder->change_x264_bitrate(rate_kbit);
 	}
 
+	int get_output_card_index() const {  // -1 = no output, just stream.
+		return desired_output_card_index;
+	}
+
+	void set_output_card(int card_index) { // -1 = no output, just stream.
+		desired_output_card_index = card_index;
+	}
+
 private:
 	void configure_card(unsigned card_index, bmusb::CaptureInterface *capture, bool is_fake_capture, DeckLinkOutput *output);
-	void set_output_card(int card_index); // -1 = no output, just stream.
+	void set_output_card_internal(int card_index);  // Should only be called from the mixer thread.
 	void bm_frame(unsigned card_index, uint16_t timecode,
 		bmusb::FrameAllocator::Frame video_frame, size_t video_offset, bmusb::VideoFormat video_format,
 		bmusb::FrameAllocator::Frame audio_frame, size_t audio_offset, bmusb::AudioFormat audio_format);
@@ -310,7 +337,15 @@ private:
 	std::unique_ptr<Theme> theme;
 	std::atomic<unsigned> audio_source_channel{0};
 	std::atomic<int> master_clock_channel{0};  // Gets overridden by <output_card_index> if set.
-	std::atomic<int> output_card_index{-1};  // -1 for none.
+	int output_card_index = -1;  // -1 for none.
+
+	// The mechanics of changing the output card are so intricately connected
+	// with the work the mixer thread is doing. Thus, we don't change it directly,
+	// we just set this variable instead, which signals to the mixer thread that
+	// it should do the change before the next frame. This simplifies locking
+	// considerations immensely.
+	std::atomic<int> desired_output_card_index{-1};
+
 	std::unique_ptr<movit::EffectChain> display_chain;
 	std::unique_ptr<ChromaSubsampler> chroma_subsampler;
 	std::unique_ptr<VideoEncoder> video_encoder;
