@@ -71,8 +71,9 @@ string search_for_file(const string &filename)
 ImageInput::ImageInput(const string &filename)
 	: movit::FlatInput({movit::COLORSPACE_sRGB, movit::GAMMA_sRGB}, movit::FORMAT_RGBA_POSTMULTIPLIED_ALPHA,
 	                   GL_UNSIGNED_BYTE, 1280, 720),  // FIXME
+	  filename(filename),
 	  pathname(search_for_file(filename)),
-	  current_image(load_image(pathname))
+	  current_image(load_image(filename, pathname))
 {
 	if (current_image == nullptr) {  // Could happen even though search_for_file() returned.
 		fprintf(stderr, "Couldn't load image, exiting.\n");
@@ -99,7 +100,7 @@ void ImageInput::set_gl_state(GLuint glsl_program_num, const string& prefix, uns
 	movit::FlatInput::set_gl_state(glsl_program_num, prefix, sampler_num);
 }
 
-shared_ptr<const ImageInput::Image> ImageInput::load_image(const string &pathname)
+shared_ptr<const ImageInput::Image> ImageInput::load_image(const string &filename, const string &pathname)
 {
 	unique_lock<mutex> lock(all_images_lock);  // Held also during loading.
 	if (all_images.count(pathname)) {
@@ -109,7 +110,7 @@ shared_ptr<const ImageInput::Image> ImageInput::load_image(const string &pathnam
 	all_images[pathname] = load_image_raw(pathname);
 	timespec first_modified = all_images[pathname]->last_modified;
 	update_threads[pathname] =
-		thread(bind(update_thread_func, pathname, first_modified));
+		thread(bind(update_thread_func, filename, pathname, first_modified));
 
 	return all_images[pathname];
 }
@@ -235,8 +236,12 @@ shared_ptr<const ImageInput::Image> ImageInput::load_image_raw(const string &pat
 
 // Fire up a thread to update the image every second.
 // We could do inotify, but this is good enough for now.
-void ImageInput::update_thread_func(const std::string &pathname, const timespec &first_modified)
+void ImageInput::update_thread_func(const std::string &filename, const std::string &pathname, const timespec &first_modified)
 {
+	char thread_name[16];
+	snprintf(thread_name, sizeof(thread_name), "Update_%s", filename.c_str());
+	pthread_setname_np(pthread_self(), thread_name);
+
 	timespec last_modified = first_modified;
 	struct stat buf;
 	for ( ;; ) {

@@ -17,7 +17,7 @@
 // from disk about every second.
 class ImageInput : public movit::FlatInput {
 public:
-	ImageInput(const std::string &pathname);
+	ImageInput(const std::string &filename);
 
 	std::string effect_type_id() const override { return "ImageInput"; }
 	void set_gl_state(GLuint glsl_program_num, const std::string& prefix, unsigned *sampler_num) override;
@@ -29,12 +29,12 @@ private:
 		timespec last_modified;
 	};
 
-	std::string pathname;
+	std::string filename, pathname;
 	std::shared_ptr<const Image> current_image;
 
-	static std::shared_ptr<const Image> load_image(const std::string &pathname);
+	static std::shared_ptr<const Image> load_image(const std::string &filename, const std::string &pathname);
 	static std::shared_ptr<const Image> load_image_raw(const std::string &pathname);
-	static void update_thread_func(const std::string &pathname, const timespec &first_modified);
+	static void update_thread_func(const std::string &filename, const std::string &pathname, const timespec &first_modified);
 	static std::mutex all_images_lock;
 	static std::map<std::string, std::shared_ptr<const Image>> all_images;
 	static std::map<std::string, std::thread> update_threads;
