@@ -63,6 +63,9 @@ void GLWidget::initializeGL()
 		global_mixer->set_transition_names_updated_callback(output, [this](const vector<string> &names){
 			emit transition_names_updated(names);
 		});
+		setContextMenuPolicy(Qt::CustomContextMenu);
+		connect(this, &QWidget::customContextMenuRequested,
+			bind(&GLWidget::show_live_context_menu, this, _1));
 	}
 	if (output >= Mixer::OUTPUT_INPUT0) {
 		global_mixer->set_name_updated_callback(output, [this](const string &name){
@@ -76,7 +79,7 @@ void GLWidget::initializeGL()
 		if (signal_num != -1) {
 			setContextMenuPolicy(Qt::CustomContextMenu);
 			connect(this, &QWidget::customContextMenuRequested,
-			        bind(&GLWidget::show_context_menu, this, signal_num, _1));
+			        bind(&GLWidget::show_preview_context_menu, this, signal_num, _1));
 		}
 	}
 
@@ -121,7 +124,54 @@ void GLWidget::mousePressEvent(QMouseEvent *event)
 	emit clicked();
 }
 
-void GLWidget::show_context_menu(unsigned signal_num, const QPoint &pos)
+void GLWidget::show_live_context_menu(const QPoint &pos)
+{
+	QPoint global_pos = mapToGlobal(pos);
+
+	QMenu menu;
+
+	// Add a submenu for selecting output card, with an action for each card.
+	QMenu card_submenu;
+	QActionGroup card_group(&card_submenu);
+
+	int current_card = global_mixer->get_output_card_index();
+
+	QAction *none_action = new QAction("None", &card_group);
+	none_action->setCheckable(true);
+	if (current_card == -1) {
+		none_action->setChecked(true);
+	}
+	none_action->setData(-1);
+	card_submenu.addAction(none_action);
+
+	unsigned num_cards = global_mixer->get_num_cards();
+	for (unsigned card_index = 0; card_index < num_cards; ++card_index) {
+		if (!global_mixer->card_can_be_used_as_output(card_index)) {
+			continue;
+		}
+
+		QString description(QString::fromStdString(global_mixer->get_output_card_description(card_index)));
+		QAction *action = new QAction(description, &card_group);
+		action->setCheckable(true);
+		if (current_card == int(card_index)) {
+			action->setChecked(true);
+		}
+		action->setData(card_index);
+		card_submenu.addAction(action);
+	}
+
+	card_submenu.setTitle("HDMI/SDI output");
+	menu.addMenu(&card_submenu);
+
+	// Show the menu and look at the result.
+	QAction *selected_item = menu.exec(global_pos);
+	if (selected_item != nullptr) {
+		int output_card = selected_item->data().toInt(nullptr);
+		global_mixer->set_output_card(output_card);
+	}
+}
+
+void GLWidget::show_preview_context_menu(unsigned signal_num, const QPoint &pos)
 {
 	QPoint global_pos = mapToGlobal(pos);
 
