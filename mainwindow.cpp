@@ -12,6 +12,7 @@
 #include <QApplication>
 #include <QBoxLayout>
 #include <QCheckBox>
+#include <QDesktopServices>
 #include <QDial>
 #include <QDialog>
 #include <QEvent>
@@ -196,6 +197,7 @@ MainWindow::MainWindow()
 	// The menus.
 	connect(ui->cut_action, &QAction::triggered, this, &MainWindow::cut_triggered);
 	connect(ui->exit_action, &QAction::triggered, this, &MainWindow::exit_triggered);
+	connect(ui->manual_action, &QAction::triggered, this, &MainWindow::manual_triggered);
 	connect(ui->about_action, &QAction::triggered, this, &MainWindow::about_triggered);
 	connect(ui->simple_audio_mode, &QAction::triggered, this, &MainWindow::simple_audio_mode_triggered);
 	connect(ui->multichannel_audio_mode, &QAction::triggered, this, &MainWindow::multichannel_audio_mode_triggered);
@@ -561,6 +563,15 @@ void MainWindow::x264_bitrate_triggered()
 void MainWindow::exit_triggered()
 {
 	close();
+}
+
+void MainWindow::manual_triggered()
+{
+	if (!QDesktopServices::openUrl(QUrl("https://nageru.sesse.net/doc/"))) {
+		QMessageBox msgbox;
+		msgbox.setText("Could not launch manual in web browser.\nPlease see https://nageru.sesse.net/doc/ manually.");
+		msgbox.exec();
+	}
 }
 
 void MainWindow::about_triggered()

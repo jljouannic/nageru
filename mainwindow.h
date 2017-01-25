@@ -45,6 +45,7 @@ public slots:
 	void cut_triggered();
 	void x264_bitrate_triggered();
 	void exit_triggered();
+	void manual_triggered();
 	void about_triggered();
 	void simple_audio_mode_triggered();
 	void multichannel_audio_mode_triggered();

@@ -640,8 +640,8 @@
                 <rect>
                  <x>0</x>
                  <y>0</y>
-                 <width>505</width>
-                 <height>236</height>
+                 <width>514</width>
+                 <height>238</height>
                 </rect>
                </property>
                <layout class="QHBoxLayout" name="horizontalLayout_4">
@@ -1130,8 +1130,8 @@
                 <rect>
                  <x>0</x>
                  <y>0</y>
-                 <width>728</width>
-                 <height>282</height>
+                 <width>100</width>
+                 <height>30</height>
                 </rect>
                </property>
                <layout class="QHBoxLayout" name="horizontalLayout_5">
@@ -1390,7 +1390,7 @@
      <x>0</x>
      <y>0</y>
      <width>1089</width>
-     <height>23</height>
+     <height>19</height>
     </rect>
    </property>
    <widget class="QMenu" name="menuWhat">
@@ -1405,6 +1405,7 @@
     <property name="title">
      <string>&amp;Help</string>
     </property>
+    <addaction name="manual_action"/>
     <addaction name="about_action"/>
    </widget>
    <widget class="QMenu" name="menu_Audio">
@@ -1468,6 +1469,11 @@
   <action name="midi_mapping_action">
    <property name="text">
     <string>Setup MIDI controller…</string>
+   </property>
+  </action>
+  <action name="manual_action">
+   <property name="text">
+    <string>Online &amp;manual…</string>
    </property>
   </action>
  </widget>
