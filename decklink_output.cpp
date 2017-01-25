@@ -1,6 +1,7 @@
 #include <movit/effect_util.h>
 #include <movit/util.h>
 #include <movit/resource_pool.h>  // Must be above the Xlib includes.
+#include <pthread.h>
 
 #include <epoxy/egl.h>
 
@@ -361,6 +362,7 @@ unique_ptr<DeckLinkOutput::Frame> DeckLinkOutput::get_frame()
 
 void DeckLinkOutput::present_thread_func()
 {
+	pthread_setname_np(pthread_self(), "DeckLinkOutput");
 	for ( ;; ) {
 		unique_ptr<Frame> frame;
 		{

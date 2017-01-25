@@ -8,6 +8,7 @@
 #include <assert.h>
 #include <epoxy/egl.h>
 #include <fcntl.h>
+#include <pthread.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -1430,6 +1431,7 @@ void QuickSyncEncoderImpl::storage_task_enqueue(storage_task task)
 
 void QuickSyncEncoderImpl::storage_task_thread()
 {
+	pthread_setname_np(pthread_self(), "QS_Storage");
 	for ( ;; ) {
 		storage_task current;
 		{
@@ -1723,6 +1725,8 @@ void QuickSyncEncoderImpl::open_output_file(const std::string &filename)
 
 void QuickSyncEncoderImpl::encode_thread_func()
 {
+	pthread_setname_np(pthread_self(), "QS_Encode");
+
 	int64_t last_dts = -1;
 	int gop_start_display_frame_num = 0;
 	for (int display_frame_num = 0; ; ++display_frame_num) {

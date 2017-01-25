@@ -4,6 +4,7 @@
 #include <assert.h>
 #include <errno.h>
 #include <limits.h>
+#include <pthread.h>
 #include <poll.h>
 #include <stdint.h>
 #include <stdio.h>
@@ -133,6 +134,10 @@ void ALSAPool::probe_device_retry_thread_func(unsigned card_index, unsigned dev_
 {
 	char address[256];
 	snprintf(address, sizeof(address), "hw:%d,%d", card_index, dev_index);
+
+	char thread_name[16];
+	snprintf(thread_name, sizeof(thread_name), "Reprobe_hw:%d,%d", card_index, dev_index);
+	pthread_setname_np(pthread_self(), thread_name);
 
 	for ( ;; ) {  // Termination condition within the loop.
 		sleep(1);
@@ -288,6 +293,8 @@ void ALSAPool::init()
 
 void ALSAPool::inotify_thread_func()
 {
+	pthread_setname_np(pthread_self(), "ALSA_Hotplug");
+
 	int inotify_fd = inotify_init();
 	if (inotify_fd == -1) {
 		perror("inotify_init()");

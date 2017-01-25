@@ -8,6 +8,7 @@
 #ifdef __SSE2__
 #include <immintrin.h>
 #endif
+#include <pthread.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -301,6 +302,9 @@ HRESULT STDMETHODCALLTYPE DeckLinkCapture::VideoInputFrameArrived(
 	IDeckLinkAudioInputPacket *audio_frame)
 {
 	if (!done_init) {
+		char thread_name[16];
+		snprintf(thread_name, sizeof(thread_name), "DeckLink_C_%d", card_index);
+		pthread_setname_np(pthread_self(), thread_name);
 		if (has_dequeue_callbacks) {
 			dequeue_init_callback();
 		}

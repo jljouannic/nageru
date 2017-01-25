@@ -8,6 +8,7 @@
 #include <google/protobuf/io/zero_copy_stream_impl.h>
 #include <google/protobuf/message.h>
 #include <google/protobuf/text_format.h>
+#include <pthread.h>
 #include <poll.h>
 #include <stdint.h>
 #include <stdio.h>
@@ -148,6 +149,8 @@ ControllerReceiver *MIDIMapper::set_receiver(ControllerReceiver *new_receiver)
 
 void MIDIMapper::thread_func()
 {
+	pthread_setname_np(pthread_self(), "MIDIMapper");
+
 	snd_seq_t *seq;
 	int err;
 

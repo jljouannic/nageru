@@ -10,6 +10,7 @@
 #include <movit/image_format.h>
 #include <movit/init.h>
 #include <movit/resource_pool.h>
+#include <pthread.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -565,6 +566,8 @@ void Mixer::bm_hotplug_remove(unsigned card_index)
 
 void Mixer::thread_func()
 {
+	pthread_setname_np(pthread_self(), "Mixer_OpenGL");
+
 	eglBindAPI(EGL_OPENGL_API);
 	QOpenGLContext *context = create_context(mixer_surface);
 	if (!make_current(context, mixer_surface)) {
@@ -932,6 +935,8 @@ void Mixer::render_one_frame(int64_t duration)
 
 void Mixer::audio_thread_func()
 {
+	pthread_setname_np(pthread_self(), "Mixer_Audio");
+
 	while (!should_quit) {
 		AudioTask task;
 
