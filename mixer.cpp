@@ -203,6 +203,7 @@ Mixer::Mixer(const QSurfaceFormat &format, unsigned num_cards)
 		alsa.reset(new ALSAOutput(OUTPUT_FREQUENCY, /*num_channels=*/2));
 	}
 	if (global_flags.output_card != -1) {
+		desired_output_card_index = global_flags.output_card;
 		set_output_card_internal(global_flags.output_card);
 	}
 }
