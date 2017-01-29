@@ -41,7 +41,7 @@ public:
 
 	void send_frame(GLuint y_tex, GLuint cbcr_tex, const std::vector<RefCountedFrame> &input_frames, int64_t pts, int64_t duration);
 	void send_audio(int64_t pts, const std::vector<float> &samples);
-	void wait_for_frame(int64_t pts, int *dropped_frames, int64_t *frame_duration);
+	void wait_for_frame(int64_t pts, int *dropped_frames, int64_t *frame_duration, bool *is_preroll);
 
 	// Analogous to CaptureInterface. Will only return modes that have the right width/height.
 	std::map<uint32_t, bmusb::VideoMode> get_available_video_modes() const { return video_modes; }

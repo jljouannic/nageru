@@ -613,7 +613,7 @@ void Mixer::thread_func()
 		}
 
 		OutputFrameInfo	output_frame_info = get_one_frame_from_each_card(master_card_index, master_card_is_output, new_frames, has_new_frame);
-		schedule_audio_resampling_tasks(output_frame_info.dropped_frames, output_frame_info.num_samples, output_frame_info.frame_duration);
+		schedule_audio_resampling_tasks(output_frame_info.dropped_frames, output_frame_info.num_samples, output_frame_info.frame_duration, output_frame_info.is_preroll);
 		stats_dropped_frames += output_frame_info.dropped_frames;
 
 		handle_hotplugged_cards();
@@ -738,11 +738,12 @@ start:
 	unique_lock<mutex> lock(card_mutex, defer_lock);
 	if (master_card_is_output) {
 		// Clocked to the output, so wait for it to be ready for the next frame.
-		cards[master_card_index].output->wait_for_frame(pts_int, &output_frame_info.dropped_frames, &output_frame_info.frame_duration);
+		cards[master_card_index].output->wait_for_frame(pts_int, &output_frame_info.dropped_frames, &output_frame_info.frame_duration, &output_frame_info.is_preroll);
 		lock.lock();
 	} else {
 		// Wait for the master card to have a new frame.
 		// TODO: Add a timeout.
+		output_frame_info.is_preroll = false;
 		lock.lock();
 		cards[master_card_index].new_frames_changed.wait(lock, [this, master_card_index]{ return !cards[master_card_index].new_frames.empty() || cards[master_card_index].capture->get_disconnected(); });
 	}
@@ -846,7 +847,7 @@ void Mixer::handle_hotplugged_cards()
 }
 
 
-void Mixer::schedule_audio_resampling_tasks(unsigned dropped_frames, int num_samples_per_frame, int length_per_frame)
+void Mixer::schedule_audio_resampling_tasks(unsigned dropped_frames, int num_samples_per_frame, int length_per_frame, bool is_preroll)
 {
 	// Resample the audio as needed, including from previously dropped frames.
 	assert(num_cards > 0);
@@ -867,7 +868,7 @@ void Mixer::schedule_audio_resampling_tasks(unsigned dropped_frames, int num_sam
 			// since dropped frames are expected to be rare, and it might be
 			// better to just wait until we have a slightly more normal situation).
 			unique_lock<mutex> lock(audio_mutex);
-			bool adjust_rate = !dropped_frame;
+			bool adjust_rate = !dropped_frame && !is_preroll;
 			audio_task_queue.push(AudioTask{pts_int, num_samples_per_frame, adjust_rate});
 			audio_task_queue_changed.notify_one();
 		}

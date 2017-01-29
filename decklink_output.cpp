@@ -242,7 +242,7 @@ void DeckLinkOutput::send_audio(int64_t pts, const std::vector<float> &samples)
 	}
 }
 
-void DeckLinkOutput::wait_for_frame(int64_t pts, int *dropped_frames, int64_t *frame_duration)
+void DeckLinkOutput::wait_for_frame(int64_t pts, int *dropped_frames, int64_t *frame_duration, bool *is_preroll)
 {
 	assert(!should_quit);
 
@@ -255,8 +255,11 @@ void DeckLinkOutput::wait_for_frame(int64_t pts, int *dropped_frames, int64_t *f
 
 	// While prerolling, we send out frames as quickly as we can.
 	if (target_time < base_pts) {
+		*is_preroll = true;
 		return;
 	}
+
+	*is_preroll = !playback_started;
 
 	if (!playback_started) {
 		if (output->EndAudioPreroll() != S_OK) {
