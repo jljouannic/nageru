@@ -13,6 +13,7 @@
 #include <stdint.h>
 #include <sys/types.h>
 #include <atomic>
+#include <chrono>
 #include <functional>
 #include <memory>
 #include <string>
@@ -24,7 +25,7 @@ class ALSAPool;
 
 class ALSAInput {
 public:
-	typedef std::function<bool(const uint8_t *data, unsigned num_samples, bmusb::AudioFormat audio_format, int64_t frame_length)> audio_callback_t;
+	typedef std::function<bool(const uint8_t *data, unsigned num_samples, bmusb::AudioFormat audio_format, int64_t frame_length, std::chrono::steady_clock::time_point ts)> audio_callback_t;
 
 	ALSAInput(const char *device, unsigned sample_rate, unsigned num_channels, audio_callback_t audio_callback, ALSAPool *parent_pool, unsigned internal_dev_index);
 	~ALSAInput();

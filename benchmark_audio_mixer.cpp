@@ -61,6 +61,10 @@ void callback(float level_lufs, float peak_db,
 
 vector<float> process_frame(unsigned frame_num, AudioMixer *mixer)
 {
+	duration<int64_t, ratio<NUM_SAMPLES, OUTPUT_FREQUENCY>> frame_duration(frame_num);
+	steady_clock::time_point ts = steady_clock::time_point::min() +
+		duration_cast<steady_clock::duration>(frame_duration);
+
 	// Feed the inputs.
 	for (unsigned card_index = 0; card_index < NUM_BENCHMARK_CARDS; ++card_index) {
 		bmusb::AudioFormat audio_format;
@@ -70,12 +74,11 @@ vector<float> process_frame(unsigned frame_num, AudioMixer *mixer)
 		unsigned num_samples = NUM_SAMPLES + (lcgrand() % 9) - 5;
 		bool ok = mixer->add_audio(DeviceSpec{InputSourceType::CAPTURE_CARD, card_index},
 			card_index == 3 ? samples24 : samples16, num_samples, audio_format,
-			NUM_SAMPLES * TIMEBASE / OUTPUT_FREQUENCY);
+			NUM_SAMPLES * TIMEBASE / OUTPUT_FREQUENCY, ts);
 		assert(ok);
 	}
 
-	double pts = double(frame_num) * NUM_SAMPLES / OUTPUT_FREQUENCY;
-	return mixer->get_output(pts, NUM_SAMPLES, ResamplingQueue::ADJUST_RATE);
+	return mixer->get_output(ts, NUM_SAMPLES, ResamplingQueue::ADJUST_RATE);
 }
 
 void init_mapping(AudioMixer *mixer)

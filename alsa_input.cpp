@@ -12,6 +12,7 @@
 #include "timebase.h"
 
 using namespace std;
+using namespace std::chrono;
 using namespace std::placeholders;
 
 #define RETURN_ON_ERROR(msg, expr) do {                                                    \
@@ -243,10 +244,11 @@ ALSAInput::CaptureEndReason ALSAInput::do_capture()
 
 		const int64_t prev_pts = frames_to_pts(num_frames_output);
 		const int64_t pts = frames_to_pts(num_frames_output + frames);
+		const steady_clock::time_point now = steady_clock::now();
 		bool success;
 		do {
 			if (should_quit) return CaptureEndReason::REQUESTED_QUIT;
-			success = audio_callback(buffer.get(), frames, audio_format, pts - prev_pts);
+			success = audio_callback(buffer.get(), frames, audio_format, pts - prev_pts, now);
 		} while (!success);
 		num_frames_output += frames;
 	}

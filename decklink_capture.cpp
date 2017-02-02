@@ -311,6 +311,8 @@ HRESULT STDMETHODCALLTYPE DeckLinkCapture::VideoInputFrameArrived(
 		done_init = true;
 	}
 
+	steady_clock::time_point now = steady_clock::now();
+
 	FrameAllocator::Frame current_video_frame, current_audio_frame;
 	VideoFormat video_format;
 	AudioFormat audio_format;
@@ -357,7 +359,7 @@ HRESULT STDMETHODCALLTYPE DeckLinkCapture::VideoInputFrameArrived(
 			video_format.width = width;
 			video_format.height = height;
 
-			current_video_frame.received_timestamp = steady_clock::now();
+			current_video_frame.received_timestamp = now;
 		}
 	}
 
@@ -375,7 +377,7 @@ HRESULT STDMETHODCALLTYPE DeckLinkCapture::VideoInputFrameArrived(
 			audio_format.bits_per_sample = 32;
 			audio_format.num_channels = 2;
 
-			current_audio_frame.received_timestamp = steady_clock::now();
+			current_audio_frame.received_timestamp = now;
 		}
 	}
 

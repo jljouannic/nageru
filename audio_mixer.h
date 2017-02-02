@@ -12,6 +12,7 @@
 #include <stdint.h>
 #include <zita-resampler/resampler.h>
 #include <atomic>
+#include <chrono>
 #include <functional>
 #include <map>
 #include <memory>
@@ -54,7 +55,7 @@ public:
 	// (This is to avoid a deadlock where a card hangs on the mutex in add_audio()
 	// while we are trying to shut it down from another thread that also holds
 	// the mutex.) frame_length is in TIMEBASE units.
-	bool add_audio(DeviceSpec device_spec, const uint8_t *data, unsigned num_samples, bmusb::AudioFormat audio_format, int64_t frame_length);
+	bool add_audio(DeviceSpec device_spec, const uint8_t *data, unsigned num_samples, bmusb::AudioFormat audio_format, int64_t frame_length, std::chrono::steady_clock::time_point frame_time);
 	bool add_silence(DeviceSpec device_spec, unsigned samples_per_frame, unsigned num_frames, int64_t frame_length);
 
 	// If a given device is offline for whatever reason and cannot deliver audio
@@ -64,7 +65,7 @@ public:
 	// affect it. Same true/false behavior as add_audio().
 	bool silence_card(DeviceSpec device_spec, bool silence);
 
-	std::vector<float> get_output(double pts, unsigned num_samples, ResamplingQueue::RateAdjustmentPolicy rate_adjustment_policy);
+	std::vector<float> get_output(std::chrono::steady_clock::time_point ts, unsigned num_samples, ResamplingQueue::RateAdjustmentPolicy rate_adjustment_policy);
 
 	float get_fader_volume(unsigned bus_index) const { return fader_volume_db[bus_index]; }
 	void set_fader_volume(unsigned bus_index, float level_db) { fader_volume_db[bus_index] = level_db; }
@@ -301,7 +302,6 @@ public:
 private:
 	struct AudioDevice {
 		std::unique_ptr<ResamplingQueue> resampling_queue;
-		int64_t next_local_pts = 0;
 		std::string display_name;
 		unsigned capture_frequency = OUTPUT_FREQUENCY;
 		// Which channels we consider interesting (ie., are part of some input_mapping).

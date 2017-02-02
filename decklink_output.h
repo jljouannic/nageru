@@ -4,6 +4,7 @@
 #include <epoxy/gl.h>
 #include <stdint.h>
 #include <atomic>
+#include <chrono>
 #include <condition_variable>
 #include <memory>
 #include <mutex>
@@ -41,7 +42,16 @@ public:
 
 	void send_frame(GLuint y_tex, GLuint cbcr_tex, const std::vector<RefCountedFrame> &input_frames, int64_t pts, int64_t duration);
 	void send_audio(int64_t pts, const std::vector<float> &samples);
-	void wait_for_frame(int64_t pts, int *dropped_frames, int64_t *frame_duration, bool *is_preroll);
+
+	// NOTE: The returned timestamp is undefined for preroll.
+	// Otherwise, it is the timestamp of the output frame as it should have been,
+	// even if we're overshooting. E.g. at 50 fps (0.02 spf), assuming the
+	// last frame was at t=0.980:
+	//
+	//   If we're at t=0.999, we wait until t=1.000 and return that.
+	//   If we're at t=1.001, we return t=1.000 immediately (small overshoot).
+	//   If we're at t=1.055, we drop two frames and return t=1.040 immediately.
+	void wait_for_frame(int64_t pts, int *dropped_frames, int64_t *frame_duration, bool *is_preroll, std::chrono::steady_clock::time_point *frame_timestamp);
 
 	// Analogous to CaptureInterface. Will only return modes that have the right width/height.
 	std::map<uint32_t, bmusb::VideoMode> get_available_video_modes() const { return video_modes; }

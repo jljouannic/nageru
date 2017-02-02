@@ -25,6 +25,7 @@
 
 using namespace bmusb;
 using namespace std;
+using namespace std::chrono;
 using namespace std::placeholders;
 
 namespace {
@@ -231,10 +232,9 @@ void AudioMixer::reset_resampler_mutex_held(DeviceSpec device_spec)
 			device_spec.index, device->capture_frequency, OUTPUT_FREQUENCY, device->interesting_channels.size(),
 			global_flags.audio_queue_length_ms * 0.001));
 	}
-	device->next_local_pts = 0;
 }
 
-bool AudioMixer::add_audio(DeviceSpec device_spec, const uint8_t *data, unsigned num_samples, AudioFormat audio_format, int64_t frame_length)
+bool AudioMixer::add_audio(DeviceSpec device_spec, const uint8_t *data, unsigned num_samples, AudioFormat audio_format, int64_t frame_length, steady_clock::time_point frame_time)
 {
 	AudioDevice *device = find_audio_device(device_spec);
 
@@ -274,9 +274,7 @@ bool AudioMixer::add_audio(DeviceSpec device_spec, const uint8_t *data, unsigned
 	}
 
 	// Now add it.
-	int64_t local_pts = device->next_local_pts;
-	device->resampling_queue->add_input_samples(local_pts / double(TIMEBASE), audio.get(), num_samples);
-	device->next_local_pts = local_pts + frame_length;
+	device->resampling_queue->add_input_samples(frame_time, audio.get(), num_samples, ResamplingQueue::ADJUST_RATE);
 	return true;
 }
 
@@ -298,11 +296,7 @@ bool AudioMixer::add_silence(DeviceSpec device_spec, unsigned samples_per_frame,
 
 	vector<float> silence(samples_per_frame * num_channels, 0.0f);
 	for (unsigned i = 0; i < num_frames; ++i) {
-		device->resampling_queue->add_input_samples(device->next_local_pts / double(TIMEBASE), silence.data(), samples_per_frame);
-		// Note that if the format changed in the meantime, we have
-		// no way of detecting that; we just have to assume the frame length
-		// is always the same.
-		device->next_local_pts += frame_length;
+		device->resampling_queue->add_input_samples(steady_clock::now(), silence.data(), samples_per_frame, ResamplingQueue::DO_NOT_ADJUST_RATE);
 	}
 	return true;
 }
@@ -475,7 +469,7 @@ void apply_gain(float db, float last_db, vector<float> *samples)
 
 }  // namespace
 
-vector<float> AudioMixer::get_output(double pts, unsigned num_samples, ResamplingQueue::RateAdjustmentPolicy rate_adjustment_policy)
+vector<float> AudioMixer::get_output(steady_clock::time_point ts, unsigned num_samples, ResamplingQueue::RateAdjustmentPolicy rate_adjustment_policy)
 {
 	map<DeviceSpec, vector<float>> samples_card;
 	vector<float> samples_bus;
@@ -490,7 +484,7 @@ vector<float> AudioMixer::get_output(double pts, unsigned num_samples, Resamplin
 			memset(&samples_card[device_spec][0], 0, samples_card[device_spec].size() * sizeof(float));
 		} else {
 			device->resampling_queue->get_output_samples(
-				pts,
+				ts,
 				&samples_card[device_spec][0],
 				num_samples,
 				rate_adjustment_policy);

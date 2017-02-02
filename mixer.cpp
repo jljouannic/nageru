@@ -383,7 +383,7 @@ void Mixer::bm_frame(unsigned card_index, uint16_t timecode,
 		} while (!success);
 	}
 
-	audio_mixer.add_audio(device, audio_frame.data + audio_offset, num_samples, audio_format, frame_length);
+	audio_mixer.add_audio(device, audio_frame.data + audio_offset, num_samples, audio_format, frame_length, audio_frame.received_timestamp);
 
 	// Done with the audio, so release it.
 	if (audio_frame.owner) {
@@ -613,7 +613,7 @@ void Mixer::thread_func()
 		}
 
 		OutputFrameInfo	output_frame_info = get_one_frame_from_each_card(master_card_index, master_card_is_output, new_frames, has_new_frame);
-		schedule_audio_resampling_tasks(output_frame_info.dropped_frames, output_frame_info.num_samples, output_frame_info.frame_duration, output_frame_info.is_preroll);
+		schedule_audio_resampling_tasks(output_frame_info.dropped_frames, output_frame_info.num_samples, output_frame_info.frame_duration, output_frame_info.is_preroll, output_frame_info.frame_timestamp);
 		stats_dropped_frames += output_frame_info.dropped_frames;
 
 		handle_hotplugged_cards();
@@ -738,7 +738,7 @@ start:
 	unique_lock<mutex> lock(card_mutex, defer_lock);
 	if (master_card_is_output) {
 		// Clocked to the output, so wait for it to be ready for the next frame.
-		cards[master_card_index].output->wait_for_frame(pts_int, &output_frame_info.dropped_frames, &output_frame_info.frame_duration, &output_frame_info.is_preroll);
+		cards[master_card_index].output->wait_for_frame(pts_int, &output_frame_info.dropped_frames, &output_frame_info.frame_duration, &output_frame_info.is_preroll, &output_frame_info.frame_timestamp);
 		lock.lock();
 	} else {
 		// Wait for the master card to have a new frame.
@@ -756,6 +756,11 @@ start:
 		assert(cards[master_card_index].capture->get_disconnected());
 		handle_hotplugged_cards();
 		goto start;
+	}
+
+	if (!master_card_is_output) {
+		output_frame_info.frame_timestamp =
+			cards[master_card_index].new_frames.front().received_timestamp;
 	}
 
 	for (unsigned card_index = 0; card_index < num_cards; ++card_index) {
@@ -847,7 +852,7 @@ void Mixer::handle_hotplugged_cards()
 }
 
 
-void Mixer::schedule_audio_resampling_tasks(unsigned dropped_frames, int num_samples_per_frame, int length_per_frame, bool is_preroll)
+void Mixer::schedule_audio_resampling_tasks(unsigned dropped_frames, int num_samples_per_frame, int length_per_frame, bool is_preroll, steady_clock::time_point frame_timestamp)
 {
 	// Resample the audio as needed, including from previously dropped frames.
 	assert(num_cards > 0);
@@ -869,7 +874,7 @@ void Mixer::schedule_audio_resampling_tasks(unsigned dropped_frames, int num_sam
 			// better to just wait until we have a slightly more normal situation).
 			unique_lock<mutex> lock(audio_mutex);
 			bool adjust_rate = !dropped_frame && !is_preroll;
-			audio_task_queue.push(AudioTask{pts_int, num_samples_per_frame, adjust_rate});
+			audio_task_queue.push(AudioTask{pts_int, num_samples_per_frame, adjust_rate, frame_timestamp});
 			audio_task_queue_changed.notify_one();
 		}
 		if (dropped_frame) {
@@ -962,7 +967,7 @@ void Mixer::audio_thread_func()
 		ResamplingQueue::RateAdjustmentPolicy rate_adjustment_policy =
 			task.adjust_rate ? ResamplingQueue::ADJUST_RATE : ResamplingQueue::DO_NOT_ADJUST_RATE;
 		vector<float> samples_out = audio_mixer.get_output(
-			double(task.pts_int) / TIMEBASE,
+			task.frame_timestamp,
 			task.num_samples,
 			rate_adjustment_policy);
 

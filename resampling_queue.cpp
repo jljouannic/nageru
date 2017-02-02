@@ -28,9 +28,11 @@
 #include <cmath>
 
 using namespace std;
+using namespace std::chrono;
 
 ResamplingQueue::ResamplingQueue(unsigned card_num, unsigned freq_in, unsigned freq_out, unsigned num_channels, double expected_delay_seconds)
 	: card_num(card_num), freq_in(freq_in), freq_out(freq_out), num_channels(num_channels),
+	  current_estimated_freq_in(freq_in),
 	  ratio(double(freq_out) / double(freq_in)), expected_delay(expected_delay_seconds * OUTPUT_FREQUENCY)
 {
 	vresampler.setup(ratio, num_channels, /*hlen=*/32);
@@ -41,54 +43,55 @@ ResamplingQueue::ResamplingQueue(unsigned card_num, unsigned freq_in, unsigned f
         vresampler.process ();
 }
 
-void ResamplingQueue::add_input_samples(double pts, const float *samples, ssize_t num_samples)
+void ResamplingQueue::add_input_samples(steady_clock::time_point ts, const float *samples, ssize_t num_samples, ResamplingQueue::RateAdjustmentPolicy rate_adjustment_policy)
 {
 	if (num_samples == 0) {
 		return;
 	}
-	if (first_input) {
-		// Synthesize a fake length.
-		last_input_len = double(num_samples) / freq_in;
-		first_input = false;
-	} else {
-		last_input_len = pts - last_input_pts;
+
+	bool good_sample = (rate_adjustment_policy == ADJUST_RATE);
+	if (good_sample && a1.good_sample) {
+		a0 = a1;
 	}
+	a1.ts = ts;
+	a1.input_samples_received += num_samples;
+	a1.good_sample = good_sample;
+	if (a0.good_sample && a1.good_sample) {
+		current_estimated_freq_in = (a1.input_samples_received - a0.input_samples_received) / duration<double>(a1.ts - a0.ts).count();
+		assert(current_estimated_freq_in >= 0.0);
 
-	last_input_pts = pts;
-
-	k_a0 = k_a1;
-	k_a1 += num_samples;
+		// Bound the frequency, so that a single wild result won't throw the filter off guard.
+		current_estimated_freq_in = min(current_estimated_freq_in, 1.2 * freq_in);
+		current_estimated_freq_in = max(current_estimated_freq_in, 0.8 * freq_in);
+	}
 
 	buffer.insert(buffer.end(), samples, samples + num_samples * num_channels);
 }
 
-bool ResamplingQueue::get_output_samples(double pts, float *samples, ssize_t num_samples, ResamplingQueue::RateAdjustmentPolicy rate_adjustment_policy)
+bool ResamplingQueue::get_output_samples(steady_clock::time_point ts, float *samples, ssize_t num_samples, ResamplingQueue::RateAdjustmentPolicy rate_adjustment_policy)
 {
 	assert(num_samples > 0);
-	if (first_input) {
+	if (a1.input_samples_received == 0) {
 		// No data yet, just return zeros.
 		memset(samples, 0, num_samples * num_channels * sizeof(float));
 		return true;
 	}
 
-	double rcorr = -1.0;
-	if (rate_adjustment_policy == ADJUST_RATE) {
-		double last_output_len;
-		if (first_output) {
-			// Synthesize a fake length.
-			last_output_len = double(num_samples) / freq_out;
-		} else {
-			last_output_len = pts - last_output_pts;
-		}
-		last_output_pts = pts;
+	if (rate_adjustment_policy == ADJUST_RATE && (a0.good_sample || a1.good_sample)) {
+		// Estimate the current number of input samples produced at
+		// this instant in time, by extrapolating from the last known
+		// good point. Note that we could be extrapolating backward or
+		// forward, depending on the timing of the calls.
+		const InputPoint &base_point = a1.good_sample ? a1 : a0;
+		const double input_samples_received = base_point.input_samples_received +
+			current_estimated_freq_in * duration<double>(ts - base_point.ts).count();
 
-		// Using the time point since just before the last call to add_input_samples() as a base,
-		// estimate actual delay based on activity since then, measured in number of input samples:
-		double actual_delay = 0.0;
-		assert(last_input_len != 0);
-		actual_delay += (k_a1 - k_a0) * last_output_len / last_input_len;    // Inserted samples since k_a0, rescaled for the different time periods.
-		actual_delay += k_a0 - total_consumed_samples;                       // Samples inserted before k_a0 but not consumed yet.
-		actual_delay += vresampler.inpdist();                                // Delay in the resampler itself.
+		// Estimate the number of input samples _consumed_ after we've run the resampler.
+		const double input_samples_consumed = total_consumed_samples +
+			num_samples / (ratio * rcorr);
+
+		double actual_delay = input_samples_received - input_samples_consumed;
+		actual_delay += vresampler.inpdist();    // Delay in the resampler itself.
 		double err = actual_delay - expected_delay;
 		if (first_output && err < 0.0) {
 			// Before the very first block, insert artificial delay based on our initial estimate,
@@ -97,7 +100,7 @@ bool ResamplingQueue::get_output_samples(double pts, float *samples, ssize_t num
 			for (ssize_t i = 0; i < delay_samples_to_add * num_channels; ++i) {
 				buffer.push_front(0.0f);
 			}
-			total_consumed_samples -= delay_samples_to_add;  // Equivalent to increasing k_a0 and k_a1.
+			total_consumed_samples -= delay_samples_to_add;  // Equivalent to increasing input_samples_received on a0 and a1.
 			err += delay_samples_to_add;
 		}
 		first_output = false;
@@ -105,10 +108,18 @@ bool ResamplingQueue::get_output_samples(double pts, float *samples, ssize_t num
 		// Compute loop filter coefficients for the two filters. We need to compute them
 		// every time, since they depend on the number of samples the user asked for.
 		//
-		// The loop bandwidth is at 0.02 Hz; we trust the initial estimate quite well,
-		// and our jitter is pretty large since none of the threads involved run at
-		// real-time priority.
-		double loop_bandwidth_hz = 0.02;
+		// The loop bandwidth is at 0.02 Hz; our jitter is pretty large
+		// since none of the threads involved run at real-time priority.
+		// However, the first four seconds, we use a larger loop bandwidth (2 Hz),
+		// because there's a lot going on during startup, and thus the
+		// initial estimate might be tainted by jitter during that phase,
+		// and we want to converge faster.
+		//
+		// NOTE: The above logic might only hold during Nageru startup
+		// (we start ResamplingQueues also when we e.g. switch sound sources),
+		// but in general, a little bit of increased timing jitter is acceptable
+		// right after a setup change like this.
+		double loop_bandwidth_hz = (total_consumed_samples < 4 * freq_in) ? 0.2 : 0.02;
 
 		// Set filters. The first filter much wider than the first one (20x as wide).
 		double w = (2.0 * M_PI) * loop_bandwidth_hz * num_samples / freq_out;
@@ -127,9 +138,9 @@ bool ResamplingQueue::get_output_samples(double pts, float *samples, ssize_t num
 		vresampler.set_rratio(rcorr);
 	} else {
 		assert(rate_adjustment_policy == DO_NOT_ADJUST_RATE);
-	};
+	}
 
-	// Finally actually resample, consuming exactly <num_samples> output samples.
+	// Finally actually resample, producing exactly <num_samples> output samples.
 	vresampler.out_data = samples;
 	vresampler.out_count = num_samples;
 	while (vresampler.out_count > 0) {

@@ -393,7 +393,7 @@ void ALSAPool::reset_device(unsigned index)
 		inputs[index].reset();
 	} else {
 		// TODO: Put on a background thread instead of locking?
-		auto callback = bind(&AudioMixer::add_audio, global_audio_mixer, DeviceSpec{InputSourceType::ALSA_INPUT, index}, _1, _2, _3, _4);
+		auto callback = bind(&AudioMixer::add_audio, global_audio_mixer, DeviceSpec{InputSourceType::ALSA_INPUT, index}, _1, _2, _3, _4, _5);
 		inputs[index].reset(new ALSAInput(device->address.c_str(), OUTPUT_FREQUENCY, device->num_channels, callback, this, index));
 		inputs[index]->start_capture_thread();
 	}

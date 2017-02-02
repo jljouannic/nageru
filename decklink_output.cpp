@@ -242,7 +242,7 @@ void DeckLinkOutput::send_audio(int64_t pts, const std::vector<float> &samples)
 	}
 }
 
-void DeckLinkOutput::wait_for_frame(int64_t pts, int *dropped_frames, int64_t *frame_duration, bool *is_preroll)
+void DeckLinkOutput::wait_for_frame(int64_t pts, int *dropped_frames, int64_t *frame_duration, bool *is_preroll, steady_clock::time_point *frame_timestamp)
 {
 	assert(!should_quit);
 
@@ -277,11 +277,12 @@ void DeckLinkOutput::wait_for_frame(int64_t pts, int *dropped_frames, int64_t *f
 	double playback_speed;
 	output->GetScheduledStreamTime(TIMEBASE, &stream_frame_time, &playback_speed);
 
+	*frame_timestamp = steady_clock::now() +
+		nanoseconds((target_time - stream_frame_time) * 1000000000 / TIMEBASE);
+
 	// If we're ahead of time, wait for the frame to (approximately) start.
 	if (stream_frame_time < target_time) {
-		steady_clock::time_point t = steady_clock::now() +
-			nanoseconds((target_time - stream_frame_time) * 1000000000 / TIMEBASE);
-		this_thread::sleep_until(t);
+		this_thread::sleep_until(*frame_timestamp);
 		return;
 	}
 
@@ -296,6 +297,8 @@ void DeckLinkOutput::wait_for_frame(int64_t pts, int *dropped_frames, int64_t *f
 	// Oops, we missed by more than one frame. Return immediately,
 	// but drop so that we catch up.
 	*dropped_frames = (stream_frame_time - target_time + *frame_duration - 1) / *frame_duration;
+	const int64_t ns_per_frame = this->frame_duration * 1000000000 / TIMEBASE;
+	*frame_timestamp += nanoseconds(*dropped_frames * ns_per_frame);
 	fprintf(stderr, "Dropped %d output frames; skipping.\n", *dropped_frames);
 }
 

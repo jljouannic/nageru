@@ -323,7 +323,7 @@ private:
 	void place_rectangle(movit::Effect *resample_effect, movit::Effect *padding_effect, float x0, float y0, float x1, float y1);
 	void thread_func();
 	void handle_hotplugged_cards();
-	void schedule_audio_resampling_tasks(unsigned dropped_frames, int num_samples_per_frame, int length_per_frame, bool is_preroll);
+	void schedule_audio_resampling_tasks(unsigned dropped_frames, int num_samples_per_frame, int length_per_frame, bool is_preroll, std::chrono::steady_clock::time_point frame_timestamp);
 	void render_one_frame(int64_t duration);
 	void audio_thread_func();
 	void release_display_frame(DisplayFrame *frame);
@@ -403,6 +403,7 @@ private:
 		int num_samples;  // Audio samples needed for this output frame.
 		int64_t frame_duration;  // In TIMEBASE units.
 		bool is_preroll;
+		std::chrono::steady_clock::time_point frame_timestamp;
 	};
 	OutputFrameInfo get_one_frame_from_each_card(unsigned master_card_index, bool master_card_is_output, CaptureCard::NewFrame new_frames[MAX_VIDEO_CARDS], bool has_new_frame[MAX_VIDEO_CARDS]);
 
@@ -452,6 +453,7 @@ private:
 		int64_t pts_int;
 		int num_samples;
 		bool adjust_rate;
+		std::chrono::steady_clock::time_point frame_timestamp;
 	};
 	std::mutex audio_mutex;
 	std::condition_variable audio_task_queue_changed;
