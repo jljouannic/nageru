@@ -93,15 +93,24 @@ bool ResamplingQueue::get_output_samples(steady_clock::time_point ts, float *sam
 		double actual_delay = input_samples_received - input_samples_consumed;
 		actual_delay += vresampler.inpdist();    // Delay in the resampler itself.
 		double err = actual_delay - expected_delay;
-		if (first_output && err < 0.0) {
+		if (first_output) {
 			// Before the very first block, insert artificial delay based on our initial estimate,
 			// so that we don't need a long period to stabilize at the beginning.
-			int delay_samples_to_add = lrintf(-err);
-			for (ssize_t i = 0; i < delay_samples_to_add * num_channels; ++i) {
-				buffer.push_front(0.0f);
+			if (err < 0.0) {
+				int delay_samples_to_add = lrintf(-err);
+				for (ssize_t i = 0; i < delay_samples_to_add * num_channels; ++i) {
+					buffer.push_front(0.0f);
+				}
+				total_consumed_samples -= delay_samples_to_add;  // Equivalent to increasing input_samples_received on a0 and a1.
+				err += delay_samples_to_add;
+			} else if (err > 0.0) {
+				int delay_samples_to_remove = min<int>(lrintf(err), buffer.size() / num_channels);
+				for (ssize_t i = 0; i < delay_samples_to_remove * num_channels; ++i) {
+					buffer.pop_front();
+				}
+				total_consumed_samples += delay_samples_to_remove;
+				err -= delay_samples_to_remove;
 			}
-			total_consumed_samples -= delay_samples_to_add;  // Equivalent to increasing input_samples_received on a0 and a1.
-			err += delay_samples_to_add;
 		}
 		first_output = false;
 
