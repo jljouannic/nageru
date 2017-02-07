@@ -105,9 +105,7 @@ bool ResamplingQueue::get_output_samples(steady_clock::time_point ts, float *sam
 				err += delay_samples_to_add;
 			} else if (err > 0.0) {
 				int delay_samples_to_remove = min<int>(lrintf(err), buffer.size() / num_channels);
-				for (ssize_t i = 0; i < delay_samples_to_remove * num_channels; ++i) {
-					buffer.pop_front();
-				}
+				buffer.erase(buffer.begin(), buffer.begin() + delay_samples_to_remove * num_channels);
 				total_consumed_samples += delay_samples_to_remove;
 				err -= delay_samples_to_remove;
 			}
