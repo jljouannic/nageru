@@ -88,6 +88,11 @@ void DeckLinkOutput::start_output(uint32_t mode, int64_t base_pts)
 		fprintf(stderr, "Failed to set PsF flag for card\n");
 		exit(1);
 	}
+	if (config->SetFlag(bmdDeckLinkConfigSMPTELevelAOutput, true) != S_OK) {
+		// This affects at least some no-name SDI->HDMI converters.
+		// Warn, but don't die.
+		fprintf(stderr, "WARNING: Failed to enable SMTPE Level A; resolutions like 1080p60 might have issues.\n");
+	}
 
 	BMDDisplayModeSupport support;
 	IDeckLinkDisplayMode *display_mode;
