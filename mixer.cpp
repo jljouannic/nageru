@@ -297,7 +297,8 @@ void Mixer::set_output_card_internal(int card_index)
 		configure_card(card_index, fake_capture, /*is_fake_capture=*/true, card->output.release());
 		card->queue_length_policy.reset(card_index);
 		card->capture->start_bm_capture();
-		card->output->start_output(bmdModeHD720p5994, pts_int);  // FIXME
+		desired_output_video_mode = output_video_mode = card->output->pick_video_mode(desired_output_video_mode);
+		card->output->start_output(desired_output_video_mode, pts_int);
 	}
 	output_card_index = card_index;
 }
@@ -596,6 +597,13 @@ void Mixer::thread_func()
 	while (!should_quit) {
 		if (desired_output_card_index != output_card_index) {
 			set_output_card_internal(desired_output_card_index);
+		}
+		if (output_card_index != -1 &&
+		    desired_output_video_mode != output_video_mode) {
+			DeckLinkOutput *output = cards[output_card_index].output.get();
+			output->end_output();
+			desired_output_video_mode = output_video_mode = output->pick_video_mode(desired_output_video_mode);
+			output->start_output(desired_output_video_mode, pts_int);
 		}
 
 		CaptureCard::NewFrame new_frames[MAX_VIDEO_CARDS];
@@ -1032,6 +1040,13 @@ void Mixer::start_mode_scanning(unsigned card_index)
 	mode_scanlist_index[card_index] = 0;
 	cards[card_index].capture->set_video_mode(mode_scanlist[card_index][0]);
 	last_mode_scan_change[card_index] = steady_clock::now();
+}
+
+map<uint32_t, bmusb::VideoMode> Mixer::get_available_output_video_modes() const
+{
+	assert(desired_output_card_index != -1);
+	unique_lock<mutex> lock(card_mutex);
+	return cards[desired_output_card_index].output->get_available_video_modes();
 }
 
 Mixer::OutputChannel::~OutputChannel()

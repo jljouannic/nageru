@@ -141,7 +141,7 @@ void GLWidget::show_live_context_menu(const QPoint &pos)
 	if (current_card == -1) {
 		none_action->setChecked(true);
 	}
-	none_action->setData(-1);
+	none_action->setData(QList<QVariant>{"output_card", -1});
 	card_submenu.addAction(none_action);
 
 	unsigned num_cards = global_mixer->get_num_cards();
@@ -156,18 +156,51 @@ void GLWidget::show_live_context_menu(const QPoint &pos)
 		if (current_card == int(card_index)) {
 			action->setChecked(true);
 		}
-		action->setData(card_index);
+		action->setData(QList<QVariant>{"output_card", card_index});
 		card_submenu.addAction(action);
 	}
 
 	card_submenu.setTitle("HDMI/SDI output");
 	menu.addMenu(&card_submenu);
 
+	// Add a submenu for choosing the output resolution. Since this is
+	// card-dependent, it is disabled if we haven't chosen a card
+	// (but it's still there so that the user will know it exists).
+	QMenu resolution_submenu;
+	QActionGroup resolution_group(&resolution_submenu);
+	if (current_card == -1) {
+		resolution_submenu.setEnabled(false);
+	} else {
+		uint32_t current_mode = global_mixer->get_output_video_mode();
+		map<uint32_t, bmusb::VideoMode> video_modes = global_mixer->get_available_output_video_modes();
+		for (const auto &mode : video_modes) {
+			QString description(QString::fromStdString(mode.second.name));
+			QAction *action = new QAction(description, &resolution_group);
+			action->setCheckable(true);
+			if (current_mode == mode.first) {
+				action->setChecked(true);
+			}
+			action->setData(QList<QVariant>{"video_mode", mode.first});
+			resolution_submenu.addAction(action);
+		}
+	}
+
+	resolution_submenu.setTitle("HDMI/SDI output resolution");
+	menu.addMenu(&resolution_submenu);
+
 	// Show the menu and look at the result.
 	QAction *selected_item = menu.exec(global_pos);
 	if (selected_item != nullptr) {
-		int output_card = selected_item->data().toInt(nullptr);
-		global_mixer->set_output_card(output_card);
+		QList<QVariant> selected = selected_item->data().toList();
+		if (selected[0].toString() == "output_card") {
+			unsigned output_card = selected[1].toUInt(nullptr);
+			global_mixer->set_output_card(output_card);
+		} else if (selected[0].toString() == "video_mode") {
+			uint32_t mode = selected[1].toUInt(nullptr);
+			global_mixer->set_output_video_mode(mode);
+		} else {
+			assert(false);
+		}
 	}
 }
 

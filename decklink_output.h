@@ -56,6 +56,9 @@ public:
 	// Analogous to CaptureInterface. Will only return modes that have the right width/height.
 	std::map<uint32_t, bmusb::VideoMode> get_available_video_modes() const { return video_modes; }
 
+	// If the given mode is supported, return it. If not, pick some “best” valid mode.
+	uint32_t pick_video_mode(uint32_t mode) const;
+
 	// IUnknown.
 	HRESULT STDMETHODCALLTYPE QueryInterface(REFIID iid, LPVOID *ppv) override;
 	ULONG STDMETHODCALLTYPE AddRef() override;

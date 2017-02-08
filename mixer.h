@@ -312,6 +312,16 @@ public:
 		desired_output_card_index = card_index;
 	}
 
+	std::map<uint32_t, bmusb::VideoMode> get_available_output_video_modes() const;
+
+	uint32_t get_output_video_mode() const {
+		return desired_output_video_mode;
+	}
+
+	void set_output_video_mode(uint32_t mode) {
+		desired_output_video_mode = mode;
+	}
+
 private:
 	void configure_card(unsigned card_index, bmusb::CaptureInterface *capture, bool is_fake_capture, DeckLinkOutput *output);
 	void set_output_card_internal(int card_index);  // Should only be called from the mixer thread.
@@ -338,13 +348,15 @@ private:
 	std::atomic<unsigned> audio_source_channel{0};
 	std::atomic<int> master_clock_channel{0};  // Gets overridden by <output_card_index> if set.
 	int output_card_index = -1;  // -1 for none.
+	uint32_t output_video_mode = -1;
 
-	// The mechanics of changing the output card are so intricately connected
+	// The mechanics of changing the output card and modes are so intricately connected
 	// with the work the mixer thread is doing. Thus, we don't change it directly,
 	// we just set this variable instead, which signals to the mixer thread that
 	// it should do the change before the next frame. This simplifies locking
 	// considerations immensely.
 	std::atomic<int> desired_output_card_index{-1};
+	std::atomic<uint32_t> desired_output_video_mode{0};
 
 	std::unique_ptr<movit::EffectChain> display_chain;
 	std::unique_ptr<ChromaSubsampler> chroma_subsampler;
@@ -359,7 +371,7 @@ private:
 	// frame rate is integer, will always stay zero.
 	unsigned fractional_samples = 0;
 
-	std::mutex card_mutex;
+	mutable std::mutex card_mutex;
 	bool has_bmusb_thread = false;
 	struct CaptureCard {
 		std::unique_ptr<bmusb::CaptureInterface> capture;

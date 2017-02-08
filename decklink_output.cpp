@@ -302,6 +302,33 @@ void DeckLinkOutput::wait_for_frame(int64_t pts, int *dropped_frames, int64_t *f
 	fprintf(stderr, "Dropped %d output frames; skipping.\n", *dropped_frames);
 }
 
+uint32_t DeckLinkOutput::pick_video_mode(uint32_t mode) const
+{
+	if (video_modes.count(mode)) {
+		return mode;
+	}
+
+	// Prioritize 59.94 > 60 > 29.97. If none of those are found, then pick the highest one.
+	for (const pair<int, int> &desired : vector<pair<int, int>>{ { 60000, 1001 }, { 60, 0 }, { 30000, 1001 } }) {
+		for (const auto &it : video_modes) {
+			if (it.second.frame_rate_num * desired.second == desired.first * it.second.frame_rate_den) {
+				return it.first;
+			}
+		}
+	}
+
+	uint32_t best_mode = 0;
+	double best_fps = 0.0;
+	for (const auto &it : video_modes) {
+		double fps = double(it.second.frame_rate_num) / it.second.frame_rate_den;
+		if (fps > best_fps) {
+			best_mode = it.first;
+			best_fps = fps;
+		}
+	}
+	return best_mode;
+}
+
 HRESULT DeckLinkOutput::ScheduledFrameCompleted(/* in */ IDeckLinkVideoFrame *completedFrame, /* in */ BMDOutputFrameCompletionResult result)
 {
 	Frame *frame = static_cast<Frame *>(completedFrame);
