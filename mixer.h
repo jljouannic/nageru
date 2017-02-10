@@ -68,8 +68,7 @@ class ResourcePool;
 //
 // N is reduced as follows: If the queue has had at least one spare frame for
 // at least 50 (master) frames (ie., it's been too conservative for a second),
-// we reduce N by 1 and reset the timers. TODO: Only do this if N ever actually
-// touched the limit.
+// we reduce N by 1 and reset the timers.
 //
 // Whenever the queue is starved (we needed a frame but there was none),
 // and we've been at N since the last starvation, N was obviously too low,
@@ -79,17 +78,17 @@ public:
 	QueueLengthPolicy() {}
 	void reset(unsigned card_index) {
 		this->card_index = card_index;
-		safe_queue_length = 0;
+		safe_queue_length = 1;
 		frames_with_at_least_one = 0;
 		been_at_safe_point_since_last_starvation = false;
 	}
 
-	void update_policy(int queue_length);  // Give in -1 for starvation.
+	void update_policy(unsigned queue_length);  // Call before picking out a frame, so 0 means starvation.
 	unsigned get_safe_queue_length() const { return safe_queue_length; }
 
 private:
 	unsigned card_index;  // For debugging only.
-	unsigned safe_queue_length = 0;  // Called N in the comments.
+	unsigned safe_queue_length = 1;  // Called N in the comments. Can never go below 1.
 	unsigned frames_with_at_least_one = 0;
 	bool been_at_safe_point_since_last_starvation = false;
 };
@@ -323,6 +322,8 @@ public:
 	}
 
 private:
+	struct CaptureCard;
+
 	void configure_card(unsigned card_index, bmusb::CaptureInterface *capture, bool is_fake_capture, DeckLinkOutput *output);
 	void set_output_card_internal(int card_index);  // Should only be called from the mixer thread.
 	void bm_frame(unsigned card_index, uint16_t timecode,
@@ -338,6 +339,9 @@ private:
 	void audio_thread_func();
 	void release_display_frame(DisplayFrame *frame);
 	double pts() { return double(pts_int) / TIMEBASE; }
+	// Call this _before_ trying to pull out a frame from a capture card;
+	// it will update the policy and drop the right amount of frames for you.
+	void trim_queue(CaptureCard *card, unsigned card_index);
 
 	HTTPD httpd;
 	unsigned num_cards;
@@ -399,7 +403,7 @@ private:
 			unsigned dropped_frames = 0;  // Number of dropped frames before this one.
 			std::chrono::steady_clock::time_point received_timestamp = std::chrono::steady_clock::time_point::min();
 		};
-		std::queue<NewFrame> new_frames;
+		std::deque<NewFrame> new_frames;
 		bool should_quit = false;
 		std::condition_variable new_frames_changed;  // Set whenever new_frames (or should_quit) is changed.
 
