@@ -356,8 +356,8 @@ HRESULT DeckLinkOutput::ScheduledFrameCompleted(/* in */ IDeckLinkVideoFrame *co
 		break;
 	}
 
-	static int hei = 0;
-	print_latency("DeckLink output latency (frame received → output on HDMI):", frame->received_ts, false, &hei);
+	static int frameno = 0;
+	print_latency("DeckLink output latency (frame received → output on HDMI):", frame->received_ts, false, &frameno);
 
 	{
 		lock_guard<mutex> lock(frame_queue_mutex);
