@@ -320,7 +320,10 @@ void GLWidget::show_preview_context_menu(unsigned signal_num, const QPoint &pos)
 	// And a master clock selector.
 	QAction *master_clock_action = new QAction("Use as master clock", &menu);
 	master_clock_action->setCheckable(true);
-	if (global_mixer->get_master_clock() == signal_num) {
+	if (global_mixer->get_output_card_index() != -1) {
+		master_clock_action->setChecked(false);
+		master_clock_action->setEnabled(false);
+	} else if (global_mixer->get_master_clock() == signal_num) {
 		master_clock_action->setChecked(true);
 		master_clock_action->setEnabled(false);
 	}
