@@ -46,6 +46,7 @@ struct Flags {
 	int output_card = -1;
 	double output_buffer_frames = 6.0;
 	double output_slop_frames = 0.5;
+	int max_input_queue_frames = 6;
 };
 extern Flags global_flags;
 

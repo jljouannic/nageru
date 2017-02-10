@@ -46,6 +46,7 @@ enum LongOption {
 	OPTION_DISABLE_ALSA_OUTPUT,
 	OPTION_NO_FLUSH_PBOS,
 	OPTION_PRINT_VIDEO_LATENCY,
+	OPTION_MAX_INPUT_QUEUE_FRAMES,
 	OPTION_AUDIO_QUEUE_LENGTH_MS,
 	OPTION_OUTPUT_YCBCR_COEFFICIENTS,
 	OPTION_OUTPUT_BUFFER_FRAMES,
@@ -105,6 +106,8 @@ void usage()
 	fprintf(stderr, "                                    (will give display corruption, but makes it\n");
 	fprintf(stderr, "                                    possible to run with apitrace in real time)\n");
 	fprintf(stderr, "      --print-video-latency       print out measurements of video latency on stdout\n");
+	fprintf(stderr, "      --max-input-queue-frames=FRAMES  never keep more than FRAMES frames for each card\n");
+	fprintf(stderr, "                                    (default 6, minimum 1)\n");
 	fprintf(stderr, "      --audio-queue-length-ms=MS  length of audio resampling queue (default 100.0)\n");
 	fprintf(stderr, "      --output-ycbcr-coefficients={rec601,rec709,auto}\n");
 	fprintf(stderr, "                                  Y'CbCr coefficient standard of output (default auto)\n");
@@ -163,6 +166,7 @@ void parse_flags(int argc, char * const argv[])
 		{ "disable-alsa-output", no_argument, 0, OPTION_DISABLE_ALSA_OUTPUT },
 		{ "no-flush-pbos", no_argument, 0, OPTION_NO_FLUSH_PBOS },
 		{ "print-video-latency", no_argument, 0, OPTION_PRINT_VIDEO_LATENCY },
+		{ "max-input-queue-frames", required_argument, 0, OPTION_MAX_INPUT_QUEUE_FRAMES },
 		{ "audio-queue-length-ms", required_argument, 0, OPTION_AUDIO_QUEUE_LENGTH_MS },
 		{ "output-ycbcr-coefficients", required_argument, 0, OPTION_OUTPUT_YCBCR_COEFFICIENTS },
 		{ "output-buffer-frames", required_argument, 0, OPTION_OUTPUT_BUFFER_FRAMES },
@@ -323,6 +327,9 @@ void parse_flags(int argc, char * const argv[])
 		case OPTION_PRINT_VIDEO_LATENCY:
 			global_flags.print_video_latency = true;
 			break;
+		case OPTION_MAX_INPUT_QUEUE_FRAMES:
+			global_flags.max_input_queue_frames = atoi(optarg);
+			break;
 		case OPTION_AUDIO_QUEUE_LENGTH_MS:
 			global_flags.audio_queue_length_ms = atof(optarg);
 			break;
@@ -430,5 +437,12 @@ void parse_flags(int argc, char * const argv[])
 	if (global_flags.output_slop_frames < 0.0f) {
 		fprintf(stderr, "ERROR: --output-slop-frames can't be negative.\n");
 		exit(1);
+	}
+	if (global_flags.max_input_queue_frames < 1) {
+		fprintf(stderr, "ERROR: --max-input-queue-frames must be at least 1.\n");
+		exit(1);
+	}
+	if (global_flags.max_input_queue_frames > 10) {
+		fprintf(stderr, "WARNING: --max-input-queue-frames has little effect over 10.\n");
 	}
 }
