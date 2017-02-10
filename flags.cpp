@@ -48,8 +48,8 @@ enum LongOption {
 	OPTION_PRINT_VIDEO_LATENCY,
 	OPTION_AUDIO_QUEUE_LENGTH_MS,
 	OPTION_OUTPUT_YCBCR_COEFFICIENTS,
-	OUTPUT_BUFFER_FRAMES,
-	OUTPUT_SLOP_FRAMES,
+	OPTION_OUTPUT_BUFFER_FRAMES,
+	OPTION_OUTPUT_SLOP_FRAMES,
 };
 
 void usage()
@@ -165,8 +165,8 @@ void parse_flags(int argc, char * const argv[])
 		{ "print-video-latency", no_argument, 0, OPTION_PRINT_VIDEO_LATENCY },
 		{ "audio-queue-length-ms", required_argument, 0, OPTION_AUDIO_QUEUE_LENGTH_MS },
 		{ "output-ycbcr-coefficients", required_argument, 0, OPTION_OUTPUT_YCBCR_COEFFICIENTS },
-		{ "output-buffer-frames", required_argument, 0, OUTPUT_BUFFER_FRAMES },
-		{ "output-slop-frames", required_argument, 0, OUTPUT_SLOP_FRAMES },
+		{ "output-buffer-frames", required_argument, 0, OPTION_OUTPUT_BUFFER_FRAMES },
+		{ "output-slop-frames", required_argument, 0, OPTION_OUTPUT_SLOP_FRAMES },
 		{ 0, 0, 0, 0 }
 	};
 	vector<string> theme_dirs;
@@ -329,10 +329,10 @@ void parse_flags(int argc, char * const argv[])
 		case OPTION_OUTPUT_YCBCR_COEFFICIENTS:
 			output_ycbcr_coefficients = optarg;
 			break;
-		case OUTPUT_BUFFER_FRAMES:
+		case OPTION_OUTPUT_BUFFER_FRAMES:
 			global_flags.output_buffer_frames = atof(optarg);
 			break;
-		case OUTPUT_SLOP_FRAMES:
+		case OPTION_OUTPUT_SLOP_FRAMES:
 			global_flags.output_slop_frames = atof(optarg);
 			break;
 		case OPTION_HELP:
