@@ -81,7 +81,7 @@ void insert_new_frame(RefCountedFrame frame, unsigned field_num, bool interlaced
 void QueueLengthPolicy::update_policy(unsigned queue_length)
 {
 	if (queue_length == 0) {  // Starvation.
-		if (been_at_safe_point_since_last_starvation && safe_queue_length < global_flags.max_input_queue_frames) {
+		if (been_at_safe_point_since_last_starvation && safe_queue_length < unsigned(global_flags.max_input_queue_frames)) {
 			++safe_queue_length;
 			fprintf(stderr, "Card %u: Starvation, increasing safe limit to %u frame(s)\n",
 				card_index, safe_queue_length);
