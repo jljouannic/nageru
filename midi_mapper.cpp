@@ -390,8 +390,9 @@ void MIDIMapper::handle_event(snd_seq_t *seq, snd_seq_event_t *event)
 
 void MIDIMapper::subscribe_to_port_lock_held(snd_seq_t *seq, const snd_seq_addr_t &addr)
 {
-	// Client 0 is basically the system; ignore it.
-	if (addr.client == 0) {
+	// Client 0 (SNDRV_SEQ_CLIENT_SYSTEM) is basically the system; ignore it.
+	// MIDI through (SNDRV_SEQ_CLIENT_DUMMY) echoes back what we give it, so ignore that, too.
+	if (addr.client == 0 || addr.client == 14) {
 		return;
 	}
 
