@@ -77,6 +77,11 @@ bool ResamplingQueue::get_output_samples(steady_clock::time_point ts, float *sam
 		return true;
 	}
 
+	// This can happen when we get dropped frames on the master card.
+	if (duration<double>(ts.time_since_epoch()).count() <= 0.0) {
+		rate_adjustment_policy = DO_NOT_ADJUST_RATE;
+	}
+
 	if (rate_adjustment_policy == ADJUST_RATE && (a0.good_sample || a1.good_sample)) {
 		// Estimate the current number of input samples produced at
 		// this instant in time, by extrapolating from the last known

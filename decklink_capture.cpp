@@ -358,8 +358,6 @@ HRESULT STDMETHODCALLTYPE DeckLinkCapture::VideoInputFrameArrived(
 
 			video_format.width = width;
 			video_format.height = height;
-
-			current_video_frame.received_timestamp = now;
 		}
 	}
 
@@ -376,10 +374,11 @@ HRESULT STDMETHODCALLTYPE DeckLinkCapture::VideoInputFrameArrived(
 
 			audio_format.bits_per_sample = 32;
 			audio_format.num_channels = 2;
-
-			current_audio_frame.received_timestamp = now;
 		}
 	}
+
+	current_video_frame.received_timestamp = now;
+	current_audio_frame.received_timestamp = now;
 
 	if (current_video_frame.data != nullptr || current_audio_frame.data != nullptr) {
 		// TODO: Put into a queue and put into a dequeue thread, if the

@@ -413,6 +413,7 @@ void Mixer::bm_frame(unsigned card_index, uint16_t timecode,
 			new_frame.length = frame_length;
 			new_frame.interlaced = false;
 			new_frame.dropped_frames = dropped_frames;
+			new_frame.received_timestamp = video_frame.received_timestamp;
 			card->new_frames.push_back(move(new_frame));
 			card->new_frames_changed.notify_all();
 		}
