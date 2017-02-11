@@ -232,6 +232,10 @@ void MIDIMapper::thread_func()
 			if (err < 0) {
 				if (err == -EINTR) continue;
 				if (err == -EAGAIN) break;
+				if (err == -ENOSPC) {
+					fprintf(stderr, "snd_seq_event_input: Some events were lost.\n");
+					continue;
+				}
 				fprintf(stderr, "snd_seq_event_input: %s\n", snd_strerror(err));
 				return;
 			}
