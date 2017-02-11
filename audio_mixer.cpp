@@ -184,7 +184,18 @@ AudioMixer::AudioMixer(unsigned num_cards)
 	set_limiter_enabled(global_flags.limiter_enabled);
 	set_final_makeup_gain_auto(global_flags.final_makeup_gain_auto);
 
+	r128.init(2, OUTPUT_FREQUENCY);
+	r128.integr_start();
+
+	// hlen=16 is pretty low quality, but we use quite a bit of CPU otherwise,
+	// and there's a limit to how important the peak meter is.
+	peak_resampler.setup(OUTPUT_FREQUENCY, OUTPUT_FREQUENCY * 4, /*num_channels=*/2, /*hlen=*/16, /*frel=*/1.0);
+
+	global_audio_mixer = this;
+	alsa_pool.init();
+
 	if (!global_flags.input_mapping_filename.empty()) {
+		// Must happen after ALSAPool is initialized, as it needs to know the card list.
 		current_mapping_mode = MappingMode::MULTICHANNEL;
 		InputMapping new_input_mapping;
 		if (!load_input_mapping_from_file(get_devices(),
@@ -201,16 +212,6 @@ AudioMixer::AudioMixer(unsigned num_cards)
 			current_mapping_mode = MappingMode::MULTICHANNEL;
 		}
 	}
-
-	r128.init(2, OUTPUT_FREQUENCY);
-	r128.integr_start();
-
-	// hlen=16 is pretty low quality, but we use quite a bit of CPU otherwise,
-	// and there's a limit to how important the peak meter is.
-	peak_resampler.setup(OUTPUT_FREQUENCY, OUTPUT_FREQUENCY * 4, /*num_channels=*/2, /*hlen=*/16, /*frel=*/1.0);
-
-	global_audio_mixer = this;
-	alsa_pool.init();
 }
 
 void AudioMixer::reset_resampler(DeviceSpec device_spec)
