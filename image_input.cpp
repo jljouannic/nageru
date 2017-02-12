@@ -246,7 +246,10 @@ void ImageInput::update_thread_func(const std::string &filename, const std::stri
 	timespec last_modified = first_modified;
 	struct stat buf;
 	for ( ;; ) {
-		sleep(1);
+		{
+			unique_lock<mutex> lock(threads_should_quit_mu);
+			threads_should_quit_modified.wait_for(lock, chrono::seconds(1), []() { return threads_should_quit; });
+		}
 
 		if (threads_should_quit) {
 			return;
@@ -275,9 +278,11 @@ void ImageInput::update_thread_func(const std::string &filename, const std::stri
 
 void ImageInput::shutdown_updaters()
 {
-	// TODO: Kick these out of the sleep before one second?
-	threads_should_quit = true;
-
+	{
+		unique_lock<mutex> lock(threads_should_quit_mu);
+		threads_should_quit = true;
+		threads_should_quit_modified.notify_all();
+	}
 	for (auto &it : update_threads) {
 		it.second.join();
 	}
@@ -286,4 +291,6 @@ void ImageInput::shutdown_updaters()
 mutex ImageInput::all_images_lock;
 map<string, shared_ptr<const ImageInput::Image>> ImageInput::all_images;
 map<string, thread> ImageInput::update_threads;
-volatile bool ImageInput::threads_should_quit = false;
+mutex ImageInput::threads_should_quit_mu;
+bool ImageInput::threads_should_quit = false;
+condition_variable ImageInput::threads_should_quit_modified;

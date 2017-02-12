@@ -5,6 +5,7 @@
 #include <movit/flat_input.h>
 #include <stdbool.h>
 #include <time.h>
+#include <condition_variable>
 #include <cstdint>
 #include <map>
 #include <memory>
@@ -39,7 +40,10 @@ private:
 	static std::mutex all_images_lock;
 	static std::map<std::string, std::shared_ptr<const Image>> all_images;
 	static std::map<std::string, std::thread> update_threads;
-	static volatile bool threads_should_quit;
+
+	static std::mutex threads_should_quit_mu;
+	static bool threads_should_quit;  // Under threads_should_quit_mu.
+	static std::condition_variable threads_should_quit_modified;  // Signals when threads_should_quit is set.
 };
 
 #endif // !defined(_IMAGE_INPUT_H)
