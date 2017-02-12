@@ -45,6 +45,7 @@
 #include "ref_counted_gl_sync.h"
 #include "resampling_queue.h"
 #include "timebase.h"
+#include "timecode_renderer.h"
 #include "video_encoder.h"
 
 class IDeckLink;
@@ -198,6 +199,10 @@ Mixer::Mixer(const QSurfaceFormat &format, unsigned num_cards)
 	}
 
 	chroma_subsampler.reset(new ChromaSubsampler(resource_pool.get()));
+
+	timecode_renderer.reset(new TimecodeRenderer(resource_pool.get(), global_flags.width, global_flags.height));
+	display_timecode_in_stream = global_flags.display_timecode_in_stream;
+	display_timecode_on_stdout = global_flags.display_timecode_on_stdout;
 
 	if (global_flags.enable_alsa_output) {
 		alsa.reset(new ALSAOutput(OUTPUT_FREQUENCY, /*num_channels=*/2));
@@ -592,7 +597,6 @@ void Mixer::thread_func()
 	steady_clock::time_point start, now;
 	start = steady_clock::now();
 
-	int frame = 0;
 	int stats_dropped_frames = 0;
 
 	while (!should_quit) {
@@ -666,15 +670,15 @@ void Mixer::thread_func()
 
 		int64_t frame_duration = output_frame_info.frame_duration;
 		render_one_frame(frame_duration);
-		++frame;
+		++frame_num;
 		pts_int += frame_duration;
 
 		now = steady_clock::now();
 		double elapsed = duration<double>(now - start).count();
-		if (frame % 100 == 0) {
+		if (frame_num % 100 == 0) {
 			printf("%d frames (%d dropped) in %.3f seconds = %.1f fps (%.1f ms/frame)",
-				frame, stats_dropped_frames, elapsed, frame / elapsed,
-				1e3 * elapsed / frame);
+				frame_num, stats_dropped_frames, elapsed, frame_num / elapsed,
+				1e3 * elapsed / frame_num);
 		//	chain->print_phase_timing();
 
 			// Check our memory usage, to see if we are close to our mlockall()
@@ -711,7 +715,7 @@ void Mixer::thread_func()
 
 
 		if (should_cut.exchange(false)) {  // Test and clear.
-			video_encoder->do_cut(frame);
+			video_encoder->do_cut(frame_num);
 		}
 
 #if 0
@@ -930,6 +934,12 @@ void Mixer::schedule_audio_resampling_tasks(unsigned dropped_frames, int num_sam
 
 void Mixer::render_one_frame(int64_t duration)
 {
+	// Determine the time code for this frame before we start rendering.
+	string timecode_text = timecode_renderer->get_timecode_text(double(pts_int) / TIMEBASE, frame_num);
+	if (display_timecode_on_stdout) {
+		printf("Timecode: '%s'\n", timecode_text.c_str());
+	}
+
 	// Get the main chain from the theme, and set its state immediately.
 	Theme::Chain theme_main_chain = theme->get_chain(0, pts(), global_flags.width, global_flags.height, input_state);
 	EffectChain *chain = theme_main_chain.chain;
@@ -946,6 +956,12 @@ void Mixer::render_one_frame(int64_t duration)
 	GLuint fbo = resource_pool->create_fbo(y_tex, cbcr_full_tex, rgba_tex);
 	check_error();
 	chain->render_to_fbo(fbo, global_flags.width, global_flags.height);
+
+	if (display_timecode_in_stream) {
+		// Render the timecode on top.
+		timecode_renderer->render_timecode(fbo, timecode_text);
+	}
+
 	resource_pool->release_fbo(fbo);
 
 	chroma_subsampler->subsample_chroma(cbcr_full_tex, global_flags.width, global_flags.height, cbcr_tex);

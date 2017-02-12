@@ -39,6 +39,7 @@
 class ALSAOutput;
 class ChromaSubsampler;
 class DeckLinkOutput;
+class TimecodeRenderer;
 class QSurface;
 class QSurfaceFormat;
 
@@ -321,6 +322,14 @@ public:
 		desired_output_video_mode = mode;
 	}
 
+	void set_display_timecode_in_stream(bool enable) {
+		display_timecode_in_stream = enable;
+	}
+
+	void set_display_timecode_on_stdout(bool enable) {
+		display_timecode_on_stdout = enable;
+	}
+
 private:
 	struct CaptureCard;
 
@@ -335,6 +344,7 @@ private:
 	void thread_func();
 	void handle_hotplugged_cards();
 	void schedule_audio_resampling_tasks(unsigned dropped_frames, int num_samples_per_frame, int length_per_frame, bool is_preroll, std::chrono::steady_clock::time_point frame_timestamp);
+	std::string get_timecode_text() const;
 	void render_one_frame(int64_t duration);
 	void audio_thread_func();
 	void release_display_frame(DisplayFrame *frame);
@@ -366,10 +376,15 @@ private:
 	std::unique_ptr<ChromaSubsampler> chroma_subsampler;
 	std::unique_ptr<VideoEncoder> video_encoder;
 
+	std::unique_ptr<TimecodeRenderer> timecode_renderer;
+	std::atomic<bool> display_timecode_in_stream{false};
+	std::atomic<bool> display_timecode_on_stdout{false};
+
 	// Effects part of <display_chain>. Owned by <display_chain>.
 	movit::FlatInput *display_input;
 
 	int64_t pts_int = 0;  // In TIMEBASE units.
+	unsigned frame_num = 0;
 
 	// Accumulated errors in number of 1/TIMEBASE audio samples. If OUTPUT_FREQUENCY divided by
 	// frame rate is integer, will always stay zero.

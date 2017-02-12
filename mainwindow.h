@@ -51,6 +51,8 @@ public slots:
 	void multichannel_audio_mode_triggered();
 	void input_mapping_triggered();
 	void midi_mapping_triggered();
+	void timecode_stream_triggered();
+	void timecode_stdout_triggered();
 	void transition_clicked(int transition_number);
 	void channel_clicked(int channel_number);
 	void wb_button_clicked(int channel_number);

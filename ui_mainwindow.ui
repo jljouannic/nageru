@@ -640,8 +640,8 @@
                 <rect>
                  <x>0</x>
                  <y>0</y>
-                 <width>514</width>
-                 <height>238</height>
+                 <width>505</width>
+                 <height>236</height>
                 </rect>
                </property>
                <layout class="QHBoxLayout" name="horizontalLayout_4">
@@ -1390,15 +1390,23 @@
      <x>0</x>
      <y>0</y>
      <width>1089</width>
-     <height>19</height>
+     <height>23</height>
     </rect>
    </property>
    <widget class="QMenu" name="menuWhat">
     <property name="title">
      <string>&amp;Video</string>
     </property>
+    <widget class="QMenu" name="display_timecode_menu">
+     <property name="title">
+      <string>Display &amp;time code</string>
+     </property>
+     <addaction name="timecode_stream_action"/>
+     <addaction name="timecode_stdout_action"/>
+    </widget>
     <addaction name="cut_action"/>
     <addaction name="x264_bitrate_action"/>
+    <addaction name="display_timecode_menu"/>
     <addaction name="exit_action"/>
    </widget>
    <widget class="QMenu" name="menu_Help">
@@ -1474,6 +1482,22 @@
   <action name="manual_action">
    <property name="text">
     <string>Online &amp;manual…</string>
+   </property>
+  </action>
+  <action name="timecode_stream_action">
+   <property name="checkable">
+    <bool>true</bool>
+   </property>
+   <property name="text">
+    <string>In &amp;stream</string>
+   </property>
+  </action>
+  <action name="timecode_stdout_action">
+   <property name="checkable">
+    <bool>true</bool>
+   </property>
+   <property name="text">
+    <string>On standard &amp;output</string>
    </property>
   </action>
  </widget>

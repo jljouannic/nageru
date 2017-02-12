@@ -51,6 +51,8 @@ enum LongOption {
 	OPTION_OUTPUT_YCBCR_COEFFICIENTS,
 	OPTION_OUTPUT_BUFFER_FRAMES,
 	OPTION_OUTPUT_SLOP_FRAMES,
+	OPTION_TIMECODE_STREAM,
+	OPTION_TIMECODE_STDOUT,
 };
 
 void usage()
@@ -119,6 +121,8 @@ void usage()
 	fprintf(stderr, "      --output-slop-frames=NUM    if more less than this number of frames behind for\n");
 	fprintf(stderr, "                                    --output-card, try to submit anyway instead of\n");
 	fprintf(stderr, "                                    dropping the frame (default 0.5)\n");
+	fprintf(stderr, "      --timecode-stream           show timestamp and timecode in stream\n");
+	fprintf(stderr, "      --timecode-stdout           show timestamp and timecode on standard output\n");
 }
 
 void parse_flags(int argc, char * const argv[])
@@ -171,6 +175,8 @@ void parse_flags(int argc, char * const argv[])
 		{ "output-ycbcr-coefficients", required_argument, 0, OPTION_OUTPUT_YCBCR_COEFFICIENTS },
 		{ "output-buffer-frames", required_argument, 0, OPTION_OUTPUT_BUFFER_FRAMES },
 		{ "output-slop-frames", required_argument, 0, OPTION_OUTPUT_SLOP_FRAMES },
+		{ "timecode-stream", no_argument, 0, OPTION_TIMECODE_STREAM },
+		{ "timecode-stdout", no_argument, 0, OPTION_TIMECODE_STDOUT },
 		{ 0, 0, 0, 0 }
 	};
 	vector<string> theme_dirs;
@@ -341,6 +347,12 @@ void parse_flags(int argc, char * const argv[])
 			break;
 		case OPTION_OUTPUT_SLOP_FRAMES:
 			global_flags.output_slop_frames = atof(optarg);
+			break;
+		case OPTION_TIMECODE_STREAM:
+			global_flags.display_timecode_in_stream = true;
+			break;
+		case OPTION_TIMECODE_STDOUT:
+			global_flags.display_timecode_on_stdout = true;
 			break;
 		case OPTION_HELP:
 			usage();

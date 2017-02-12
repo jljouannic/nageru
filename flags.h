@@ -47,6 +47,8 @@ struct Flags {
 	double output_buffer_frames = 6.0;
 	double output_slop_frames = 0.5;
 	int max_input_queue_frames = 6;
+	bool display_timecode_in_stream = false;
+	bool display_timecode_on_stdout = false;
 };
 extern Flags global_flags;
 

@@ -203,6 +203,11 @@ MainWindow::MainWindow()
 	connect(ui->multichannel_audio_mode, &QAction::triggered, this, &MainWindow::multichannel_audio_mode_triggered);
 	connect(ui->input_mapping_action, &QAction::triggered, this, &MainWindow::input_mapping_triggered);
 	connect(ui->midi_mapping_action, &QAction::triggered, this, &MainWindow::midi_mapping_triggered);
+	connect(ui->timecode_stream_action, &QAction::triggered, this, &MainWindow::timecode_stream_triggered);
+	connect(ui->timecode_stdout_action, &QAction::triggered, this, &MainWindow::timecode_stdout_triggered);
+
+	ui->timecode_stream_action->setChecked(global_flags.display_timecode_in_stream);
+	ui->timecode_stdout_action->setChecked(global_flags.display_timecode_on_stdout);
 
 	if (global_flags.x264_video_to_http) {
 		connect(ui->x264_bitrate_action, &QAction::triggered, this, &MainWindow::x264_bitrate_triggered);
@@ -629,6 +634,16 @@ void MainWindow::input_mapping_triggered()
 void MainWindow::midi_mapping_triggered()
 {
 	MIDIMappingDialog(&midi_mapper).exec();
+}
+
+void MainWindow::timecode_stream_triggered()
+{
+	global_mixer->set_display_timecode_in_stream(ui->timecode_stream_action->isChecked());
+}
+
+void MainWindow::timecode_stdout_triggered()
+{
+	global_mixer->set_display_timecode_on_stdout(ui->timecode_stdout_action->isChecked());
 }
 
 void MainWindow::gain_staging_knob_changed(unsigned bus_index, int value)
