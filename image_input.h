@@ -25,6 +25,7 @@ public:
 	
 private:
 	struct Image {
+		unsigned width, height;
 		std::unique_ptr<uint8_t[]> pixels;
 		timespec last_modified;
 	};

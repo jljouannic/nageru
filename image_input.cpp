@@ -70,7 +70,7 @@ string search_for_file(const string &filename)
 
 ImageInput::ImageInput(const string &filename)
 	: movit::FlatInput({movit::COLORSPACE_sRGB, movit::GAMMA_sRGB}, movit::FORMAT_RGBA_POSTMULTIPLIED_ALPHA,
-	                   GL_UNSIGNED_BYTE, 1280, 720),  // FIXME
+	                   GL_UNSIGNED_BYTE, 1280, 720),  // Resolution will be overwritten.
 	  filename(filename),
 	  pathname(search_for_file(filename)),
 	  current_image(load_image(filename, pathname))
@@ -79,6 +79,8 @@ ImageInput::ImageInput(const string &filename)
 		fprintf(stderr, "Couldn't load image, exiting.\n");
 		exit(1);
 	}
+	set_width(current_image->width);
+	set_height(current_image->height);
 	set_pixel_data(current_image->pixels.get());
 }
 
@@ -206,7 +208,6 @@ shared_ptr<const ImageInput::Image> ImageInput::load_image_raw(const string &pat
 		return nullptr;
 	}
 
-	// TODO: Scale down if needed!
 	uint8_t *pic_data[4] = {nullptr};
 	unique_ptr<uint8_t *, decltype(av_freep)*> pic_data_cleanup(
 		&pic_data[0], av_freep);
@@ -230,7 +231,7 @@ shared_ptr<const ImageInput::Image> ImageInput::load_image_raw(const string &pat
 	unique_ptr<uint8_t[]> image_data(new uint8_t[len]);
 	av_image_copy_to_buffer(image_data.get(), len, pic_data, linesizes, AV_PIX_FMT_RGBA, frame->width, frame->height, 1);
 
-	shared_ptr<Image> image(new Image{move(image_data), last_modified});
+	shared_ptr<Image> image(new Image{unsigned(frame->width), unsigned(frame->height), move(image_data), last_modified});
 	return image;
 }
 
