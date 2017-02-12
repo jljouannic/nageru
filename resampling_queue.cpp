@@ -162,6 +162,10 @@ bool ResamplingQueue::get_output_samples(steady_clock::time_point ts, float *sam
 			fprintf(stderr, "Card %u: PANIC: Out of input samples to resample, still need %d output samples! (correction factor is %f)\n",
 				card_num, int(vresampler.out_count), rcorr);
 			memset(vresampler.out_data, 0, vresampler.out_count * num_channels * sizeof(float));
+
+			// Reset the loop filter.
+			z1 = z2 = z3 = 0.0;
+
 			return false;
 		}
 
