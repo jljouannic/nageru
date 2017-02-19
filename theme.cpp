@@ -605,6 +605,7 @@ LiveInputWrapper::LiveInputWrapper(Theme *theme, EffectChain *chain, bool overri
 	YCbCrFormat input_ycbcr_format;
 	input_ycbcr_format.chroma_subsampling_x = 2;
 	input_ycbcr_format.chroma_subsampling_y = 1;
+	input_ycbcr_format.num_levels = 256;
 	input_ycbcr_format.cb_x_position = 0.0;
 	input_ycbcr_format.cr_x_position = 0.0;
 	input_ycbcr_format.cb_y_position = 0.5;
