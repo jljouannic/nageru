@@ -77,6 +77,58 @@ void insert_new_frame(RefCountedFrame frame, unsigned field_num, bool interlaced
 	}
 }
 
+void ensure_texture_resolution(PBOFrameAllocator::Userdata *userdata, unsigned field, unsigned width, unsigned height)
+{
+	if (userdata->tex_y[field] == 0 ||
+	    userdata->tex_cbcr[field] == 0 ||
+	    width != userdata->last_width[field] ||
+	    height != userdata->last_height[field]) {
+		size_t cbcr_width = width / 2;
+
+		// We changed resolution since last use of this texture, so we need to create
+		// a new object. Note that this each card has its own PBOFrameAllocator,
+		// we don't need to worry about these flip-flopping between resolutions.
+		glBindTexture(GL_TEXTURE_2D, userdata->tex_cbcr[field]);
+		check_error();
+		glTexImage2D(GL_TEXTURE_2D, 0, GL_RG8, cbcr_width, height, 0, GL_RG, GL_UNSIGNED_BYTE, nullptr);
+		check_error();
+		glBindTexture(GL_TEXTURE_2D, userdata->tex_y[field]);
+		check_error();
+		glTexImage2D(GL_TEXTURE_2D, 0, GL_R8, width, height, 0, GL_RED, GL_UNSIGNED_BYTE, nullptr);
+		check_error();
+		userdata->last_width[field] = width;
+		userdata->last_height[field] = height;
+	}
+}
+
+void upload_texture(GLuint tex, GLuint width, GLuint height, GLuint stride, bool interlaced_stride, GLenum format, GLintptr offset)
+{
+	if (interlaced_stride) {
+		stride *= 2;
+	}
+	if (global_flags.flush_pbos) {
+		glFlushMappedBufferRange(GL_PIXEL_UNPACK_BUFFER, offset, stride * height);
+		check_error();
+	}
+
+	glBindTexture(GL_TEXTURE_2D, tex);
+	check_error();
+	if (interlaced_stride) {
+		glPixelStorei(GL_UNPACK_ROW_LENGTH, width * 2);
+		check_error();
+	} else {
+		glPixelStorei(GL_UNPACK_ROW_LENGTH, 0);
+		check_error();
+	}
+
+	glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, width, height, format, GL_UNSIGNED_BYTE, BUFFER_OFFSET(offset));
+	check_error();
+	glBindTexture(GL_TEXTURE_2D, 0);
+	check_error();
+	glPixelStorei(GL_UNPACK_ROW_LENGTH, 0);
+	check_error();
+}
+
 }  // namespace
 
 void QueueLengthPolicy::update_policy(unsigned queue_length)
@@ -471,68 +523,18 @@ void Mixer::bm_frame(unsigned card_index, uint16_t timecode,
 			} else {
 				field_start_line = video_format.extra_lines_top;
 			}
-
-			if (userdata->tex_y[field] == 0 ||
-			    userdata->tex_cbcr[field] == 0 ||
-			    video_format.width != userdata->last_width[field] ||
-			    video_format.height != userdata->last_height[field]) {
-				// We changed resolution since last use of this texture, so we need to create
-				// a new object. Note that this each card has its own PBOFrameAllocator,
-				// we don't need to worry about these flip-flopping between resolutions.
-				glBindTexture(GL_TEXTURE_2D, userdata->tex_cbcr[field]);
-				check_error();
-				glTexImage2D(GL_TEXTURE_2D, 0, GL_RG8, cbcr_width, video_format.height, 0, GL_RG, GL_UNSIGNED_BYTE, nullptr);
-				check_error();
-				glBindTexture(GL_TEXTURE_2D, userdata->tex_y[field]);
-				check_error();
-				glTexImage2D(GL_TEXTURE_2D, 0, GL_R8, video_format.width, video_format.height, 0, GL_RED, GL_UNSIGNED_BYTE, nullptr);
-				check_error();
-				userdata->last_width[field] = video_format.width;
-				userdata->last_height[field] = video_format.height;
-			}
-
-			GLuint pbo = userdata->pbo;
-			check_error();
-			glBindBuffer(GL_PIXEL_UNPACK_BUFFER, pbo);
-			check_error();
-
 			size_t field_y_start = y_offset + video_format.width * field_start_line;
 			size_t field_cbcr_start = cbcr_offset + cbcr_width * field_start_line * sizeof(uint16_t);
 
-			if (global_flags.flush_pbos) {
-				glFlushMappedBufferRange(GL_PIXEL_UNPACK_BUFFER, field_y_start, video_format.width * video_format.height);
-				check_error();
-				glFlushMappedBufferRange(GL_PIXEL_UNPACK_BUFFER, field_cbcr_start, cbcr_width * video_format.height * sizeof(uint16_t));
-				check_error();
-			}
+			ensure_texture_resolution(userdata, field, video_format.width, video_format.height);
 
-			glBindTexture(GL_TEXTURE_2D, userdata->tex_cbcr[field]);
+			glBindBuffer(GL_PIXEL_UNPACK_BUFFER, userdata->pbo);
 			check_error();
-			if (interlaced_stride) {
-				glPixelStorei(GL_UNPACK_ROW_LENGTH, cbcr_width * 2);
-				check_error();
-			} else {
-				glPixelStorei(GL_UNPACK_ROW_LENGTH, 0);
-				check_error();
-			}
-			glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, cbcr_width, video_format.height, GL_RG, GL_UNSIGNED_BYTE, BUFFER_OFFSET(field_cbcr_start));
-			check_error();
-			glBindTexture(GL_TEXTURE_2D, userdata->tex_y[field]);
-			check_error();
-			if (interlaced_stride) {
-				glPixelStorei(GL_UNPACK_ROW_LENGTH, video_format.width * 2);
-				check_error();
-			} else {
-				glPixelStorei(GL_UNPACK_ROW_LENGTH, 0);
-				check_error();
-			}
-			glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, video_format.width, video_format.height, GL_RED, GL_UNSIGNED_BYTE, BUFFER_OFFSET(field_y_start));
-			check_error();
-			glBindTexture(GL_TEXTURE_2D, 0);
-			check_error();
+
+			upload_texture(userdata->tex_y[field], video_format.width, video_format.height, video_format.width, interlaced_stride, GL_RED, field_y_start);
+			upload_texture(userdata->tex_cbcr[field], cbcr_width, video_format.height, cbcr_width * sizeof(uint16_t), interlaced_stride, GL_RG, field_cbcr_start);
+
 			glBindBuffer(GL_PIXEL_UNPACK_BUFFER, 0);
-			check_error();
-			glPixelStorei(GL_UNPACK_ROW_LENGTH, 0);
 			check_error();
 		};
 
