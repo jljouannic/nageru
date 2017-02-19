@@ -335,24 +335,28 @@ HRESULT STDMETHODCALLTYPE DeckLinkCapture::VideoInputFrameArrived(
 		if (current_video_frame.data != nullptr) {
 			const uint8_t *frame_bytes;
 			video_frame->GetBytes((void **)&frame_bytes);
+			size_t num_bytes = stride * height;
 
-			uint8_t *data = current_video_frame.data;
-			uint8_t *data2 = current_video_frame.data2;
-			size_t num_bytes = width * height * 2;
+			if (current_video_frame.interleaved) {
+				uint8_t *data = current_video_frame.data;
+				uint8_t *data2 = current_video_frame.data2;
 #ifdef __SSE2__
-			size_t consumed = memcpy_interleaved_fastpath(data, data2, frame_bytes, num_bytes);
-			frame_bytes += consumed;
-			data += consumed / 2;
-			data2 += consumed / 2;
-			if (num_bytes % 2) {
-				swap(data, data2);
-			}
-			current_video_frame.len += consumed;
-			num_bytes -= consumed;
+				size_t consumed = memcpy_interleaved_fastpath(data, data2, frame_bytes, num_bytes);
+				frame_bytes += consumed;
+				data += consumed / 2;
+				data2 += consumed / 2;
+				if (num_bytes % 2) {
+					swap(data, data2);
+				}
+				current_video_frame.len += consumed;
+				num_bytes -= consumed;
 #endif
 
-			if (num_bytes > 0) {
-				memcpy_interleaved(data, data2, frame_bytes, num_bytes);
+				if (num_bytes > 0) {
+					memcpy_interleaved(data, data2, frame_bytes, num_bytes);
+				}
+			} else {
+				memcpy(current_video_frame.data, frame_bytes, num_bytes);
 			}
 			current_video_frame.len += num_bytes;
 
