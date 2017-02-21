@@ -148,8 +148,6 @@ bool ResamplingQueue::get_output_samples(steady_clock::time_point ts, float *sam
 		if (rcorr < 0.95) rcorr = 0.95;
 		assert(!isnan(rcorr));
 		vresampler.set_rratio(rcorr);
-	} else {
-		assert(rate_adjustment_policy == DO_NOT_ADJUST_RATE);
 	}
 
 	// Finally actually resample, producing exactly <num_samples> output samples.
