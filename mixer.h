@@ -39,9 +39,10 @@
 class ALSAOutput;
 class ChromaSubsampler;
 class DeckLinkOutput;
-class TimecodeRenderer;
 class QSurface;
 class QSurfaceFormat;
+class TimecodeRenderer;
+class v210Converter;
 
 namespace movit {
 class Effect;
@@ -374,6 +375,7 @@ private:
 
 	std::unique_ptr<movit::EffectChain> display_chain;
 	std::unique_ptr<ChromaSubsampler> chroma_subsampler;
+	std::unique_ptr<v210Converter> v210_converter;
 	std::unique_ptr<VideoEncoder> video_encoder;
 
 	std::unique_ptr<TimecodeRenderer> timecode_renderer;

@@ -49,6 +49,7 @@ struct Flags {
 	int max_input_queue_frames = 6;
 	bool display_timecode_in_stream = false;
 	bool display_timecode_on_stdout = false;
+	bool ten_bit_input = false;
 };
 extern Flags global_flags;
 

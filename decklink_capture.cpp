@@ -20,6 +20,8 @@
 
 #include "bmusb/bmusb.h"
 #include "decklink_util.h"
+#include "flags.h"
+#include "v210_converter.h"
 
 #define FRAME_SIZE (8 << 20)  // 8 MB.
 
@@ -137,6 +139,18 @@ size_t memcpy_interleaved_fastpath(uint8_t *dest1, uint8_t *dest2, const uint8_t
 }
 
 #endif  // __SSE2__
+
+BMDPixelFormat pixel_format_to_bmd(PixelFormat pixel_format)
+{
+	switch (pixel_format) {
+	case PixelFormat_8BitYCbCr:
+		return bmdFormat8BitYUV;
+	case PixelFormat_10BitYCbCr:
+		return bmdFormat10BitYUV;
+	default:
+		assert(false);
+	}
+}
 
 }  // namespace
 
@@ -329,7 +343,13 @@ HRESULT STDMETHODCALLTYPE DeckLinkCapture::VideoInputFrameArrived(
 		int width = video_frame->GetWidth();
 		int height = video_frame->GetHeight();
 		const int stride = video_frame->GetRowBytes();
-		assert(stride == width * 2);
+		const BMDPixelFormat format = video_frame->GetPixelFormat();
+		assert(format == pixel_format_to_bmd(current_pixel_format));
+		if (global_flags.ten_bit_input) {
+			assert(stride == int(v210Converter::get_v210_stride(width)));
+		} else {
+			assert(stride == width * 2);
+		}
 
 		current_video_frame = video_frame_allocator->alloc_frame();
 		if (current_video_frame.data != nullptr) {
@@ -362,6 +382,7 @@ HRESULT STDMETHODCALLTYPE DeckLinkCapture::VideoInputFrameArrived(
 
 			video_format.width = width;
 			video_format.height = height;
+			video_format.stride = stride;
 		}
 	}
 
@@ -413,7 +434,7 @@ void DeckLinkCapture::start_bm_capture()
 	if (running) {
 		return;
 	}
-	if (input->EnableVideoInput(current_video_mode, bmdFormat8BitYUV, supports_autodetect ? bmdVideoInputEnableFormatDetection : 0) != S_OK) {
+	if (input->EnableVideoInput(current_video_mode, pixel_format_to_bmd(current_pixel_format), supports_autodetect ? bmdVideoInputEnableFormatDetection : 0) != S_OK) {
 		fprintf(stderr, "Failed to set video mode 0x%04x for card %d\n", current_video_mode, card_index);
 		exit(1);
 	}
@@ -469,11 +490,17 @@ void DeckLinkCapture::set_video_mode(uint32_t video_mode_id)
 	}
 }
 
+void DeckLinkCapture::set_pixel_format(PixelFormat pixel_format)
+{
+	current_pixel_format = pixel_format;
+	set_video_mode(current_video_mode);
+}
+
 void DeckLinkCapture::set_video_mode_no_restart(uint32_t video_mode_id)
 {
 	BMDDisplayModeSupport support;
 	IDeckLinkDisplayMode *display_mode;
-	if (input->DoesSupportVideoMode(video_mode_id, bmdFormat8BitYUV, /*flags=*/0, &support, &display_mode)) {
+	if (input->DoesSupportVideoMode(video_mode_id, pixel_format_to_bmd(current_pixel_format), /*flags=*/0, &support, &display_mode)) {
 		fprintf(stderr, "Failed to query display mode for card %d\n", card_index);
 		exit(1);
 	}
@@ -491,7 +518,7 @@ void DeckLinkCapture::set_video_mode_no_restart(uint32_t video_mode_id)
 	field_dominance = display_mode->GetFieldDominance();
 
 	if (running) {
-		if (input->EnableVideoInput(video_mode_id, bmdFormat8BitYUV, supports_autodetect ? bmdVideoInputEnableFormatDetection : 0) != S_OK) {
+		if (input->EnableVideoInput(video_mode_id, pixel_format_to_bmd(current_pixel_format), supports_autodetect ? bmdVideoInputEnableFormatDetection : 0) != S_OK) {
 			fprintf(stderr, "Failed to set video mode 0x%04x for card %d\n", video_mode_id, card_index);
 			exit(1);
 		}

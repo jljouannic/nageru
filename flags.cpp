@@ -53,6 +53,7 @@ enum LongOption {
 	OPTION_OUTPUT_SLOP_FRAMES,
 	OPTION_TIMECODE_STREAM,
 	OPTION_TIMECODE_STDOUT,
+	OPTION_10_BIT_INPUT,
 };
 
 void usage()
@@ -123,6 +124,7 @@ void usage()
 	fprintf(stderr, "                                    dropping the frame (default 0.5)\n");
 	fprintf(stderr, "      --timecode-stream           show timestamp and timecode in stream\n");
 	fprintf(stderr, "      --timecode-stdout           show timestamp and timecode on standard output\n");
+	fprintf(stderr, "      --10-bit-input              use 10-bit video input (requires compute shaders)\n");
 }
 
 void parse_flags(int argc, char * const argv[])
@@ -177,6 +179,7 @@ void parse_flags(int argc, char * const argv[])
 		{ "output-slop-frames", required_argument, 0, OPTION_OUTPUT_SLOP_FRAMES },
 		{ "timecode-stream", no_argument, 0, OPTION_TIMECODE_STREAM },
 		{ "timecode-stdout", no_argument, 0, OPTION_TIMECODE_STDOUT },
+		{ "10-bit-input", no_argument, 0, OPTION_10_BIT_INPUT },
 		{ 0, 0, 0, 0 }
 	};
 	vector<string> theme_dirs;
@@ -353,6 +356,9 @@ void parse_flags(int argc, char * const argv[])
 			break;
 		case OPTION_TIMECODE_STDOUT:
 			global_flags.display_timecode_on_stdout = true;
+			break;
+		case OPTION_10_BIT_INPUT:
+			global_flags.ten_bit_input = true;
 			break;
 		case OPTION_HELP:
 			usage();

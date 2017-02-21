@@ -603,9 +603,9 @@ LiveInputWrapper::LiveInputWrapper(Theme *theme, EffectChain *chain, bool overri
 	// Perhaps 601 was only to indicate the subsampling positions, not the
 	// colorspace itself? Tested with a Lenovo X1 gen 3 as input.
 	YCbCrFormat input_ycbcr_format;
-	input_ycbcr_format.chroma_subsampling_x = 2;
+	input_ycbcr_format.chroma_subsampling_x = global_flags.ten_bit_input ? 1 : 2;
 	input_ycbcr_format.chroma_subsampling_y = 1;
-	input_ycbcr_format.num_levels = 256;
+	input_ycbcr_format.num_levels = global_flags.ten_bit_input ? 1024 : 256;
 	input_ycbcr_format.cb_x_position = 0.0;
 	input_ycbcr_format.cr_x_position = 0.0;
 	input_ycbcr_format.cb_y_position = 0.5;
@@ -629,10 +629,12 @@ LiveInputWrapper::LiveInputWrapper(Theme *theme, EffectChain *chain, bool overri
 		num_inputs = 1;
 	}
 	for (unsigned i = 0; i < num_inputs; ++i) {
+		// When using 10-bit input, we're converting to interleaved through v210Converter.
+		YCbCrInputSplitting splitting = global_flags.ten_bit_input ? YCBCR_INPUT_INTERLEAVED : YCBCR_INPUT_SPLIT_Y_AND_CBCR;
 		if (override_bounce) {
-			inputs.push_back(new NonBouncingYCbCrInput(inout_format, input_ycbcr_format, global_flags.width, global_flags.height, YCBCR_INPUT_SPLIT_Y_AND_CBCR));
+			inputs.push_back(new NonBouncingYCbCrInput(inout_format, input_ycbcr_format, global_flags.width, global_flags.height, splitting));
 		} else {
-			inputs.push_back(new YCbCrInput(inout_format, input_ycbcr_format, global_flags.width, global_flags.height, YCBCR_INPUT_SPLIT_Y_AND_CBCR));
+			inputs.push_back(new YCbCrInput(inout_format, input_ycbcr_format, global_flags.width, global_flags.height, splitting));
 		}
 		chain->add_input(inputs.back());
 	}
@@ -681,8 +683,12 @@ void LiveInputWrapper::connect_signal(int signal_num)
 			userdata = (const PBOFrameAllocator::Userdata *)frame.frame->userdata;
 		}
 
-		inputs[i]->set_texture_num(0, userdata->tex_y[frame.field_number]);
-		inputs[i]->set_texture_num(1, userdata->tex_cbcr[frame.field_number]);
+		if (global_flags.ten_bit_input) {
+			inputs[i]->set_texture_num(0, userdata->tex_444[frame.field_number]);
+		} else {
+			inputs[i]->set_texture_num(0, userdata->tex_y[frame.field_number]);
+			inputs[i]->set_texture_num(1, userdata->tex_cbcr[frame.field_number]);
+		}
 		inputs[i]->set_width(userdata->last_width[frame.field_number]);
 		inputs[i]->set_height(userdata->last_height[frame.field_number]);
 

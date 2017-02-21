@@ -46,6 +46,7 @@
 #include "resampling_queue.h"
 #include "timebase.h"
 #include "timecode_renderer.h"
+#include "v210_converter.h"
 #include "video_encoder.h"
 
 class IDeckLink;
@@ -79,29 +80,48 @@ void insert_new_frame(RefCountedFrame frame, unsigned field_num, bool interlaced
 
 void ensure_texture_resolution(PBOFrameAllocator::Userdata *userdata, unsigned field, unsigned width, unsigned height)
 {
-	if (userdata->tex_y[field] == 0 ||
-	    userdata->tex_cbcr[field] == 0 ||
+	bool first;
+	if (global_flags.ten_bit_input) {
+		first = userdata->tex_v210[field] == 0 || userdata->tex_444[field] == 0;
+	} else {
+		first = userdata->tex_y[field] == 0 || userdata->tex_cbcr[field] == 0;
+	}
+
+	if (first ||
 	    width != userdata->last_width[field] ||
 	    height != userdata->last_height[field]) {
-		size_t cbcr_width = width / 2;
-
 		// We changed resolution since last use of this texture, so we need to create
 		// a new object. Note that this each card has its own PBOFrameAllocator,
 		// we don't need to worry about these flip-flopping between resolutions.
-		glBindTexture(GL_TEXTURE_2D, userdata->tex_cbcr[field]);
-		check_error();
-		glTexImage2D(GL_TEXTURE_2D, 0, GL_RG8, cbcr_width, height, 0, GL_RG, GL_UNSIGNED_BYTE, nullptr);
-		check_error();
-		glBindTexture(GL_TEXTURE_2D, userdata->tex_y[field]);
-		check_error();
-		glTexImage2D(GL_TEXTURE_2D, 0, GL_R8, width, height, 0, GL_RED, GL_UNSIGNED_BYTE, nullptr);
-		check_error();
+		if (global_flags.ten_bit_input) {
+			const size_t v210_width = v210Converter::get_minimum_v210_texture_width(width);
+
+			glBindTexture(GL_TEXTURE_2D, userdata->tex_v210[field]);
+			check_error();
+			glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB10_A2, v210_width, height, 0, GL_RGBA, GL_UNSIGNED_INT_2_10_10_10_REV, nullptr);
+			check_error();
+			glBindTexture(GL_TEXTURE_2D, userdata->tex_444[field]);
+			check_error();
+			glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB10_A2, width, height, 0, GL_RGBA, GL_UNSIGNED_INT_2_10_10_10_REV, nullptr);
+			check_error();
+		} else {
+			size_t cbcr_width = width / 2;
+
+			glBindTexture(GL_TEXTURE_2D, userdata->tex_cbcr[field]);
+			check_error();
+			glTexImage2D(GL_TEXTURE_2D, 0, GL_RG8, cbcr_width, height, 0, GL_RG, GL_UNSIGNED_BYTE, nullptr);
+			check_error();
+			glBindTexture(GL_TEXTURE_2D, userdata->tex_y[field]);
+			check_error();
+			glTexImage2D(GL_TEXTURE_2D, 0, GL_R8, width, height, 0, GL_RED, GL_UNSIGNED_BYTE, nullptr);
+			check_error();
+		}
 		userdata->last_width[field] = width;
 		userdata->last_height[field] = height;
 	}
 }
 
-void upload_texture(GLuint tex, GLuint width, GLuint height, GLuint stride, bool interlaced_stride, GLenum format, GLintptr offset)
+void upload_texture(GLuint tex, GLuint width, GLuint height, GLuint stride, bool interlaced_stride, GLenum format, GLenum type, GLintptr offset)
 {
 	if (interlaced_stride) {
 		stride *= 2;
@@ -121,7 +141,7 @@ void upload_texture(GLuint tex, GLuint width, GLuint height, GLuint stride, bool
 		check_error();
 	}
 
-	glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, width, height, format, GL_UNSIGNED_BYTE, BUFFER_OFFSET(offset));
+	glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, width, height, format, type, BUFFER_OFFSET(offset));
 	check_error();
 	glBindTexture(GL_TEXTURE_2D, 0);
 	check_error();
@@ -252,6 +272,24 @@ Mixer::Mixer(const QSurfaceFormat &format, unsigned num_cards)
 
 	chroma_subsampler.reset(new ChromaSubsampler(resource_pool.get()));
 
+	if (global_flags.ten_bit_input) {
+		if (!v210Converter::has_hardware_support()) {
+			fprintf(stderr, "ERROR: --ten-bit-input requires support for OpenGL compute shaders\n");
+			fprintf(stderr, "       (OpenGL 4.3, or GL_ARB_compute_shader + GL_ARB_shader_image_load_store).\n");
+			exit(1);
+		}
+		v210_converter.reset(new v210Converter());
+
+		// These are all the widths listed in the Blackmagic SDK documentation
+		// (section 2.7.3, “Display Modes”).
+		v210_converter->precompile_shader(720);
+		v210_converter->precompile_shader(1280);
+		v210_converter->precompile_shader(1920);
+		v210_converter->precompile_shader(2048);
+		v210_converter->precompile_shader(3840);
+		v210_converter->precompile_shader(4096);
+	}
+
 	timecode_renderer.reset(new TimecodeRenderer(resource_pool.get(), global_flags.width, global_flags.height));
 	display_timecode_in_stream = global_flags.display_timecode_in_stream;
 	display_timecode_on_stdout = global_flags.display_timecode_on_stdout;
@@ -308,6 +346,7 @@ void Mixer::configure_card(unsigned card_index, CaptureInterface *capture, bool 
 	}
 	while (!card->new_frames.empty()) card->new_frames.pop_front();
 	card->last_timecode = -1;
+	card->capture->set_pixel_format(global_flags.ten_bit_input ? PixelFormat_10BitYCbCr : PixelFormat_8BitYCbCr);
 	card->capture->configure_card();
 
 	// NOTE: start_bm_capture() happens in thread_func().
@@ -450,7 +489,7 @@ void Mixer::bm_frame(unsigned card_index, uint16_t timecode,
 
 	card->last_timecode = timecode;
 
-	size_t expected_length = video_format.width * (video_format.height + video_format.extra_lines_top + video_format.extra_lines_bottom) * 2;
+	size_t expected_length = video_format.stride * (video_format.height + video_format.extra_lines_top + video_format.extra_lines_bottom);
 	if (video_frame.len - video_offset == 0 ||
 	    video_frame.len - video_offset != expected_length) {
 		if (video_frame.len != 0) {
@@ -503,9 +542,9 @@ void Mixer::bm_frame(unsigned card_index, uint16_t timecode,
 	RefCountedFrame frame(video_frame);
 
 	// Upload the textures.
-	size_t cbcr_width = video_format.width / 2;
-	size_t cbcr_offset = video_offset / 2;
-	size_t y_offset = video_frame.size / 2 + video_offset / 2;
+	const size_t cbcr_width = video_format.width / 2;
+	const size_t cbcr_offset = video_offset / 2;
+	const size_t y_offset = video_frame.size / 2 + video_offset / 2;
 
 	for (unsigned field = 0; field < num_fields; ++field) {
 		// Put the actual texture upload in a lambda that is executed in the main thread.
@@ -516,23 +555,31 @@ void Mixer::bm_frame(unsigned card_index, uint16_t timecode,
 		// Note that this means we must hold on to the actual frame data in <userdata>
 		// until the upload command is run, but we hold on to <frame> much longer than that
 		// (in fact, all the way until we no longer use the texture in rendering).
-		auto upload_func = [field, video_format, y_offset, cbcr_offset, cbcr_width, interlaced_stride, userdata]() {
+		auto upload_func = [this, field, video_format, y_offset, video_offset, cbcr_offset, cbcr_width, interlaced_stride, userdata]() {
 			unsigned field_start_line;
 			if (field == 1) {
 				field_start_line = video_format.second_field_start;
 			} else {
 				field_start_line = video_format.extra_lines_top;
 			}
-			size_t field_y_start = y_offset + video_format.width * field_start_line;
-			size_t field_cbcr_start = cbcr_offset + cbcr_width * field_start_line * sizeof(uint16_t);
 
 			ensure_texture_resolution(userdata, field, video_format.width, video_format.height);
 
 			glBindBuffer(GL_PIXEL_UNPACK_BUFFER, userdata->pbo);
 			check_error();
 
-			upload_texture(userdata->tex_y[field], video_format.width, video_format.height, video_format.width, interlaced_stride, GL_RED, field_y_start);
-			upload_texture(userdata->tex_cbcr[field], cbcr_width, video_format.height, cbcr_width * sizeof(uint16_t), interlaced_stride, GL_RG, field_cbcr_start);
+			if (global_flags.ten_bit_input) {
+				size_t field_start = video_offset + video_format.stride * field_start_line;
+				upload_texture(userdata->tex_v210[field], video_format.stride / sizeof(uint32_t), video_format.height, video_format.stride, interlaced_stride, GL_RGBA, GL_UNSIGNED_INT_2_10_10_10_REV, field_start);
+				v210_converter->convert(userdata->tex_v210[field], userdata->tex_444[field], video_format.width, video_format.height);
+			} else {
+				size_t field_y_start = y_offset + video_format.width * field_start_line;
+				size_t field_cbcr_start = cbcr_offset + cbcr_width * field_start_line * sizeof(uint16_t);
+
+				// Make up our own strides, since we are interleaving.
+				upload_texture(userdata->tex_y[field], video_format.width, video_format.height, video_format.width, interlaced_stride, GL_RED, GL_UNSIGNED_BYTE, field_y_start);
+				upload_texture(userdata->tex_cbcr[field], cbcr_width, video_format.height, cbcr_width * sizeof(uint16_t), interlaced_stride, GL_RG, GL_UNSIGNED_BYTE, field_cbcr_start);
+			}
 
 			glBindBuffer(GL_PIXEL_UNPACK_BUFFER, 0);
 			check_error();

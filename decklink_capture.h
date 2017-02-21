@@ -7,6 +7,7 @@
 #include <functional>
 #include <map>
 #include <memory>
+#include <set>
 #include <string>
 
 #include "DeckLinkAPIModes.h"
@@ -93,6 +94,14 @@ public:
 	void set_video_mode(uint32_t video_mode_id) override;
 	uint32_t get_current_video_mode() const override { return current_video_mode; }
 
+	std::set<bmusb::PixelFormat> get_available_pixel_formats() const override {
+		return std::set<bmusb::PixelFormat>{ bmusb::PixelFormat_8BitYCbCr, bmusb::PixelFormat_10BitYCbCr };
+	}
+	void set_pixel_format(bmusb::PixelFormat pixel_format) override;
+	bmusb::PixelFormat get_current_pixel_format() const override {
+		return current_pixel_format;
+	}
+
 	std::map<uint32_t, std::string> get_available_video_inputs() const override { return video_inputs; }
 	void set_video_input(uint32_t video_input_id) override;
 	uint32_t get_current_video_input() const override { return current_video_input; }
@@ -132,6 +141,7 @@ private:
 
 	std::map<uint32_t, bmusb::VideoMode> video_modes;
 	BMDDisplayMode current_video_mode;
+	bmusb::PixelFormat current_pixel_format = bmusb::PixelFormat_8BitYCbCr;
 
 	std::map<uint32_t, std::string> video_inputs;
 	BMDVideoConnection current_video_input;
