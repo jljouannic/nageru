@@ -20,6 +20,7 @@
 
 #include "audio_mixer.h"
 #include "context.h"
+#include "context_menus.h"
 #include "flags.h"
 #include "mainwindow.h"
 #include "mixer.h"
@@ -132,76 +133,20 @@ void GLWidget::show_live_context_menu(const QPoint &pos)
 
 	// Add a submenu for selecting output card, with an action for each card.
 	QMenu card_submenu;
-	QActionGroup card_group(&card_submenu);
-
-	int current_card = global_mixer->get_output_card_index();
-
-	QAction *none_action = new QAction("None", &card_group);
-	none_action->setCheckable(true);
-	if (current_card == -1) {
-		none_action->setChecked(true);
-	}
-	none_action->setData(QList<QVariant>{"output_card", -1});
-	card_submenu.addAction(none_action);
-
-	unsigned num_cards = global_mixer->get_num_cards();
-	for (unsigned card_index = 0; card_index < num_cards; ++card_index) {
-		if (!global_mixer->card_can_be_used_as_output(card_index)) {
-			continue;
-		}
-
-		QString description(QString::fromStdString(global_mixer->get_output_card_description(card_index)));
-		QAction *action = new QAction(description, &card_group);
-		action->setCheckable(true);
-		if (current_card == int(card_index)) {
-			action->setChecked(true);
-		}
-		action->setData(QList<QVariant>{"output_card", card_index});
-		card_submenu.addAction(action);
-	}
-
-	card_submenu.setTitle("HDMI/SDI output");
+	fill_hdmi_sdi_output_device_menu(&card_submenu);
+	card_submenu.setTitle("HDMI/SDI output device");
 	menu.addMenu(&card_submenu);
 
 	// Add a submenu for choosing the output resolution. Since this is
 	// card-dependent, it is disabled if we haven't chosen a card
 	// (but it's still there so that the user will know it exists).
 	QMenu resolution_submenu;
-	QActionGroup resolution_group(&resolution_submenu);
-	if (current_card == -1) {
-		resolution_submenu.setEnabled(false);
-	} else {
-		uint32_t current_mode = global_mixer->get_output_video_mode();
-		map<uint32_t, bmusb::VideoMode> video_modes = global_mixer->get_available_output_video_modes();
-		for (const auto &mode : video_modes) {
-			QString description(QString::fromStdString(mode.second.name));
-			QAction *action = new QAction(description, &resolution_group);
-			action->setCheckable(true);
-			if (current_mode == mode.first) {
-				action->setChecked(true);
-			}
-			action->setData(QList<QVariant>{"video_mode", mode.first});
-			resolution_submenu.addAction(action);
-		}
-	}
-
+	fill_hdmi_sdi_output_resolution_menu(&resolution_submenu);
 	resolution_submenu.setTitle("HDMI/SDI output resolution");
 	menu.addMenu(&resolution_submenu);
 
-	// Show the menu and look at the result.
-	QAction *selected_item = menu.exec(global_pos);
-	if (selected_item != nullptr) {
-		QList<QVariant> selected = selected_item->data().toList();
-		if (selected[0].toString() == "output_card") {
-			unsigned output_card = selected[1].toUInt(nullptr);
-			global_mixer->set_output_card(output_card);
-		} else if (selected[0].toString() == "video_mode") {
-			uint32_t mode = selected[1].toUInt(nullptr);
-			global_mixer->set_output_video_mode(mode);
-		} else {
-			assert(false);
-		}
-	}
+	// Show the menu; if there's an action selected, it will deal with it itself.
+	menu.exec(global_pos);
 }
 
 void GLWidget::show_preview_context_menu(unsigned signal_num, const QPoint &pos)

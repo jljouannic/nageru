@@ -47,6 +47,7 @@
 #include "aboutdialog.h"
 #include "alsa_pool.h"
 #include "clickable_label.h"
+#include "context_menus.h"
 #include "correlation_meter.h"
 #include "disk_space_estimator.h"
 #include "ellipsis_label.h"
@@ -214,6 +215,11 @@ MainWindow::MainWindow()
 	} else {
 		ui->x264_bitrate_action->setEnabled(false);
 	}
+
+	connect(ui->video_menu, &QMenu::aboutToShow, [this]{
+		fill_hdmi_sdi_output_device_menu(ui->hdmi_sdi_output_device_menu);
+		fill_hdmi_sdi_output_resolution_menu(ui->hdmi_sdi_output_resolution_menu);
+	});
 
 	// Hook up the transition buttons. (Keyboard shortcuts are set in set_transition_names().)
 	// TODO: Make them dynamic.

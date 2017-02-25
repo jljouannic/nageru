@@ -17,7 +17,7 @@ LDLIBS=$(shell pkg-config --libs $(PKG_MODULES)) -pthread -lva -lva-drm -lva-x11
 OBJS_WITH_MOC = glwidget.o mainwindow.o vumeter.o lrameter.o compression_reduction_meter.o correlation_meter.o aboutdialog.o input_mapping_dialog.o midi_mapping_dialog.o nonlinear_fader.o
 OBJS += $(OBJS_WITH_MOC)
 OBJS += $(OBJS_WITH_MOC:.o=.moc.o) ellipsis_label.moc.o clickable_label.moc.o
-OBJS += vu_common.o piecewise_interpolator.o main.o
+OBJS += context_menus.o vu_common.o piecewise_interpolator.o main.o
 OBJS += midi_mapper.o midi_mapping.pb.o
 
 # Mixer objects

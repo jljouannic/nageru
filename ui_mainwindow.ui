@@ -1393,7 +1393,7 @@
      <height>23</height>
     </rect>
    </property>
-   <widget class="QMenu" name="menuWhat">
+   <widget class="QMenu" name="video_menu">
     <property name="title">
      <string>&amp;Video</string>
     </property>
@@ -1404,8 +1404,22 @@
      <addaction name="timecode_stream_action"/>
      <addaction name="timecode_stdout_action"/>
     </widget>
+    <widget class="QMenu" name="hdmi_sdi_output_device_menu">
+     <property name="title">
+      <string>HDMI/SDI output device</string>
+     </property>
+     <addaction name="separator"/>
+    </widget>
+    <widget class="QMenu" name="hdmi_sdi_output_resolution_menu">
+     <property name="title">
+      <string>HDMI/SDI output resolution</string>
+     </property>
+     <addaction name="separator"/>
+    </widget>
     <addaction name="cut_action"/>
     <addaction name="x264_bitrate_action"/>
+    <addaction name="hdmi_sdi_output_device_menu"/>
+    <addaction name="hdmi_sdi_output_resolution_menu"/>
     <addaction name="display_timecode_menu"/>
     <addaction name="exit_action"/>
    </widget>
@@ -1426,7 +1440,7 @@
     <addaction name="input_mapping_action"/>
     <addaction name="midi_mapping_action"/>
    </widget>
-   <addaction name="menuWhat"/>
+   <addaction name="video_menu"/>
    <addaction name="menu_Audio"/>
    <addaction name="menu_Help"/>
   </widget>
