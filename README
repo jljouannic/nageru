@@ -39,7 +39,7 @@ Nageru is in beta stage. It currently needs:
    are driven through the “bmusb” driver, using libusb-1.0. If you want
    zerocopy USB, you need libusb 1.0.21 or newer, as well as a recent
    kernel (4.6.0 or newer). Zerocopy USB helps not only for performance,
-   but also for stability.
+   but also for stability. You need at least version 0.6.0.
 
  - Movit, my GPU-based video filter library (https://movit.sesse.net).
    You will need at least version 1.5.0 (unreleased; get it from git).
@@ -80,7 +80,7 @@ Exceptions as of February 2017:
 
   - You will need Movit from git; stretch only has 1.4.0.
 
-  - You will need bmusb from git; stretch only has 0.5.4.
+  - You will need bmusb from experimental; stretch only has 0.5.4.
 
 The patches/ directory contains a patch that helps zita-resampler performance.
 It is meant for upstream, but was not in at the time Nageru was released.
