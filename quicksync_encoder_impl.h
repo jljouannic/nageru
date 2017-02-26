@@ -12,6 +12,7 @@
 #include <string>
 #include <stack>
 #include <thread>
+#include <unordered_map>
 
 #include "audio_encoder.h"
 #include "defs.h"
@@ -55,11 +56,41 @@ private:
 		std::vector<float> audio;
 		int64_t pts, dts, duration;
 		ReceivedTimestamps received_ts;
+		std::vector<size_t> ref_display_frame_numbers;
 	};
 	struct PendingFrame {
 		RefCountedGLsync fence;
 		std::vector<RefCountedFrame> input_frames;
 		int64_t pts, duration;
+	};
+	struct GLSurface {
+		VASurfaceID src_surface, ref_surface;
+		VABufferID coded_buf;
+
+		VAImage surface_image;
+		GLuint y_tex, cbcr_tex;
+
+		// Only if use_zerocopy == true.
+		EGLImage y_egl_image, cbcr_egl_image;
+
+		// Only if use_zerocopy == false.
+		GLuint pbo;
+		uint8_t *y_ptr, *cbcr_ptr;
+		size_t y_offset, cbcr_offset;
+
+		// Surfaces can be busy (have refcount > 0) for a variety of
+		// reasons: First of all because they belong to a frame that's
+		// under encoding. But also reference frames take refcounts;
+		// while a frame is being encoded, all its reference frames
+		// also have increased refcounts so that they are not dropped.
+		// Similarly, just being in <reference_frames> increases the
+		// refcount. Until it is back to zero, the surface cannot be given
+		// out for encoding another frame. Use release_gl_surface()
+		// to reduce the refcount, which will free the surface if
+		// the refcount reaches zero.
+		//
+		// Protected by storage_task_queue_mutex.
+		int refcount = 0;
 	};
 
 	void open_output_file(const std::string &filename);
@@ -71,12 +102,12 @@ private:
 	                  int frame_type, int64_t pts, int64_t dts, int64_t duration);
 	void storage_task_thread();
 	void storage_task_enqueue(storage_task task);
-	void save_codeddata(storage_task task);
+	void save_codeddata(GLSurface *surf, storage_task task);
 	int render_packedsequence();
 	int render_packedpicture();
 	void render_packedslice();
 	int render_sequence();
-	int render_picture(int frame_type, int display_frame_num, int gop_start_display_frame_num);
+	int render_picture(GLSurface *surf, int frame_type, int display_frame_num, int gop_start_display_frame_num);
 	void sps_rbsp(bitstream *bs);
 	void pps_rbsp(bitstream *bs);
 	int build_packed_pic_buffer(unsigned char **header_buffer);
@@ -91,9 +122,11 @@ private:
 	void va_close_display(VADisplay va_dpy);
 	int setup_encode();
 	void release_encode();
-	void update_ReferenceFrames(int frame_type);
+	void update_ReferenceFrames(int current_display_frame, int frame_type);
 	void update_RefPicList_P(VAPictureH264 RefPicList0_P[MAX_NUM_REF2]);
 	void update_RefPicList_B(VAPictureH264 RefPicList0_B[MAX_NUM_REF2], VAPictureH264 RefPicList1_B[MAX_NUM_REF2]);
+	GLSurface *allocate_gl_surface();
+	void release_gl_surface(size_t display_frame_num);
 
 	bool is_shutdown = false;
 	bool has_released_gl_resources = false;
@@ -104,7 +137,6 @@ private:
 
 	std::mutex storage_task_queue_mutex;
 	std::condition_variable storage_task_queue_changed;
-	int srcsurface_status[SURFACE_NUM];  // protected by storage_task_queue_mutex
 	std::queue<storage_task> storage_task_queue;  // protected by storage_task_queue_mutex
 	bool storage_thread_should_quit = false;  // protected by storage_task_queue_mutex
 
@@ -139,22 +171,12 @@ private:
 	VAConfigAttrib config_attrib[VAConfigAttribTypeMax];
 	int config_attrib_num = 0, enc_packed_header_idx;
 
-	struct GLSurface {
-		VASurfaceID src_surface, ref_surface;
-		VABufferID coded_buf;
-
-		VAImage surface_image;
-		GLuint y_tex, cbcr_tex;
-
-		// Only if use_zerocopy == true.
-		EGLImage y_egl_image, cbcr_egl_image;
-
-		// Only if use_zerocopy == false.
-		GLuint pbo;
-		uint8_t *y_ptr, *cbcr_ptr;
-		size_t y_offset, cbcr_offset;
-	};
 	GLSurface gl_surfaces[SURFACE_NUM];
+
+	// For all frames in encoding (refcount > 0), a pointer into gl_surfaces
+	// for the surface used for that frame. Protected by storage_task_queue_mutex.
+	// The key is display frame number.
+	std::unordered_map<size_t, GLSurface *> surface_for_frame;
 
 	VAConfigID config_id;
 	VAContextID context_id;
@@ -162,7 +184,12 @@ private:
 	VAEncPictureParameterBufferH264 pic_param;
 	VAEncSliceParameterBufferH264 slice_param;
 	VAPictureH264 CurrentCurrPic;
-	VAPictureH264 ReferenceFrames[MAX_NUM_REF1];
+
+	struct ReferenceFrame {
+		VAPictureH264 pic;
+		int display_number;  // To track reference counts.
+	};
+	std::deque<ReferenceFrame> reference_frames;
 
 	// Static quality settings.
 	static constexpr unsigned int frame_bitrate = 15000000 / 60;  // Doesn't really matter; only initial_qp does.
@@ -181,8 +208,7 @@ private:
 	int ip_period = 3;
 
 	int rc_mode = -1;
-	unsigned int current_frame_num = 0;
-	unsigned int numShortTerm = 0;
+	unsigned int current_ref_frame_num = 0;  // Encoding frame order within this GOP, sans B-frames.
 
 	int frame_width;
 	int frame_height;

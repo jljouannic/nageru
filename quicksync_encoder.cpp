@@ -113,10 +113,6 @@ static constexpr int rc_default_modes[] = {  // Priority list of modes.
     VA_RC_NONE,
 };
 
-/* thread to save coded data */
-#define SRC_SURFACE_FREE        0
-#define SRC_SURFACE_IN_ENCODING 1
-    
 using namespace std;
 
 // Supposedly vaRenderPicture() is supposed to destroy the buffer implicitly,
@@ -1025,24 +1021,35 @@ static void sort_two(T *begin, T *end, const T &pivot, const C &less_than)
 	sort(middle, end, less_than);
 }
 
-void QuickSyncEncoderImpl::update_ReferenceFrames(int frame_type)
+void QuickSyncEncoderImpl::update_ReferenceFrames(int current_display_frame, int frame_type)
 {
-    int i;
-    
     if (frame_type == FRAME_B)
         return;
 
+    pic_param.CurrPic.frame_idx = current_ref_frame_num;
+
     CurrentCurrPic.flags = VA_PICTURE_H264_SHORT_TERM_REFERENCE;
-    numShortTerm++;
-    if (numShortTerm > num_ref_frames)
-        numShortTerm = num_ref_frames;
-    for (i=numShortTerm-1; i>0; i--)
-        ReferenceFrames[i] = ReferenceFrames[i-1];
-    ReferenceFrames[0] = CurrentCurrPic;
+    unique_lock<mutex> lock(storage_task_queue_mutex);
+
+    // Insert the new frame at the start of the reference queue.
+    reference_frames.push_front(ReferenceFrame{ CurrentCurrPic, current_display_frame });
+
+    if (reference_frames.size() > num_ref_frames)
+    {
+        // The back frame frame is no longer in use as a reference.
+        int display_frame_num = reference_frames.back().display_number;
+        assert(surface_for_frame.count(display_frame_num));
+        release_gl_surface(display_frame_num);
+        reference_frames.pop_back();
+    }
+
+    // Mark this frame in use as a reference.
+    assert(surface_for_frame.count(current_display_frame));
+    ++surface_for_frame[current_display_frame]->refcount;
     
-    current_frame_num++;
-    if (current_frame_num > MaxFrameNum)
-        current_frame_num = 0;
+    current_ref_frame_num++;
+    if (current_ref_frame_num > MaxFrameNum)
+        current_ref_frame_num = 0;
 }
 
 
@@ -1052,8 +1059,10 @@ void QuickSyncEncoderImpl::update_RefPicList_P(VAPictureH264 RefPicList0_P[MAX_N
         return a.frame_idx > b.frame_idx;
     };
 
-    memcpy(RefPicList0_P, ReferenceFrames, numShortTerm * sizeof(VAPictureH264));
-    sort(&RefPicList0_P[0], &RefPicList0_P[numShortTerm], descending_by_frame_idx);
+    for (size_t i = 0; i < reference_frames.size(); ++i) {
+        RefPicList0_P[i] = reference_frames[i].pic;
+    }
+    sort(&RefPicList0_P[0], &RefPicList0_P[reference_frames.size()], descending_by_frame_idx);
 }
 
 void QuickSyncEncoderImpl::update_RefPicList_B(VAPictureH264 RefPicList0_B[MAX_NUM_REF2], VAPictureH264 RefPicList1_B[MAX_NUM_REF2])
@@ -1065,11 +1074,12 @@ void QuickSyncEncoderImpl::update_RefPicList_B(VAPictureH264 RefPicList0_B[MAX_N
         return a.TopFieldOrderCnt > b.TopFieldOrderCnt;
     };
 
-    memcpy(RefPicList0_B, ReferenceFrames, numShortTerm * sizeof(VAPictureH264));
-    sort_two(&RefPicList0_B[0], &RefPicList0_B[numShortTerm], CurrentCurrPic, ascending_by_top_field_order_cnt);
-
-    memcpy(RefPicList1_B, ReferenceFrames, numShortTerm * sizeof(VAPictureH264));
-    sort_two(&RefPicList1_B[0], &RefPicList1_B[numShortTerm], CurrentCurrPic, descending_by_top_field_order_cnt);
+    for (size_t i = 0; i < reference_frames.size(); ++i) {
+        RefPicList0_B[i] = reference_frames[i].pic;
+        RefPicList1_B[i] = reference_frames[i].pic;
+    }
+    sort_two(&RefPicList0_B[0], &RefPicList0_B[reference_frames.size()], CurrentCurrPic, ascending_by_top_field_order_cnt);
+    sort_two(&RefPicList1_B[0], &RefPicList1_B[reference_frames.size()], CurrentCurrPic, descending_by_top_field_order_cnt);
 }
 
 
@@ -1171,21 +1181,23 @@ static int calc_poc(int pic_order_cnt_lsb, int frame_type)
     return TopFieldOrderCnt;
 }
 
-int QuickSyncEncoderImpl::render_picture(int frame_type, int display_frame_num, int gop_start_display_frame_num)
+int QuickSyncEncoderImpl::render_picture(GLSurface *surf, int frame_type, int display_frame_num, int gop_start_display_frame_num)
 {
     VABufferID pic_param_buf;
     VAStatus va_status;
-    int i = 0;
+    size_t i = 0;
 
-    pic_param.CurrPic.picture_id = gl_surfaces[display_frame_num % SURFACE_NUM].ref_surface;
-    pic_param.CurrPic.frame_idx = current_frame_num;
+    pic_param.CurrPic.picture_id = surf->ref_surface;
+    pic_param.CurrPic.frame_idx = current_ref_frame_num;
     pic_param.CurrPic.flags = 0;
     pic_param.CurrPic.TopFieldOrderCnt = calc_poc((display_frame_num - gop_start_display_frame_num) % MaxPicOrderCntLsb, frame_type);
     pic_param.CurrPic.BottomFieldOrderCnt = pic_param.CurrPic.TopFieldOrderCnt;
     CurrentCurrPic = pic_param.CurrPic;
 
-    memcpy(pic_param.ReferenceFrames, ReferenceFrames, numShortTerm*sizeof(VAPictureH264));
-    for (i = numShortTerm; i < MAX_NUM_REF1; i++) {
+    for (i = 0; i < reference_frames.size(); i++) {
+        pic_param.ReferenceFrames[i] = reference_frames[i].pic;
+    }
+    for (i = reference_frames.size(); i < MAX_NUM_REF1; i++) {
         pic_param.ReferenceFrames[i].picture_id = VA_INVALID_SURFACE;
         pic_param.ReferenceFrames[i].flags = VA_PICTURE_H264_INVALID;
     }
@@ -1194,8 +1206,8 @@ int QuickSyncEncoderImpl::render_picture(int frame_type, int display_frame_num, 
     pic_param.pic_fields.bits.reference_pic_flag = (frame_type != FRAME_B);
     pic_param.pic_fields.bits.entropy_coding_mode_flag = h264_entropy_mode;
     pic_param.pic_fields.bits.deblocking_filter_control_present_flag = 1;
-    pic_param.frame_num = current_frame_num;
-    pic_param.coded_buf = gl_surfaces[display_frame_num % SURFACE_NUM].coded_buf;
+    pic_param.frame_num = current_ref_frame_num;  // FIXME: is this correct?
+    pic_param.coded_buf = surf->coded_buf;
     pic_param.last_picture = false;  // FIXME
     pic_param.pic_init_qp = initial_qp;
 
@@ -1381,20 +1393,20 @@ int QuickSyncEncoderImpl::render_slice(int encoding_frame_num, int display_frame
 
 
 
-void QuickSyncEncoderImpl::save_codeddata(storage_task task)
+void QuickSyncEncoderImpl::save_codeddata(GLSurface *surf, storage_task task)
 {    
 	VACodedBufferSegment *buf_list = NULL;
 	VAStatus va_status;
 
 	string data;
 
-	va_status = vaMapBuffer(va_dpy, gl_surfaces[task.display_order % SURFACE_NUM].coded_buf, (void **)(&buf_list));
+	va_status = vaMapBuffer(va_dpy, surf->coded_buf, (void **)(&buf_list));
 	CHECK_VASTATUS(va_status, "vaMapBuffer");
 	while (buf_list != NULL) {
 		data.append(reinterpret_cast<const char *>(buf_list->buf), buf_list->size);
 		buf_list = (VACodedBufferSegment *) buf_list->next;
 	}
-	vaUnmapBuffer(va_dpy, gl_surfaces[task.display_order % SURFACE_NUM].coded_buf);
+	vaUnmapBuffer(va_dpy, surf->coded_buf);
 
 	static int frameno = 0;
 	print_latency("Current QuickSync latency (video inputs → disk mux):",
@@ -1438,6 +1450,7 @@ void QuickSyncEncoderImpl::storage_task_thread()
 	pthread_setname_np(pthread_self(), "QS_Storage");
 	for ( ;; ) {
 		storage_task current;
+		GLSurface *surf;
 		{
 			// wait until there's an encoded frame  
 			unique_lock<mutex> lock(storage_task_queue_mutex);
@@ -1445,19 +1458,28 @@ void QuickSyncEncoderImpl::storage_task_thread()
 			if (storage_thread_should_quit && storage_task_queue.empty()) return;
 			current = move(storage_task_queue.front());
 			storage_task_queue.pop();
+			surf = surface_for_frame[current.display_order];
+			assert(surf != nullptr);
 		}
 
 		VAStatus va_status;
+
+		size_t display_order = current.display_order;
+		vector<size_t> ref_display_frame_numbers = move(current.ref_display_frame_numbers);
 	   
 		// waits for data, then saves it to disk.
-		va_status = vaSyncSurface(va_dpy, gl_surfaces[current.display_order % SURFACE_NUM].src_surface);
+		va_status = vaSyncSurface(va_dpy, surf->src_surface);
 		CHECK_VASTATUS(va_status, "vaSyncSurface");
-		save_codeddata(move(current));
+		save_codeddata(surf, move(current));
 
+		// Unlock the frame, and all its references.
 		{
 			unique_lock<mutex> lock(storage_task_queue_mutex);
-			srcsurface_status[current.display_order % SURFACE_NUM] = SRC_SURFACE_FREE;
-			storage_task_queue_changed.notify_all();
+			release_gl_surface(display_order);
+
+			for (size_t frame_num : ref_display_frame_numbers) {
+				release_gl_surface(frame_num);
+			}
 		}
 	}
 }
@@ -1525,9 +1547,6 @@ QuickSyncEncoderImpl::QuickSyncEncoderImpl(const std::string &filename, movit::R
 	init_va(va_display);
 	setup_encode();
 
-	// No frames are ready yet.
-	memset(srcsurface_status, SRC_SURFACE_FREE, sizeof(srcsurface_status));
-	    
 	memset(&seq_param, 0, sizeof(seq_param));
 	memset(&pic_param, 0, sizeof(pic_param));
 	memset(&slice_param, 0, sizeof(slice_param));
@@ -1554,23 +1573,51 @@ QuickSyncEncoderImpl::~QuickSyncEncoderImpl()
 	release_gl_resources();
 }
 
+QuickSyncEncoderImpl::GLSurface *QuickSyncEncoderImpl::allocate_gl_surface()
+{
+	for (unsigned i = 0; i < SURFACE_NUM; ++i) {
+		if (gl_surfaces[i].refcount == 0) {
+			++gl_surfaces[i].refcount;
+			return &gl_surfaces[i];
+		}
+	}
+	return nullptr;
+}
+
+void QuickSyncEncoderImpl::release_gl_surface(size_t display_frame_num)
+{
+	assert(surface_for_frame.count(display_frame_num));
+	QuickSyncEncoderImpl::GLSurface *surf = surface_for_frame[display_frame_num];
+	if (--surf->refcount == 0) {
+		assert(surface_for_frame.count(display_frame_num));
+		surface_for_frame.erase(display_frame_num);
+		storage_task_queue_changed.notify_all();
+	}
+}
+
 bool QuickSyncEncoderImpl::begin_frame(GLuint *y_tex, GLuint *cbcr_tex)
 {
 	assert(!is_shutdown);
+	GLSurface *surf = nullptr;
 	{
 		// Wait until this frame slot is done encoding.
 		unique_lock<mutex> lock(storage_task_queue_mutex);
-		if (srcsurface_status[current_storage_frame % SURFACE_NUM] != SRC_SURFACE_FREE) {
-			fprintf(stderr, "Warning: Slot %d (for frame %d) is still encoding, rendering has to wait for H.264 encoder\n",
-				current_storage_frame % SURFACE_NUM, current_storage_frame);
+		surf = allocate_gl_surface();
+		if (surf == nullptr) {
+			fprintf(stderr, "Warning: No free slots for frame %d, rendering has to wait for H.264 encoder\n",
+				current_storage_frame);
+			storage_task_queue_changed.wait(lock, [this, &surf]{
+				if (storage_thread_should_quit)
+					return true;
+				surf = allocate_gl_surface();
+				return surf != nullptr;
+			});
 		}
-		storage_task_queue_changed.wait(lock, [this]{ return storage_thread_should_quit || (srcsurface_status[current_storage_frame % SURFACE_NUM] == SRC_SURFACE_FREE); });
-		srcsurface_status[current_storage_frame % SURFACE_NUM] = SRC_SURFACE_IN_ENCODING;
 		if (storage_thread_should_quit) return false;
+		assert(surf != nullptr);
+		surface_for_frame[current_storage_frame] = surf;
 	}
 
-	//*fbo = fbos[current_storage_frame % SURFACE_NUM];
-  	GLSurface *surf = &gl_surfaces[current_storage_frame % SURFACE_NUM];
 	*y_tex = surf->y_tex;
 	*cbcr_tex = surf->cbcr_tex;
 
@@ -1636,7 +1683,12 @@ RefCountedGLsync QuickSyncEncoderImpl::end_frame(int64_t pts, int64_t duration, 
 	assert(!is_shutdown);
 
 	if (!use_zerocopy) {
-		GLSurface *surf = &gl_surfaces[current_storage_frame % SURFACE_NUM];
+		GLSurface *surf;
+		{
+			unique_lock<mutex> lock(storage_task_queue_mutex);
+			surf = surface_for_frame[current_storage_frame];
+			assert(surf != nullptr);
+		}
 
 		glPixelStorei(GL_PACK_ROW_LENGTH, 0);
 		check_error();
@@ -1776,8 +1828,12 @@ void QuickSyncEncoderImpl::encode_thread_func()
 			reorder_buffer.erase(quicksync_display_frame_num);
 
 			if (frame_type == FRAME_IDR) {
-				numShortTerm = 0;
-				current_frame_num = 0;
+				// Release any reference frames from the previous GOP.
+				for (const ReferenceFrame &frame : reference_frames) {
+					release_gl_surface(frame.display_number);
+				}
+				reference_frames.clear();
+				current_ref_frame_num = 0;
 				gop_start_display_frame_num = quicksync_display_frame_num;
 			}
 
@@ -1862,7 +1918,12 @@ void QuickSyncEncoderImpl::pass_frame(QuickSyncEncoderImpl::PendingFrame frame, 
 	// Release back any input frames we needed to render this frame.
 	frame.input_frames.clear();
 
-	GLSurface *surf = &gl_surfaces[display_frame_num % SURFACE_NUM];
+	GLSurface *surf;
+	{
+		unique_lock<mutex> lock(storage_task_queue_mutex);
+		surf = surface_for_frame[display_frame_num];
+		assert(surf != nullptr);
+	}
 	uint8_t *data = reinterpret_cast<uint8_t *>(surf->y_ptr);
 	if (global_flags.uncompressed_video_to_http) {
 		add_packet_for_uncompressed_frame(pts, duration, data);
@@ -1876,7 +1937,12 @@ void QuickSyncEncoderImpl::encode_frame(QuickSyncEncoderImpl::PendingFrame frame
 {
 	const ReceivedTimestamps received_ts = find_received_timestamp(frame.input_frames);
 
-	GLSurface *surf = &gl_surfaces[display_frame_num % SURFACE_NUM];
+	GLSurface *surf;
+	{
+		unique_lock<mutex> lock(storage_task_queue_mutex);
+		surf = surface_for_frame[display_frame_num];
+		assert(surf != nullptr);
+	}
 	VAStatus va_status;
 
 	if (use_zerocopy) {
@@ -1912,19 +1978,34 @@ void QuickSyncEncoderImpl::encode_frame(QuickSyncEncoderImpl::PendingFrame frame
 		// SPS/PPS before each IDR frame, but rather put it into the
 		// codec extradata (formatted differently?).
 		render_sequence();
-		render_picture(frame_type, display_frame_num, gop_start_display_frame_num);
+		render_picture(surf, frame_type, display_frame_num, gop_start_display_frame_num);
 		if (h264_packedheader) {
 			render_packedsequence();
 			render_packedpicture();
 		}
 	} else {
 		//render_sequence();
-		render_picture(frame_type, display_frame_num, gop_start_display_frame_num);
+		render_picture(surf, frame_type, display_frame_num, gop_start_display_frame_num);
 	}
 	render_slice(encoding_frame_num, display_frame_num, gop_start_display_frame_num, frame_type);
 
 	va_status = vaEndPicture(va_dpy, context_id);
 	CHECK_VASTATUS(va_status, "vaEndPicture");
+
+	update_ReferenceFrames(display_frame_num, frame_type);
+
+	vector<size_t> ref_display_frame_numbers;
+
+	// Lock the references for this frame; otherwise, they could be
+	// rendered to before this frame is done encoding.
+	{
+		unique_lock<mutex> lock(storage_task_queue_mutex);
+		for (const ReferenceFrame &frame : reference_frames) {
+			assert(surface_for_frame.count(frame.display_number));
+			++surface_for_frame[frame.display_number]->refcount;
+			ref_display_frame_numbers.push_back(frame.display_number);
+		}
+	}
 
 	// so now the data is done encoding (well, async job kicked off)...
 	// we send that to the storage thread
@@ -1935,9 +2016,8 @@ void QuickSyncEncoderImpl::encode_frame(QuickSyncEncoderImpl::PendingFrame frame
 	tmp.dts = dts;
 	tmp.duration = duration;
 	tmp.received_ts = received_ts;
+	tmp.ref_display_frame_numbers = move(ref_display_frame_numbers);
 	storage_task_enqueue(move(tmp));
-
-	update_ReferenceFrames(frame_type);
 }
 
 // Proxy object.
