@@ -65,10 +65,13 @@ PBOFrameAllocator::PBOFrameAllocator(size_t frame_size, GLuint width, GLuint hei
 			if (global_flags.ten_bit_input) {
 				const size_t v210_width = v210Converter::get_minimum_v210_texture_width(width);
 
+				// Seemingly we need to set the minification filter even though
+				// shader image loads don't use them, or NVIDIA will just give us
+				// zero back.
 				glBindTexture(GL_TEXTURE_2D, userdata[i].tex_v210[field]);
 				check_error();
-				// Don't care about texture parameters, we're only going to read it
-				// from the compute shader anyway.
+				glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+				check_error();
 				if (field == 0) {
 					glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB10_A2, v210_width, height, 0, GL_RGBA, GL_UNSIGNED_INT_2_10_10_10_REV, NULL);
 					check_error();
