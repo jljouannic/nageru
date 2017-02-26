@@ -92,7 +92,8 @@ private:
 	int setup_encode();
 	void release_encode();
 	void update_ReferenceFrames(int frame_type);
-	int update_RefPicList(int frame_type);
+	void update_RefPicList_P(VAPictureH264 RefPicList0_P[MAX_NUM_REF2]);
+	void update_RefPicList_B(VAPictureH264 RefPicList0_B[MAX_NUM_REF2], VAPictureH264 RefPicList1_B[MAX_NUM_REF2]);
 
 	bool is_shutdown = false;
 	bool has_released_gl_resources = false;
@@ -161,7 +162,7 @@ private:
 	VAEncPictureParameterBufferH264 pic_param;
 	VAEncSliceParameterBufferH264 slice_param;
 	VAPictureH264 CurrentCurrPic;
-	VAPictureH264 ReferenceFrames[MAX_NUM_REF1], RefPicList0_P[MAX_NUM_REF2], RefPicList0_B[MAX_NUM_REF2], RefPicList1_B[MAX_NUM_REF2];
+	VAPictureH264 ReferenceFrames[MAX_NUM_REF1];
 
 	// Static quality settings.
 	static constexpr unsigned int frame_bitrate = 15000000 / 60;  // Doesn't really matter; only initial_qp does.

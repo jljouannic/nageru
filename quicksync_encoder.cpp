@@ -1046,30 +1046,30 @@ void QuickSyncEncoderImpl::update_ReferenceFrames(int frame_type)
 }
 
 
-int QuickSyncEncoderImpl::update_RefPicList(int frame_type)
+void QuickSyncEncoderImpl::update_RefPicList_P(VAPictureH264 RefPicList0_P[MAX_NUM_REF2])
 {
     const auto descending_by_frame_idx = [](const VAPictureH264 &a, const VAPictureH264 &b) {
         return a.frame_idx > b.frame_idx;
     };
+
+    memcpy(RefPicList0_P, ReferenceFrames, numShortTerm * sizeof(VAPictureH264));
+    sort(&RefPicList0_P[0], &RefPicList0_P[numShortTerm], descending_by_frame_idx);
+}
+
+void QuickSyncEncoderImpl::update_RefPicList_B(VAPictureH264 RefPicList0_B[MAX_NUM_REF2], VAPictureH264 RefPicList1_B[MAX_NUM_REF2])
+{
     const auto ascending_by_top_field_order_cnt = [](const VAPictureH264 &a, const VAPictureH264 &b) {
         return a.TopFieldOrderCnt < b.TopFieldOrderCnt;
     };
     const auto descending_by_top_field_order_cnt = [](const VAPictureH264 &a, const VAPictureH264 &b) {
         return a.TopFieldOrderCnt > b.TopFieldOrderCnt;
     };
-    
-    if (frame_type == FRAME_P) {
-        memcpy(RefPicList0_P, ReferenceFrames, numShortTerm * sizeof(VAPictureH264));
-        sort(&RefPicList0_P[0], &RefPicList0_P[numShortTerm], descending_by_frame_idx);
-    } else if (frame_type == FRAME_B) {
-        memcpy(RefPicList0_B, ReferenceFrames, numShortTerm * sizeof(VAPictureH264));
-        sort_two(&RefPicList0_B[0], &RefPicList0_B[numShortTerm], CurrentCurrPic, ascending_by_top_field_order_cnt);
 
-        memcpy(RefPicList1_B, ReferenceFrames, numShortTerm * sizeof(VAPictureH264));
-        sort_two(&RefPicList1_B[0], &RefPicList1_B[numShortTerm], CurrentCurrPic, descending_by_top_field_order_cnt);
-    }
-    
-    return 0;
+    memcpy(RefPicList0_B, ReferenceFrames, numShortTerm * sizeof(VAPictureH264));
+    sort_two(&RefPicList0_B[0], &RefPicList0_B[numShortTerm], CurrentCurrPic, ascending_by_top_field_order_cnt);
+
+    memcpy(RefPicList1_B, ReferenceFrames, numShortTerm * sizeof(VAPictureH264));
+    sort_two(&RefPicList1_B[0], &RefPicList1_B[numShortTerm], CurrentCurrPic, descending_by_top_field_order_cnt);
 }
 
 
@@ -1322,8 +1322,6 @@ int QuickSyncEncoderImpl::render_slice(int encoding_frame_num, int display_frame
     VAStatus va_status;
     int i;
 
-    update_RefPicList(frame_type);
-    
     /* one frame, one slice */
     slice_param.macroblock_address = 0;
     slice_param.num_macroblocks = frame_width_mbaligned * frame_height_mbaligned/(16*16); /* Measured by MB */
@@ -1332,6 +1330,9 @@ int QuickSyncEncoderImpl::render_slice(int encoding_frame_num, int display_frame
         if (encoding_frame_num != 0)
             ++slice_param.idr_pic_id;
     } else if (frame_type == FRAME_P) {
+        VAPictureH264 RefPicList0_P[MAX_NUM_REF2];
+        update_RefPicList_P(RefPicList0_P);
+
         int refpiclist0_max = h264_maxref & 0xffff;
         memcpy(slice_param.RefPicList0, RefPicList0_P, refpiclist0_max*sizeof(VAPictureH264));
 
@@ -1340,6 +1341,9 @@ int QuickSyncEncoderImpl::render_slice(int encoding_frame_num, int display_frame
             slice_param.RefPicList0[i].flags = VA_PICTURE_H264_INVALID;
         }
     } else if (frame_type == FRAME_B) {
+        VAPictureH264 RefPicList0_B[MAX_NUM_REF2], RefPicList1_B[MAX_NUM_REF2];
+        update_RefPicList_B(RefPicList0_B, RefPicList1_B);
+
         int refpiclist0_max = h264_maxref & 0xffff;
         int refpiclist1_max = (h264_maxref >> 16) & 0xffff;
 
