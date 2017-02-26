@@ -54,10 +54,15 @@ PBOFrameAllocator::PBOFrameAllocator(size_t frame_size, GLuint width, GLuint hei
 			glGenTextures(2, userdata[i].tex_cbcr);
 			check_error();
 		}
+
 		userdata[i].last_width[0] = width;
 		userdata[i].last_height[0] = height;
+		userdata[i].last_v210_width[0] = 0;
+
 		userdata[i].last_width[1] = 0;
 		userdata[i].last_height[1] = 0;
+		userdata[i].last_v210_width[1] = 0;
+
 		userdata[i].last_interlaced = false;
 		userdata[i].last_has_signal = false;
 		userdata[i].last_is_connected = false;
@@ -73,6 +78,7 @@ PBOFrameAllocator::PBOFrameAllocator(size_t frame_size, GLuint width, GLuint hei
 				glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
 				check_error();
 				if (field == 0) {
+					userdata[i].last_v210_width[0] = v210_width;
 					glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB10_A2, v210_width, height, 0, GL_RGBA, GL_UNSIGNED_INT_2_10_10_10_REV, NULL);
 					check_error();
 				}

@@ -78,7 +78,7 @@ void insert_new_frame(RefCountedFrame frame, unsigned field_num, bool interlaced
 	}
 }
 
-void ensure_texture_resolution(PBOFrameAllocator::Userdata *userdata, unsigned field, unsigned width, unsigned height)
+void ensure_texture_resolution(PBOFrameAllocator::Userdata *userdata, unsigned field, unsigned width, unsigned height, unsigned v210_width)
 {
 	bool first;
 	if (global_flags.ten_bit_input) {
@@ -94,12 +94,6 @@ void ensure_texture_resolution(PBOFrameAllocator::Userdata *userdata, unsigned f
 		// a new object. Note that this each card has its own PBOFrameAllocator,
 		// we don't need to worry about these flip-flopping between resolutions.
 		if (global_flags.ten_bit_input) {
-			const size_t v210_width = v210Converter::get_minimum_v210_texture_width(width);
-
-			glBindTexture(GL_TEXTURE_2D, userdata->tex_v210[field]);
-			check_error();
-			glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB10_A2, v210_width, height, 0, GL_RGBA, GL_UNSIGNED_INT_2_10_10_10_REV, nullptr);
-			check_error();
 			glBindTexture(GL_TEXTURE_2D, userdata->tex_444[field]);
 			check_error();
 			glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB10_A2, width, height, 0, GL_RGBA, GL_UNSIGNED_INT_2_10_10_10_REV, nullptr);
@@ -118,6 +112,15 @@ void ensure_texture_resolution(PBOFrameAllocator::Userdata *userdata, unsigned f
 		}
 		userdata->last_width[field] = width;
 		userdata->last_height[field] = height;
+	}
+	if (global_flags.ten_bit_input &&
+	    (first || v210_width != userdata->last_v210_width[field])) {
+		// Same as above; we need to recreate the texture.
+		glBindTexture(GL_TEXTURE_2D, userdata->tex_v210[field]);
+		check_error();
+		glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB10_A2, v210_width, height, 0, GL_RGBA, GL_UNSIGNED_INT_2_10_10_10_REV, nullptr);
+		check_error();
+		userdata->last_v210_width[field] = v210_width;
 	}
 }
 
@@ -563,14 +566,16 @@ void Mixer::bm_frame(unsigned card_index, uint16_t timecode,
 				field_start_line = video_format.extra_lines_top;
 			}
 
-			ensure_texture_resolution(userdata, field, video_format.width, video_format.height);
+			// For 8-bit input, v210_width will be nonsensical but not used.
+			size_t v210_width = video_format.stride / sizeof(uint32_t);
+			ensure_texture_resolution(userdata, field, video_format.width, video_format.height, v210_width);
 
 			glBindBuffer(GL_PIXEL_UNPACK_BUFFER, userdata->pbo);
 			check_error();
 
 			if (global_flags.ten_bit_input) {
 				size_t field_start = video_offset + video_format.stride * field_start_line;
-				upload_texture(userdata->tex_v210[field], video_format.stride / sizeof(uint32_t), video_format.height, video_format.stride, interlaced_stride, GL_RGBA, GL_UNSIGNED_INT_2_10_10_10_REV, field_start);
+				upload_texture(userdata->tex_v210[field], v210_width, video_format.height, video_format.stride, interlaced_stride, GL_RGBA, GL_UNSIGNED_INT_2_10_10_10_REV, field_start);
 				v210_converter->convert(userdata->tex_v210[field], userdata->tex_444[field], video_format.width, video_format.height);
 			} else {
 				size_t field_y_start = y_offset + video_format.width * field_start_line;

@@ -34,6 +34,7 @@ public:
 		GLuint tex_y[2], tex_cbcr[2];  // For 8-bit.
 		GLuint tex_v210[2], tex_444[2];  // For 10-bit.
 		GLuint last_width[2], last_height[2];
+		GLuint last_v210_width[2];  // For 10-bit.
 		bool last_interlaced, last_has_signal, last_is_connected;
 		unsigned last_frame_rate_nom, last_frame_rate_den;
 	};
