@@ -473,20 +473,24 @@ void DeckLinkCapture::stop_dequeue_thread()
 
 void DeckLinkCapture::set_video_mode(uint32_t video_mode_id)
 {
-	if (input->PauseStreams() != S_OK) {
-		fprintf(stderr, "PauseStreams failed\n");
-		exit(1);
-	}
-	if (input->FlushStreams() != S_OK) {
-		fprintf(stderr, "FlushStreams failed\n");
-		exit(1);
+	if (running) {
+		if (input->PauseStreams() != S_OK) {
+			fprintf(stderr, "PauseStreams failed\n");
+			exit(1);
+		}
+		if (input->FlushStreams() != S_OK) {
+			fprintf(stderr, "FlushStreams failed\n");
+			exit(1);
+		}
 	}
 
 	set_video_mode_no_restart(video_mode_id);
 
-	if (input->StartStreams() != S_OK) {
-		fprintf(stderr, "StartStreams failed\n");
-		exit(1);
+	if (running) {
+		if (input->StartStreams() != S_OK) {
+			fprintf(stderr, "StartStreams failed\n");
+			exit(1);
+		}
 	}
 }
 
