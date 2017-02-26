@@ -110,6 +110,8 @@ void GLWidget::paintGL()
 	check_error();
 	frame.setup_chain();
 	check_error();
+	glDisable(GL_FRAMEBUFFER_SRGB);
+	check_error();
 	frame.chain->render_to_screen();
 	check_error();
 
