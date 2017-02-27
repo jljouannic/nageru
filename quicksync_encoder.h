@@ -51,8 +51,8 @@ class ResourcePool;
 }  // namespace movit
 
 // This is just a pimpl, because including anything X11-related in a .h file
-// tends to trip up Qt. All the real logic is in QuickSyncEncoderImpl, defined in the
-// .cpp file.
+// tends to trip up Qt. All the real logic is in QuickSyncEncoderImpl,
+// defined in quicksync_encoder_impl.h.
 class QuickSyncEncoder {
 public:
         QuickSyncEncoder(const std::string &filename, movit::ResourcePool *resource_pool, QSurface *surface, const std::string &va_display, int width, int height, AVOutputFormat *oformat, X264Encoder *x264_encoder, DiskSpaceEstimator *disk_space_estimator);
