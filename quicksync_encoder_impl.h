@@ -35,8 +35,8 @@ public:
 	QuickSyncEncoderImpl(const std::string &filename, movit::ResourcePool *resource_pool, QSurface *surface, const std::string &va_display, int width, int height, AVOutputFormat *oformat, X264Encoder *x264_encoder, DiskSpaceEstimator *disk_space_estimator);
 	~QuickSyncEncoderImpl();
 	void add_audio(int64_t pts, std::vector<float> audio);
-	bool begin_frame(GLuint *y_tex, GLuint *cbcr_tex);
-	RefCountedGLsync end_frame(int64_t pts, int64_t duration, const std::vector<RefCountedFrame> &input_frames);
+	bool begin_frame(int64_t pts, int64_t duration, const std::vector<RefCountedFrame> &input_frames, GLuint *y_tex, GLuint *cbcr_tex);
+	RefCountedGLsync end_frame();
 	void shutdown();
 	void release_gl_resources();
 	void set_stream_mux(Mux *mux)
@@ -146,6 +146,7 @@ private:
 
 	int current_storage_frame;
 
+	PendingFrame current_video_frame;  // Used only between begin_frame() and end_frame().
 	std::queue<PendingFrame> pending_video_frames;  // under frame_queue_mutex
 	movit::ResourcePool *resource_pool;
 	QSurface *surface;

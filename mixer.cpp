@@ -1000,8 +1000,9 @@ void Mixer::render_one_frame(int64_t duration)
 	theme_main_chain.setup_chain();
 	//theme_main_chain.chain->enable_phase_timing(true);
 
+	const int64_t av_delay = lrint(global_flags.audio_queue_length_ms * 0.001 * TIMEBASE);  // Corresponds to the delay in ResamplingQueue.
 	GLuint y_tex, cbcr_tex;
-	bool got_frame = video_encoder->begin_frame(&y_tex, &cbcr_tex);
+	bool got_frame = video_encoder->begin_frame(pts_int + av_delay, duration, theme_main_chain.input_frames, &y_tex, &cbcr_tex);
 	assert(got_frame);
 
 	// Render main chain.
@@ -1031,8 +1032,7 @@ void Mixer::render_one_frame(int64_t duration)
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
 
-	const int64_t av_delay = lrint(global_flags.audio_queue_length_ms * 0.001 * TIMEBASE);  // Corresponds to the delay in ResamplingQueue.
-	RefCountedGLsync fence = video_encoder->end_frame(pts_int + av_delay, duration, theme_main_chain.input_frames);
+	RefCountedGLsync fence = video_encoder->end_frame();
 
 	// The live frame just shows the RGBA texture we just rendered.
 	// It owns rgba_tex now.

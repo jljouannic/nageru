@@ -1595,7 +1595,7 @@ void QuickSyncEncoderImpl::release_gl_surface(size_t display_frame_num)
 	}
 }
 
-bool QuickSyncEncoderImpl::begin_frame(GLuint *y_tex, GLuint *cbcr_tex)
+bool QuickSyncEncoderImpl::begin_frame(int64_t pts, int64_t duration, const vector<RefCountedFrame> &input_frames, GLuint *y_tex, GLuint *cbcr_tex)
 {
 	assert(!is_shutdown);
 	GLSurface *surf = nullptr;
@@ -1669,6 +1669,8 @@ bool QuickSyncEncoderImpl::begin_frame(GLuint *y_tex, GLuint *cbcr_tex)
 		glEGLImageTargetTexture2DOES(GL_TEXTURE_2D, surf->cbcr_egl_image);
 	}
 
+	current_video_frame = PendingFrame{ {}, input_frames, pts, duration };
+
 	return true;
 }
 
@@ -1678,7 +1680,7 @@ void QuickSyncEncoderImpl::add_audio(int64_t pts, vector<float> audio)
 	file_audio_encoder->encode_audio(audio, pts + global_delay());
 }
 
-RefCountedGLsync QuickSyncEncoderImpl::end_frame(int64_t pts, int64_t duration, const vector<RefCountedFrame> &input_frames)
+RefCountedGLsync QuickSyncEncoderImpl::end_frame()
 {
 	assert(!is_shutdown);
 
@@ -1722,7 +1724,8 @@ RefCountedGLsync QuickSyncEncoderImpl::end_frame(int64_t pts, int64_t duration, 
 
 	{
 		unique_lock<mutex> lock(frame_queue_mutex);
-		pending_video_frames.push(PendingFrame{ fence, input_frames, pts, duration });
+		current_video_frame.fence = fence;
+		pending_video_frames.push(move(current_video_frame));
 		++current_storage_frame;
 	}
 	frame_queue_nonempty.notify_all();
@@ -2032,14 +2035,14 @@ void QuickSyncEncoder::add_audio(int64_t pts, vector<float> audio)
 	impl->add_audio(pts, audio);
 }
 
-bool QuickSyncEncoder::begin_frame(GLuint *y_tex, GLuint *cbcr_tex)
+bool QuickSyncEncoder::begin_frame(int64_t pts, int64_t duration, const vector<RefCountedFrame> &input_frames, GLuint *y_tex, GLuint *cbcr_tex)
 {
-	return impl->begin_frame(y_tex, cbcr_tex);
+	return impl->begin_frame(pts, duration, input_frames, y_tex, cbcr_tex);
 }
 
-RefCountedGLsync QuickSyncEncoder::end_frame(int64_t pts, int64_t duration, const vector<RefCountedFrame> &input_frames)
+RefCountedGLsync QuickSyncEncoder::end_frame()
 {
-	return impl->end_frame(pts, duration, input_frames);
+	return impl->end_frame();
 }
 
 void QuickSyncEncoder::shutdown()

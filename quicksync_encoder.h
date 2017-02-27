@@ -60,8 +60,8 @@ public:
 
 	void set_stream_mux(Mux *mux);  // Does not take ownership. Must be called unless x264 is used for the stream.
 	void add_audio(int64_t pts, std::vector<float> audio);
-	bool begin_frame(GLuint *y_tex, GLuint *cbcr_tex);
-	RefCountedGLsync end_frame(int64_t pts, int64_t duration, const std::vector<RefCountedFrame> &input_frames);
+	bool begin_frame(int64_t pts, int64_t duration, const std::vector<RefCountedFrame> &input_frames, GLuint *y_tex, GLuint *cbcr_tex);
+	RefCountedGLsync end_frame();
 	void shutdown();  // Blocking. Does not require an OpenGL context.
 	void release_gl_resources();  // Requires an OpenGL context. Must be run after shutdown.
 	int64_t global_delay() const;  // So we never get negative dts.

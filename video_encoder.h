@@ -40,8 +40,18 @@ public:
 	~VideoEncoder();
 
 	void add_audio(int64_t pts, std::vector<float> audio);
-	bool begin_frame(GLuint *y_tex, GLuint *cbcr_tex);
-	RefCountedGLsync end_frame(int64_t pts, int64_t duration, const std::vector<RefCountedFrame> &input_frames);
+
+	// Allocate a frame to render into. The returned two textures
+	// are yours to render into (build them into an FBO).
+	// Call end_frame() when you're done.
+	bool begin_frame(int64_t pts, int64_t duration, const std::vector<RefCountedFrame> &input_frames, GLuint *y_tex, GLuint *cbcr_tex);
+
+	// Call after you are done rendering into the frame; at this point,
+	// y_tex and cbcr_tex will be assumed done, and handed over to the
+	// encoder. The returned fence is purely a convenience; you do not
+	// need to use it for anything, but it's useful if you wanted to set
+	// one anyway.
+	RefCountedGLsync end_frame();
 
 	// Does a cut of the disk stream immediately ("frame" is used for the filename only).
 	void do_cut(int frame);

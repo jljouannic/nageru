@@ -120,17 +120,17 @@ void VideoEncoder::add_audio(int64_t pts, std::vector<float> audio)
 	stream_audio_encoder->encode_audio(audio, pts + quicksync_encoder->global_delay());
 }
 
-bool VideoEncoder::begin_frame(GLuint *y_tex, GLuint *cbcr_tex)
+bool VideoEncoder::begin_frame(int64_t pts, int64_t duration, const std::vector<RefCountedFrame> &input_frames, GLuint *y_tex, GLuint *cbcr_tex)
 {
 	lock_guard<mutex> lock(qs_mu);
 	qs_needing_cleanup.clear();  // Since we have an OpenGL context here, and are called regularly.
-	return quicksync_encoder->begin_frame(y_tex, cbcr_tex);
+	return quicksync_encoder->begin_frame(pts, duration, input_frames, y_tex, cbcr_tex);
 }
 
-RefCountedGLsync VideoEncoder::end_frame(int64_t pts, int64_t duration, const std::vector<RefCountedFrame> &input_frames)
+RefCountedGLsync VideoEncoder::end_frame()
 {
 	lock_guard<mutex> lock(qs_mu);
-	return quicksync_encoder->end_frame(pts, duration, input_frames);
+	return quicksync_encoder->end_frame();
 }
 
 void VideoEncoder::open_output_stream()
