@@ -166,17 +166,13 @@ void QueueLengthPolicy::update_policy(unsigned queue_length)
 		been_at_safe_point_since_last_starvation = false;
 		return;
 	}
-	if (queue_length >= 1) {
-		if (queue_length >= safe_queue_length) {
-			been_at_safe_point_since_last_starvation = true;
-		}
-		if (++frames_with_at_least_one >= 1000 && safe_queue_length > 1) {
-			--safe_queue_length;
-			fprintf(stderr, "Card %u: Spare frames for more than 1000 frames, reducing safe limit to %u frame(s)\n",
-				card_index, safe_queue_length);
-			frames_with_at_least_one = 0;
-		}
-	} else {
+	if (queue_length >= safe_queue_length) {
+		been_at_safe_point_since_last_starvation = true;
+	}
+	if (++frames_with_at_least_one >= 1000 && safe_queue_length > 1) {
+		--safe_queue_length;
+		fprintf(stderr, "Card %u: Spare frames for more than 1000 frames, reducing safe limit to %u frame(s)\n",
+			card_index, safe_queue_length);
 		frames_with_at_least_one = 0;
 	}
 }
