@@ -17,7 +17,10 @@ public:
 	// Subsamples chroma (packed Cb and Cr) 2x2 to yield chroma suitable for
 	// NV12 (semiplanar 4:2:0). Chroma positioning is left/center (H.264 convention).
 	// width and height are the dimensions (in pixels) of the input texture.
-	void subsample_chroma(GLuint cbcr_tex, unsigned width, unsigned height, GLuint dst_tex);
+	//
+	// You can get two equal copies if you'd like; just set dst2_tex to a texture
+	// number and it will receive an exact copy of what goes into dst_tex.
+	void subsample_chroma(GLuint cbcr_tex, unsigned width, unsigned height, GLuint dst_tex, GLuint dst2_tex = 0);
 
 	// Subsamples and interleaves luma and chroma to give 4:2:2 packed Y'CbCr (UYVY).
 	// Chroma positioning is left (H.264 convention).

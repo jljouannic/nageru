@@ -274,10 +274,12 @@ int EffectChain_finalize(lua_State* L)
 		output_ycbcr_format.num_levels = 256;
 
 		chain->add_ycbcr_output(inout_format, OUTPUT_ALPHA_FORMAT_POSTMULTIPLIED, output_ycbcr_format, YCBCR_OUTPUT_SPLIT_Y_AND_CBCR);
+		chain->add_ycbcr_output(inout_format, OUTPUT_ALPHA_FORMAT_POSTMULTIPLIED, output_ycbcr_format, YCBCR_OUTPUT_INTERLEAVED);  // Add a copy where we'll only be using the Y component.
 		chain->set_dither_bits(8);
 		chain->set_output_origin(OUTPUT_ORIGIN_TOP_LEFT);
+	} else {
+		chain->add_output(inout_format, OUTPUT_ALPHA_FORMAT_POSTMULTIPLIED);
 	}
-	chain->add_output(inout_format, OUTPUT_ALPHA_FORMAT_POSTMULTIPLIED);
 
 	chain->finalize();
 	return 0;

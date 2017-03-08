@@ -203,10 +203,26 @@ Mixer::Mixer(const QSurfaceFormat &format, unsigned num_cards)
 	inout_format.color_space = COLORSPACE_sRGB;
 	inout_format.gamma_curve = GAMMA_sRGB;
 
-	// Display chain; shows the live output produced by the main chain (its RGBA version).
+	// Matches the 4:2:0 format created by the main chain.
+	YCbCrFormat ycbcr_format;
+	ycbcr_format.chroma_subsampling_x = 2;
+	ycbcr_format.chroma_subsampling_y = 2;
+	if (global_flags.ycbcr_rec709_coefficients) {
+		ycbcr_format.luma_coefficients = YCBCR_REC_709;
+	} else {
+		ycbcr_format.luma_coefficients = YCBCR_REC_601;
+	}
+	ycbcr_format.full_range = false;
+	ycbcr_format.num_levels = 256;
+	ycbcr_format.cb_x_position = 0.0f;
+	ycbcr_format.cr_x_position = 0.0f;
+	ycbcr_format.cb_y_position = 0.5f;
+	ycbcr_format.cr_y_position = 0.5f;
+
+	// Display chain; shows the live output produced by the main chain (or rather, a copy of it).
 	display_chain.reset(new EffectChain(global_flags.width, global_flags.height, resource_pool.get()));
 	check_error();
-	display_input = new FlatInput(inout_format, FORMAT_RGB, GL_UNSIGNED_BYTE, global_flags.width, global_flags.height);  // FIXME: GL_UNSIGNED_BYTE is really wrong.
+	display_input = new YCbCrInput(inout_format, ycbcr_format, global_flags.width, global_flags.height, YCBCR_INPUT_SPLIT_Y_AND_CBCR);
 	display_chain->add_input(display_input);
 	display_chain->add_output(inout_format, OUTPUT_ALPHA_FORMAT_POSTMULTIPLIED);
 	display_chain->set_dither_bits(0);  // Don't bother.
@@ -1001,10 +1017,16 @@ void Mixer::render_one_frame(int64_t duration)
 	bool got_frame = video_encoder->begin_frame(pts_int + av_delay, duration, theme_main_chain.input_frames, &y_tex, &cbcr_tex);
 	assert(got_frame);
 
-	// Render main chain.
+	// Render main chain. We take an extra copy of the created outputs,
+	// so that we can display it back to the screen later (it's less memory
+	// bandwidth than writing and reading back an RGBA texture, even at 16-bit).
+	// Ideally, we'd like to avoid taking copies and just use the main textures
+	// for display as well, but if they're used for zero-copy Quick Sync encoding
+	// (the default case), they're just views into VA-API memory and must be
+	// unmapped during encoding, so we can't use them for display, unfortunately.
 	GLuint cbcr_full_tex = resource_pool->create_2d_texture(GL_RG8, global_flags.width, global_flags.height);
-	GLuint rgba_tex = resource_pool->create_2d_texture(GL_RGB565, global_flags.width, global_flags.height);  // Saves texture bandwidth, although dithering gets messed up.
-	GLuint fbo = resource_pool->create_fbo(y_tex, cbcr_full_tex, rgba_tex);
+	GLuint y_copy_tex = resource_pool->create_2d_texture(GL_R8, global_flags.width, global_flags.height);
+	GLuint fbo = resource_pool->create_fbo(y_tex, cbcr_full_tex, y_copy_tex);
 	check_error();
 	chain->render_to_fbo(fbo, global_flags.width, global_flags.height);
 
@@ -1015,31 +1037,38 @@ void Mixer::render_one_frame(int64_t duration)
 
 	resource_pool->release_fbo(fbo);
 
-	chroma_subsampler->subsample_chroma(cbcr_full_tex, global_flags.width, global_flags.height, cbcr_tex);
+	GLuint cbcr_copy_tex = resource_pool->create_2d_texture(GL_RG8, global_flags.width / 2, global_flags.height / 2);
+	chroma_subsampler->subsample_chroma(cbcr_full_tex, global_flags.width, global_flags.height, cbcr_tex, cbcr_copy_tex);
 	if (output_card_index != -1) {
 		cards[output_card_index].output->send_frame(y_tex, cbcr_full_tex, theme_main_chain.input_frames, pts_int, duration);
 	}
 	resource_pool->release_2d_texture(cbcr_full_tex);
 
-	// Set the right state for rgba_tex.
+	// Set the right state for the Y' and CbCr copies.
 	glBindFramebuffer(GL_FRAMEBUFFER, 0);
-	glBindTexture(GL_TEXTURE_2D, rgba_tex);
+	glBindTexture(GL_TEXTURE_2D, y_copy_tex);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+
+	glBindTexture(GL_TEXTURE_2D, cbcr_copy_tex);
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
 
 	RefCountedGLsync fence = video_encoder->end_frame();
 
-	// The live frame just shows the RGBA texture we just rendered.
-	// It owns rgba_tex now.
+	// The live frame pieces the Y'CbCr texture copies back into RGB and displays them.
+	// It owns y_copy_tex and cbcr_copy_tex now.
 	DisplayFrame live_frame;
 	live_frame.chain = display_chain.get();
-	live_frame.setup_chain = [this, rgba_tex]{
-		display_input->set_texture_num(rgba_tex);
+	live_frame.setup_chain = [this, y_copy_tex, cbcr_copy_tex]{
+		display_input->set_texture_num(0, y_copy_tex);
+		display_input->set_texture_num(1, cbcr_copy_tex);
 	};
 	live_frame.ready_fence = fence;
 	live_frame.input_frames = {};
-	live_frame.temp_textures = { rgba_tex };
+	live_frame.temp_textures = { y_copy_tex, cbcr_copy_tex };
 	output_channel[OUTPUT_LIVE].output_frame(live_frame);
 
 	// Set up preview and any additional channels.

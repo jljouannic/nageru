@@ -94,9 +94,10 @@ ChromaSubsampler::ChromaSubsampler(ResourcePool *resource_pool)
 		"#version 130 \n"
 		"in vec2 tc0, tc1; \n"
 		"uniform sampler2D cbcr_tex; \n"
-		"out vec4 FragColor; \n"
+		"out vec4 FragColor, FragColor2; \n"
 		"void main() { \n"
 		"    FragColor = 0.5 * (texture(cbcr_tex, tc0) + texture(cbcr_tex, tc1)); \n"
+		"    FragColor2 = FragColor; \n"
 		"} \n";
 	cbcr_program_num = resource_pool->compile_glsl_program(cbcr_vert_shader, cbcr_frag_shader, frag_shader_outputs);
 	check_error();
@@ -181,7 +182,7 @@ ChromaSubsampler::~ChromaSubsampler()
 	check_error();
 }
 
-void ChromaSubsampler::subsample_chroma(GLuint cbcr_tex, unsigned width, unsigned height, GLuint dst_tex)
+void ChromaSubsampler::subsample_chroma(GLuint cbcr_tex, unsigned width, unsigned height, GLuint dst_tex, GLuint dst2_tex)
 {
 	GLuint vao;
 	glGenVertexArrays(1, &vao);
@@ -191,7 +192,12 @@ void ChromaSubsampler::subsample_chroma(GLuint cbcr_tex, unsigned width, unsigne
 	check_error();
 
 	// Extract Cb/Cr.
-	GLuint fbo = resource_pool->create_fbo(dst_tex);
+	GLuint fbo;
+	if (dst2_tex <= 0) {
+		fbo = resource_pool->create_fbo(dst_tex);
+	} else {
+		fbo = resource_pool->create_fbo(dst_tex, dst2_tex);
+	}
 	glBindFramebuffer(GL_FRAMEBUFFER, fbo);
 	glViewport(0, 0, width/2, height/2);
 	check_error();

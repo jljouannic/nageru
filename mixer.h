@@ -47,8 +47,8 @@ class v210Converter;
 namespace movit {
 class Effect;
 class EffectChain;
-class FlatInput;
 class ResourcePool;
+class YCbCrInput;
 }  // namespace movit
 
 // For any card that's not the master (where we pick out the frames as they
@@ -383,7 +383,7 @@ private:
 	std::atomic<bool> display_timecode_on_stdout{false};
 
 	// Effects part of <display_chain>. Owned by <display_chain>.
-	movit::FlatInput *display_input;
+	movit::YCbCrInput *display_input;
 
 	int64_t pts_int = 0;  // In TIMEBASE units.
 	unsigned frame_num = 0;
