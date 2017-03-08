@@ -20,6 +20,7 @@ extern "C" {
 #include <libavformat/avformat.h>
 }
 
+using namespace movit;
 using namespace std;
 using namespace std::chrono;
 
@@ -58,11 +59,12 @@ X264Encoder::~X264Encoder()
 	encoder_thread.join();
 }
 
-void X264Encoder::add_frame(int64_t pts, int64_t duration, const uint8_t *data, const ReceivedTimestamps &received_ts)
+void X264Encoder::add_frame(int64_t pts, int64_t duration, YCbCrLumaCoefficients ycbcr_coefficients, const uint8_t *data, const ReceivedTimestamps &received_ts)
 {
 	QueuedFrame qf;
 	qf.pts = pts;
 	qf.duration = duration;
+	qf.ycbcr_coefficients = ycbcr_coefficients;
 	qf.received_ts = received_ts;
 
 	{
@@ -265,18 +267,36 @@ void X264Encoder::encode_frame(X264Encoder::QueuedFrame qf)
 	// See if we have a new bitrate to change to.
 	unsigned new_rate = new_bitrate_kbit.exchange(0);  // Read and clear.
 	if (new_rate != 0) {
-		if (speed_control) {
-			speed_control->set_config_override_function([new_rate](x264_param_t *param) {
-				param->rc.i_bitrate = new_rate;
-				update_vbv_settings(param);
-			});
+		bitrate_override_func = [new_rate](x264_param_t *param) {
+			param->rc.i_bitrate = new_rate;
+			update_vbv_settings(param);
+		};
+	}
+
+	auto ycbcr_coefficients_override_func = [qf](x264_param_t *param) {
+		if (qf.ycbcr_coefficients == YCBCR_REC_709) {
+			param->vui.i_colmatrix = 1;  // BT.709.
 		} else {
-			x264_param_t param;
-			x264_encoder_parameters(x264, &param);
-			param.rc.i_bitrate = new_rate;
-			update_vbv_settings(&param);
-			x264_encoder_reconfig(x264, &param);
+			assert(qf.ycbcr_coefficients == YCBCR_REC_601);
+			param->vui.i_colmatrix = 6;  // BT.601/SMPTE 170M.
 		}
+	};
+
+	if (speed_control) {
+		speed_control->set_config_override_function([this, ycbcr_coefficients_override_func](x264_param_t *param) {
+			if (bitrate_override_func) {
+				bitrate_override_func(param);
+			}
+			ycbcr_coefficients_override_func(param);
+		});
+	} else {
+		x264_param_t param;
+		x264_encoder_parameters(x264, &param);
+		if (bitrate_override_func) {
+			bitrate_override_func(&param);
+		}
+		ycbcr_coefficients_override_func(&param);
+		x264_encoder_reconfig(x264, &param);
 	}
 
 	if (speed_control) {

@@ -6,6 +6,7 @@
 #define _VIDEO_ENCODER_H
 
 #include <epoxy/gl.h>
+#include <movit/image_format.h>
 #include <stdbool.h>
 #include <stdint.h>
 #include <atomic>
@@ -44,7 +45,7 @@ public:
 	// Allocate a frame to render into. The returned two textures
 	// are yours to render into (build them into an FBO).
 	// Call end_frame() when you're done.
-	bool begin_frame(int64_t pts, int64_t duration, const std::vector<RefCountedFrame> &input_frames, GLuint *y_tex, GLuint *cbcr_tex);
+	bool begin_frame(int64_t pts, int64_t duration, movit::YCbCrLumaCoefficients ycbcr_coefficients, const std::vector<RefCountedFrame> &input_frames, GLuint *y_tex, GLuint *cbcr_tex);
 
 	// Call after you are done rendering into the frame; at this point,
 	// y_tex and cbcr_tex will be assumed done, and handed over to the

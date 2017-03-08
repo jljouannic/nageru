@@ -114,8 +114,8 @@ void usage()
 	fprintf(stderr, "      --audio-queue-length-ms=MS  length of audio resampling queue (default 100.0)\n");
 	fprintf(stderr, "      --output-ycbcr-coefficients={rec601,rec709,auto}\n");
 	fprintf(stderr, "                                  Y'CbCr coefficient standard of output (default auto)\n");
-	fprintf(stderr, "                                    auto is rec709 if and only if --output-card is used\n");
-	fprintf(stderr, "                                    and a HD resolution is set\n");
+	fprintf(stderr, "                                    auto is rec601, unless --output-card is used\n");
+	fprintf(stderr, "                                    and a Rec. 709 mode (typically HD modes) is in use\n");
 	fprintf(stderr, "      --output-buffer-frames=NUM  number of frames in output buffer for --output-card,\n");
 	fprintf(stderr, "                                    can be fractional (default 6.0); note also\n");
 	fprintf(stderr, "                                    the audio queue can't be much longer than this\n");
@@ -430,17 +430,17 @@ void parse_flags(int argc, char * const argv[])
 	// On the other hand, HDMI/SDI output typically requires Rec. 709 for
 	// HD resolutions (with no way of signaling anything else), which is
 	// a conflicting demand. In this case, we typically let the HDMI/SDI
-	// output win, but the user can override this.
+	// output win if it is active, but the user can override this.
 	if (output_ycbcr_coefficients == "auto") {
-		if (global_flags.output_card >= 0 && global_flags.width >= 1280) {
-			global_flags.ycbcr_rec709_coefficients = true;
-		} else {
-			global_flags.ycbcr_rec709_coefficients = false;
-		}
+		// Essentially: BT.709 if HDMI/SDI output is on, otherwise BT.601.
+		global_flags.ycbcr_rec709_coefficients = false;
+		global_flags.ycbcr_auto_coefficients = true;
 	} else if (output_ycbcr_coefficients == "rec709") {
 		global_flags.ycbcr_rec709_coefficients = true;
+		global_flags.ycbcr_auto_coefficients = false;
 	} else if (output_ycbcr_coefficients == "rec601") {
 		global_flags.ycbcr_rec709_coefficients = false;
+		global_flags.ycbcr_auto_coefficients = false;
 	} else {
 		fprintf(stderr, "ERROR: --output-ycbcr-coefficients must be “rec601”, “rec709” or “auto”\n");
 		exit(1);

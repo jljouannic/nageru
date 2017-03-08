@@ -1012,9 +1012,27 @@ void Mixer::render_one_frame(int64_t duration)
 	theme_main_chain.setup_chain();
 	//theme_main_chain.chain->enable_phase_timing(true);
 
+	// If HDMI/SDI output is active and the user has requested auto mode,
+	// its mode overrides the existing Y'CbCr setting for the chain.
+	YCbCrLumaCoefficients ycbcr_output_coefficients;
+	if (global_flags.ycbcr_auto_coefficients && output_card_index != -1) {
+		ycbcr_output_coefficients = cards[output_card_index].output->preferred_ycbcr_coefficients();
+	} else {
+		ycbcr_output_coefficients = global_flags.ycbcr_rec709_coefficients ? YCBCR_REC_709 : YCBCR_REC_601;
+	}
+
+	// TODO: Reduce the duplication against theme.cpp.
+	YCbCrFormat output_ycbcr_format;
+	output_ycbcr_format.chroma_subsampling_x = 1;
+	output_ycbcr_format.chroma_subsampling_y = 1;
+	output_ycbcr_format.luma_coefficients = ycbcr_output_coefficients;
+	output_ycbcr_format.full_range = false;
+	output_ycbcr_format.num_levels = 256;
+	chain->change_ycbcr_output_format(output_ycbcr_format);
+
 	const int64_t av_delay = lrint(global_flags.audio_queue_length_ms * 0.001 * TIMEBASE);  // Corresponds to the delay in ResamplingQueue.
 	GLuint y_tex, cbcr_tex;
-	bool got_frame = video_encoder->begin_frame(pts_int + av_delay, duration, theme_main_chain.input_frames, &y_tex, &cbcr_tex);
+	bool got_frame = video_encoder->begin_frame(pts_int + av_delay, duration, ycbcr_output_coefficients, theme_main_chain.input_frames, &y_tex, &cbcr_tex);
 	assert(got_frame);
 
 	// Render main chain. We take an extra copy of the created outputs,
@@ -1040,7 +1058,7 @@ void Mixer::render_one_frame(int64_t duration)
 	GLuint cbcr_copy_tex = resource_pool->create_2d_texture(GL_RG8, global_flags.width / 2, global_flags.height / 2);
 	chroma_subsampler->subsample_chroma(cbcr_full_tex, global_flags.width, global_flags.height, cbcr_tex, cbcr_copy_tex);
 	if (output_card_index != -1) {
-		cards[output_card_index].output->send_frame(y_tex, cbcr_full_tex, theme_main_chain.input_frames, pts_int, duration);
+		cards[output_card_index].output->send_frame(y_tex, cbcr_full_tex, ycbcr_output_coefficients, theme_main_chain.input_frames, pts_int, duration);
 	}
 	resource_pool->release_2d_texture(cbcr_full_tex);
 

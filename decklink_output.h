@@ -2,6 +2,7 @@
 #define _DECKLINK_OUTPUT_H 1
 
 #include <epoxy/gl.h>
+#include <movit/image_format.h>
 #include <stdint.h>
 #include <atomic>
 #include <chrono>
@@ -40,7 +41,7 @@ public:
 	void start_output(uint32_t mode, int64_t base_pts);  // Mode comes from get_available_video_modes().
 	void end_output();
 
-	void send_frame(GLuint y_tex, GLuint cbcr_tex, const std::vector<RefCountedFrame> &input_frames, int64_t pts, int64_t duration);
+	void send_frame(GLuint y_tex, GLuint cbcr_tex, movit::YCbCrLumaCoefficients ycbcr_coefficients, const std::vector<RefCountedFrame> &input_frames, int64_t pts, int64_t duration);
 	void send_audio(int64_t pts, const std::vector<float> &samples);
 
 	// NOTE: The returned timestamp is undefined for preroll.
@@ -58,6 +59,9 @@ public:
 
 	// If the given mode is supported, return it. If not, pick some “best” valid mode.
 	uint32_t pick_video_mode(uint32_t mode) const;
+
+	// Desired Y'CbCr coefficients for the current mode. Undefined before start_output().
+	movit::YCbCrLumaCoefficients preferred_ycbcr_coefficients() const;
 
 	// IUnknown.
 	HRESULT STDMETHODCALLTYPE QueryInterface(REFIID iid, LPVOID *ppv) override;
@@ -132,6 +136,8 @@ private:
 	std::condition_variable frame_queues_changed;
 	bool playback_initiated = false, playback_started = false;
 	int64_t base_pts, frame_duration;
+	BMDDisplayModeFlags current_mode_flags = 0;
+	bool last_frame_had_mode_mismatch = false;
 
 	movit::ResourcePool *resource_pool;
 	IDeckLinkOutput *output = nullptr;

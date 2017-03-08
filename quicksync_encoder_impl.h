@@ -2,6 +2,7 @@
 #define _QUICKSYNC_ENCODER_IMPL_H 1
 
 #include <epoxy/egl.h>
+#include <movit/image_format.h>
 #include <va/va.h>
 
 #include <condition_variable>
@@ -35,7 +36,7 @@ public:
 	QuickSyncEncoderImpl(const std::string &filename, movit::ResourcePool *resource_pool, QSurface *surface, const std::string &va_display, int width, int height, AVOutputFormat *oformat, X264Encoder *x264_encoder, DiskSpaceEstimator *disk_space_estimator);
 	~QuickSyncEncoderImpl();
 	void add_audio(int64_t pts, std::vector<float> audio);
-	bool begin_frame(int64_t pts, int64_t duration, const std::vector<RefCountedFrame> &input_frames, GLuint *y_tex, GLuint *cbcr_tex);
+	bool begin_frame(int64_t pts, int64_t duration, movit::YCbCrLumaCoefficients ycbcr_coefficients, const std::vector<RefCountedFrame> &input_frames, GLuint *y_tex, GLuint *cbcr_tex);
 	RefCountedGLsync end_frame();
 	void shutdown();
 	void release_gl_resources();
@@ -55,6 +56,7 @@ private:
 		int frame_type;
 		std::vector<float> audio;
 		int64_t pts, dts, duration;
+		movit::YCbCrLumaCoefficients ycbcr_coefficients;
 		ReceivedTimestamps received_ts;
 		std::vector<size_t> ref_display_frame_numbers;
 	};
@@ -62,6 +64,7 @@ private:
 		RefCountedGLsync fence;
 		std::vector<RefCountedFrame> input_frames;
 		int64_t pts, duration;
+		movit::YCbCrLumaCoefficients ycbcr_coefficients;
 	};
 	struct GLSurface {
 		VASurfaceID src_surface, ref_surface;
@@ -99,21 +102,21 @@ private:
 	void add_packet_for_uncompressed_frame(int64_t pts, int64_t duration, const uint8_t *data);
 	void pass_frame(PendingFrame frame, int display_frame_num, int64_t pts, int64_t duration);
 	void encode_frame(PendingFrame frame, int encoding_frame_num, int display_frame_num, int gop_start_display_frame_num,
-	                  int frame_type, int64_t pts, int64_t dts, int64_t duration);
+	                  int frame_type, int64_t pts, int64_t dts, int64_t duration, movit::YCbCrLumaCoefficients ycbcr_coefficients);
 	void storage_task_thread();
 	void storage_task_enqueue(storage_task task);
 	void save_codeddata(GLSurface *surf, storage_task task);
-	int render_packedsequence();
+	int render_packedsequence(movit::YCbCrLumaCoefficients ycbcr_coefficients);
 	int render_packedpicture();
 	void render_packedslice();
 	int render_sequence();
 	int render_picture(GLSurface *surf, int frame_type, int display_frame_num, int gop_start_display_frame_num);
-	void sps_rbsp(bitstream *bs);
+	void sps_rbsp(movit::YCbCrLumaCoefficients ycbcr_coefficients, bitstream *bs);
 	void pps_rbsp(bitstream *bs);
 	int build_packed_pic_buffer(unsigned char **header_buffer);
 	int render_slice(int encoding_frame_num, int display_frame_num, int gop_start_display_frame_num, int frame_type);
 	void slice_header(bitstream *bs);
-	int build_packed_seq_buffer(unsigned char **header_buffer);
+	int build_packed_seq_buffer(movit::YCbCrLumaCoefficients ycbcr_coefficients, unsigned char **header_buffer);
 	int build_packed_slice_buffer(unsigned char **header_buffer);
 	int init_va(const std::string &va_display);
 	int deinit_va();

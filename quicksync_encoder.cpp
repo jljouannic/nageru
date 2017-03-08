@@ -1,5 +1,6 @@
 #include "quicksync_encoder.h"
 
+#include <movit/image_format.h>
 #include <movit/resource_pool.h>  // Must be above the Xlib includes.
 #include <movit/util.h>
 
@@ -55,6 +56,7 @@ extern "C" {
 #include "timebase.h"
 #include "x264_encoder.h"
 
+using namespace movit;
 using namespace std;
 using namespace std::chrono;
 using namespace std::placeholders;
@@ -259,7 +261,7 @@ static void nal_header(bitstream *bs, int nal_ref_idc, int nal_unit_type)
     bitstream_put_ui(bs, nal_unit_type, 5);
 }
 
-void QuickSyncEncoderImpl::sps_rbsp(bitstream *bs)
+void QuickSyncEncoderImpl::sps_rbsp(YCbCrLumaCoefficients ycbcr_coefficients, bitstream *bs)
 {
     int profile_idc = PROFILE_IDC_BASELINE;
 
@@ -331,9 +333,10 @@ void QuickSyncEncoderImpl::sps_rbsp(bitstream *bs)
             {
                 bitstream_put_ui(bs, 1, 8);  /* colour_primaries (1 = BT.709) */
                 bitstream_put_ui(bs, 2, 8);  /* transfer_characteristics (2 = unspecified, since we use sRGB) */
-                if (global_flags.ycbcr_rec709_coefficients) {
+                if (ycbcr_coefficients == YCBCR_REC_709) {
                     bitstream_put_ui(bs, 1, 8);  /* matrix_coefficients (1 = BT.709) */
                 } else {
+                    assert(ycbcr_coefficients == YCBCR_REC_601);
                     bitstream_put_ui(bs, 6, 8);  /* matrix_coefficients (6 = BT.601/SMPTE 170M) */
                 }
             }
@@ -515,14 +518,14 @@ int QuickSyncEncoderImpl::build_packed_pic_buffer(unsigned char **header_buffer)
 }
 
 int
-QuickSyncEncoderImpl::build_packed_seq_buffer(unsigned char **header_buffer)
+QuickSyncEncoderImpl::build_packed_seq_buffer(YCbCrLumaCoefficients ycbcr_coefficients, unsigned char **header_buffer)
 {
     bitstream bs;
 
     bitstream_start(&bs);
     nal_start_code_prefix(&bs);
     nal_header(&bs, NAL_REF_IDC_HIGH, NAL_SPS);
-    sps_rbsp(&bs);
+    sps_rbsp(ycbcr_coefficients, &bs);
     bitstream_end(&bs);
 
     *header_buffer = (unsigned char *)bs.buffer;
@@ -1220,7 +1223,7 @@ int QuickSyncEncoderImpl::render_picture(GLSurface *surf, int frame_type, int di
     return 0;
 }
 
-int QuickSyncEncoderImpl::render_packedsequence()
+int QuickSyncEncoderImpl::render_packedsequence(YCbCrLumaCoefficients ycbcr_coefficients)
 {
     VAEncPackedHeaderParameterBuffer packedheader_param_buffer;
     VABufferID packedseq_para_bufid, packedseq_data_bufid, render_id[2];
@@ -1228,7 +1231,7 @@ int QuickSyncEncoderImpl::render_packedsequence()
     unsigned char *packedseq_buffer = NULL;
     VAStatus va_status;
 
-    length_in_bits = build_packed_seq_buffer(&packedseq_buffer); 
+    length_in_bits = build_packed_seq_buffer(ycbcr_coefficients, &packedseq_buffer); 
     
     packedheader_param_buffer.type = VAEncPackedHeaderSequence;
     
@@ -1526,7 +1529,7 @@ int QuickSyncEncoderImpl::deinit_va()
     return 0;
 }
 
-QuickSyncEncoderImpl::QuickSyncEncoderImpl(const std::string &filename, movit::ResourcePool *resource_pool, QSurface *surface, const string &va_display, int width, int height, AVOutputFormat *oformat, X264Encoder *x264_encoder, DiskSpaceEstimator *disk_space_estimator)
+QuickSyncEncoderImpl::QuickSyncEncoderImpl(const std::string &filename, ResourcePool *resource_pool, QSurface *surface, const string &va_display, int width, int height, AVOutputFormat *oformat, X264Encoder *x264_encoder, DiskSpaceEstimator *disk_space_estimator)
 	: current_storage_frame(0), resource_pool(resource_pool), surface(surface), x264_encoder(x264_encoder), frame_width(width), frame_height(height), disk_space_estimator(disk_space_estimator)
 {
 	file_audio_encoder.reset(new AudioEncoder(AUDIO_OUTPUT_CODEC_NAME, DEFAULT_AUDIO_OUTPUT_BIT_RATE, oformat));
@@ -1595,7 +1598,7 @@ void QuickSyncEncoderImpl::release_gl_surface(size_t display_frame_num)
 	}
 }
 
-bool QuickSyncEncoderImpl::begin_frame(int64_t pts, int64_t duration, const vector<RefCountedFrame> &input_frames, GLuint *y_tex, GLuint *cbcr_tex)
+bool QuickSyncEncoderImpl::begin_frame(int64_t pts, int64_t duration, YCbCrLumaCoefficients ycbcr_coefficients, const vector<RefCountedFrame> &input_frames, GLuint *y_tex, GLuint *cbcr_tex)
 {
 	assert(!is_shutdown);
 	GLSurface *surf = nullptr;
@@ -1669,7 +1672,7 @@ bool QuickSyncEncoderImpl::begin_frame(int64_t pts, int64_t duration, const vect
 		glEGLImageTargetTexture2DOES(GL_TEXTURE_2D, surf->cbcr_egl_image);
 	}
 
-	current_video_frame = PendingFrame{ {}, input_frames, pts, duration };
+	current_video_frame = PendingFrame{ {}, input_frames, pts, duration, ycbcr_coefficients };
 
 	return true;
 }
@@ -1850,7 +1853,7 @@ void QuickSyncEncoderImpl::encode_thread_func()
 			}
 			last_dts = dts;
 
-			encode_frame(frame, quicksync_encoding_frame_num, quicksync_display_frame_num, gop_start_display_frame_num, frame_type, frame.pts, dts, frame.duration);
+			encode_frame(frame, quicksync_encoding_frame_num, quicksync_display_frame_num, gop_start_display_frame_num, frame_type, frame.pts, dts, frame.duration, frame.ycbcr_coefficients);
 			++quicksync_encoding_frame_num;
 		}
 	}
@@ -1868,7 +1871,7 @@ void QuickSyncEncoderImpl::encode_remaining_frames_as_p(int encoding_frame_num, 
 		PendingFrame frame = move(pending_frame.second);
 		int64_t dts = last_dts + (TIMEBASE / MAX_FPS);
 		printf("Finalizing encode: Encoding leftover frame %d as P-frame instead of B-frame.\n", display_frame_num);
-		encode_frame(frame, encoding_frame_num++, display_frame_num, gop_start_display_frame_num, FRAME_P, frame.pts, dts, frame.duration);
+		encode_frame(frame, encoding_frame_num++, display_frame_num, gop_start_display_frame_num, FRAME_P, frame.pts, dts, frame.duration, frame.ycbcr_coefficients);
 		last_dts = dts;
 	}
 }
@@ -1931,12 +1934,12 @@ void QuickSyncEncoderImpl::pass_frame(QuickSyncEncoderImpl::PendingFrame frame, 
 	if (global_flags.uncompressed_video_to_http) {
 		add_packet_for_uncompressed_frame(pts, duration, data);
 	} else if (global_flags.x264_video_to_http) {
-		x264_encoder->add_frame(pts, duration, data, received_ts);
+		x264_encoder->add_frame(pts, duration, frame.ycbcr_coefficients, data, received_ts);
 	}
 }
 
 void QuickSyncEncoderImpl::encode_frame(QuickSyncEncoderImpl::PendingFrame frame, int encoding_frame_num, int display_frame_num, int gop_start_display_frame_num,
-                                        int frame_type, int64_t pts, int64_t dts, int64_t duration)
+                                        int frame_type, int64_t pts, int64_t dts, int64_t duration, YCbCrLumaCoefficients ycbcr_coefficients)
 {
 	const ReceivedTimestamps received_ts = find_received_timestamp(frame.input_frames);
 
@@ -1980,10 +1983,14 @@ void QuickSyncEncoderImpl::encode_frame(QuickSyncEncoderImpl::PendingFrame frame
 		// FIXME: If the mux wants global headers, we should not put the
 		// SPS/PPS before each IDR frame, but rather put it into the
 		// codec extradata (formatted differently?).
+		//
+		// NOTE: If we change ycbcr_coefficients, it will not take effect
+		// before the next IDR frame. This is acceptable, as it should only
+		// happen on a mode change, which is rare.
 		render_sequence();
 		render_picture(surf, frame_type, display_frame_num, gop_start_display_frame_num);
 		if (h264_packedheader) {
-			render_packedsequence();
+			render_packedsequence(ycbcr_coefficients);
 			render_packedpicture();
 		}
 	} else {
@@ -2018,13 +2025,14 @@ void QuickSyncEncoderImpl::encode_frame(QuickSyncEncoderImpl::PendingFrame frame
 	tmp.pts = pts;
 	tmp.dts = dts;
 	tmp.duration = duration;
+	tmp.ycbcr_coefficients = ycbcr_coefficients;
 	tmp.received_ts = received_ts;
 	tmp.ref_display_frame_numbers = move(ref_display_frame_numbers);
 	storage_task_enqueue(move(tmp));
 }
 
 // Proxy object.
-QuickSyncEncoder::QuickSyncEncoder(const std::string &filename, movit::ResourcePool *resource_pool, QSurface *surface, const string &va_display, int width, int height, AVOutputFormat *oformat, X264Encoder *x264_encoder, DiskSpaceEstimator *disk_space_estimator)
+QuickSyncEncoder::QuickSyncEncoder(const std::string &filename, ResourcePool *resource_pool, QSurface *surface, const string &va_display, int width, int height, AVOutputFormat *oformat, X264Encoder *x264_encoder, DiskSpaceEstimator *disk_space_estimator)
 	: impl(new QuickSyncEncoderImpl(filename, resource_pool, surface, va_display, width, height, oformat, x264_encoder, disk_space_estimator)) {}
 
 // Must be defined here because unique_ptr<> destructor needs to know the impl.
@@ -2035,9 +2043,9 @@ void QuickSyncEncoder::add_audio(int64_t pts, vector<float> audio)
 	impl->add_audio(pts, audio);
 }
 
-bool QuickSyncEncoder::begin_frame(int64_t pts, int64_t duration, const vector<RefCountedFrame> &input_frames, GLuint *y_tex, GLuint *cbcr_tex)
+bool QuickSyncEncoder::begin_frame(int64_t pts, int64_t duration, YCbCrLumaCoefficients ycbcr_coefficients, const vector<RefCountedFrame> &input_frames, GLuint *y_tex, GLuint *cbcr_tex)
 {
-	return impl->begin_frame(pts, duration, input_frames, y_tex, cbcr_tex);
+	return impl->begin_frame(pts, duration, ycbcr_coefficients, input_frames, y_tex, cbcr_tex);
 }
 
 RefCountedGLsync QuickSyncEncoder::end_frame()

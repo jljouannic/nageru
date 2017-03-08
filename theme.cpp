@@ -265,11 +265,14 @@ int EffectChain_finalize(lua_State* L)
 		// happens in a pass not run by Movit (see ChromaSubsampler::subsample_chroma()).
 		output_ycbcr_format.chroma_subsampling_x = 1;
 		output_ycbcr_format.chroma_subsampling_y = 1;
+
+		// This will be overridden if HDMI/SDI output is in force.
 		if (global_flags.ycbcr_rec709_coefficients) {
 			output_ycbcr_format.luma_coefficients = YCBCR_REC_709;
 		} else {
 			output_ycbcr_format.luma_coefficients = YCBCR_REC_601;
 		}
+
 		output_ycbcr_format.full_range = false;
 		output_ycbcr_format.num_levels = 256;
 

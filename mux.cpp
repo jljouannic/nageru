@@ -22,6 +22,7 @@ extern "C" {
 }
 
 #include "defs.h"
+#include "flags.h"
 #include "timebase.h"
 
 using namespace std;
@@ -68,9 +69,16 @@ Mux::Mux(AVFormatContext *avctx, int width, int height, Codec video_codec, const
 	// as noted in each comment.
 	// Note that the H.264 stream also contains this information and depending on the
 	// mux, this might simply get ignored. See sps_rbsp().
+	// Note that there's no way to change this per-frame as the H.264 stream
+	// would like to be able to.
 	avstream_video->codecpar->color_primaries = AVCOL_PRI_BT709;  // RGB colorspace (inout_format.color_space).
 	avstream_video->codecpar->color_trc = AVCOL_TRC_UNSPECIFIED;  // Gamma curve (inout_format.gamma_curve).
-	avstream_video->codecpar->color_space = AVCOL_SPC_SMPTE170M;  // YUV colorspace (output_ycbcr_format.luma_coefficients).
+	// YUV colorspace (output_ycbcr_format.luma_coefficients).
+	if (global_flags.ycbcr_rec709_coefficients) {
+		avstream_video->codecpar->color_space = AVCOL_SPC_BT709;
+	} else {
+		avstream_video->codecpar->color_space = AVCOL_SPC_SMPTE170M;
+	}
 	avstream_video->codecpar->color_range = AVCOL_RANGE_MPEG;  // Full vs. limited range (output_ycbcr_format.full_range).
 	avstream_video->codecpar->chroma_location = AVCHROMA_LOC_LEFT;  // Chroma sample location. See chroma_offset_0[] in Mixer::subsample_chroma().
 	avstream_video->codecpar->field_order = AV_FIELD_PROGRESSIVE;

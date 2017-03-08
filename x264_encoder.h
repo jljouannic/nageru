@@ -33,6 +33,8 @@ extern "C" {
 #include <libavformat/avformat.h>
 }
 
+#include <movit/image_format.h>
+
 #include "print_latency.h"
 
 class Mux;
@@ -51,7 +53,7 @@ public:
 
 	// <data> is taken to be raw NV12 data of WIDTHxHEIGHT resolution.
 	// Does not block.
-	void add_frame(int64_t pts, int64_t duration, const uint8_t *data, const ReceivedTimestamps &received_ts);
+	void add_frame(int64_t pts, int64_t duration, movit::YCbCrLumaCoefficients ycbcr_coefficients, const uint8_t *data, const ReceivedTimestamps &received_ts);
 
 	std::string get_global_headers() const {
 		while (!x264_init_done) {
@@ -67,6 +69,7 @@ public:
 private:
 	struct QueuedFrame {
 		int64_t pts, duration;
+		movit::YCbCrLumaCoefficients ycbcr_coefficients;
 		uint8_t *data;
 		ReceivedTimestamps received_ts;
 	};
@@ -90,6 +93,8 @@ private:
 	std::atomic<bool> should_quit{false};
 	x264_t *x264;
 	std::unique_ptr<X264SpeedControl> speed_control;
+
+	std::function<void(x264_param_t *)> bitrate_override_func;
 
 	std::atomic<unsigned> new_bitrate_kbit{0};  // 0 for no change.
 

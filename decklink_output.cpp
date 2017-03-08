@@ -107,14 +107,7 @@ void DeckLinkOutput::start_output(uint32_t mode, int64_t base_pts)
 		exit(1);
 	}
 
-	BMDDisplayModeFlags flags = display_mode->GetFlags();
-	if ((flags & bmdDisplayModeColorspaceRec601) && global_flags.ycbcr_rec709_coefficients) {
-		fprintf(stderr, "WARNING: Chosen output mode expects Rec. 601 Y'CbCr coefficients.\n");
-		fprintf(stderr, "         Consider --output-ycbcr-coefficients=rec601 (or =auto).\n");
-	} else if ((flags & bmdDisplayModeColorspaceRec709) && !global_flags.ycbcr_rec709_coefficients) {
-		fprintf(stderr, "WARNING: Chosen output mode expects Rec. 709 Y'CbCr coefficients.\n");
-		fprintf(stderr, "         Consider --output-ycbcr-coefficients=rec709 (or =auto).\n");
-	}
+	current_mode_flags = display_mode->GetFlags();
 
 	BMDTimeValue time_value;
 	BMDTimeScale time_scale;
@@ -184,9 +177,25 @@ void DeckLinkOutput::end_output()
 	}
 }
 
-void DeckLinkOutput::send_frame(GLuint y_tex, GLuint cbcr_tex, const vector<RefCountedFrame> &input_frames, int64_t pts, int64_t duration)
+void DeckLinkOutput::send_frame(GLuint y_tex, GLuint cbcr_tex, YCbCrLumaCoefficients output_ycbcr_coefficients, const vector<RefCountedFrame> &input_frames, int64_t pts, int64_t duration)
 {
 	assert(!should_quit);
+
+	if ((current_mode_flags & bmdDisplayModeColorspaceRec601) && output_ycbcr_coefficients == YCBCR_REC_709) {
+		if (!last_frame_had_mode_mismatch) {
+			fprintf(stderr, "WARNING: Chosen output mode expects Rec. 601 Y'CbCr coefficients.\n");
+			fprintf(stderr, "         Consider --output-ycbcr-coefficients=rec601 (or =auto).\n");
+		}
+		last_frame_had_mode_mismatch = true;
+	} else if ((current_mode_flags & bmdDisplayModeColorspaceRec709) && output_ycbcr_coefficients == YCBCR_REC_601) {
+		if (!last_frame_had_mode_mismatch) {
+			fprintf(stderr, "WARNING: Chosen output mode expects Rec. 709 Y'CbCr coefficients.\n");
+			fprintf(stderr, "         Consider --output-ycbcr-coefficients=rec709 (or =auto).\n");
+		}
+		last_frame_had_mode_mismatch = true;
+	} else {
+		last_frame_had_mode_mismatch = false;
+	}
 
 	unique_ptr<Frame> frame = move(get_frame());
 	chroma_subsampler->create_uyvy(y_tex, cbcr_tex, width, height, frame->uyvy_tex);
@@ -332,6 +341,17 @@ uint32_t DeckLinkOutput::pick_video_mode(uint32_t mode) const
 		}
 	}
 	return best_mode;
+}
+
+YCbCrLumaCoefficients DeckLinkOutput::preferred_ycbcr_coefficients() const
+{
+	if (current_mode_flags & bmdDisplayModeColorspaceRec601) {
+		return YCBCR_REC_601;
+	} else {
+		// Don't bother checking bmdDisplayModeColorspaceRec709;
+		// if none is set, 709 is a good default anyway.
+		return YCBCR_REC_709;
+	}
 }
 
 HRESULT DeckLinkOutput::ScheduledFrameCompleted(/* in */ IDeckLinkVideoFrame *completedFrame, /* in */ BMDOutputFrameCompletionResult result)
