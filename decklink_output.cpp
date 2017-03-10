@@ -440,7 +440,7 @@ void DeckLinkOutput::present_thread_func()
 			++num_frames_in_flight;
 		}
 
-		glWaitSync(frame->fence.get(), /*flags=*/0, GL_TIMEOUT_IGNORED);
+		glClientWaitSync(frame->fence.get(), /*flags=*/0, GL_TIMEOUT_IGNORED);
 		check_error();
 		frame->fence.reset();
 
