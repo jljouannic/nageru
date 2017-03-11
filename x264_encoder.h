@@ -3,15 +3,11 @@
 // so a little under 100 MB at 720p), then have a separate thread pull out
 // those threads as fast as we can to give it to x264 for encoding.
 //
-// TODO: We use x264's “speedcontrol” patch if available, so that quality is
-// automatically scaled up or down to content and available CPU time.
-//
 // The encoding threads are niced down because mixing is more important than
 // encoding; if we lose frames in mixing, we'll lose frames to disk _and_
 // to the stream, as where if we lose frames in encoding, we'll lose frames
 // to the stream only, so the latter is strictly better. More importantly,
-// this allows speedcontrol (when implemented) to do its thing without
-// disturbing the mixer.
+// this allows speedcontrol to do its thing without disturbing the mixer.
 
 #ifndef _X264ENCODE_H
 #define _X264ENCODE_H 1
