@@ -33,6 +33,7 @@ extern "C" {
 #include <movit/image_format.h>
 
 #include "print_latency.h"
+#include "x264_dynamic.h"
 
 class Mux;
 class X264SpeedControl;
@@ -88,6 +89,7 @@ private:
 	std::thread encoder_thread;
 	std::atomic<bool> x264_init_done{false};
 	std::atomic<bool> should_quit{false};
+	X264Dynamic dyn;
 	x264_t *x264;
 	std::unique_ptr<X264SpeedControl> speed_control;
 

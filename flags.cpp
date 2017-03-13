@@ -27,6 +27,7 @@ enum LongOption {
 	OPTION_X264_BITRATE,
 	OPTION_X264_VBV_BUFSIZE,
 	OPTION_X264_VBV_MAX_BITRATE,
+	OPTION_X264_10_BIT,
 	OPTION_X264_PARAM,
 	OPTION_HTTP_MUX,
 	OPTION_HTTP_COARSE_TIMEBASE,
@@ -89,6 +90,7 @@ void usage()
 	fprintf(stderr, "                                  default: same as --x264-bitrate, that is, one-second VBV)\n");
 	fprintf(stderr, "      --x264-vbv-max-bitrate      x264 local max bitrate (in kilobit/sec per --vbv-bufsize,\n");
 	fprintf(stderr, "                                  0 = no limit, default: same as --x264-bitrate, i.e., CBR)\n");
+	fprintf(stderr, "      --x264-10-bit               enable 10-bit x264 encoding\n");
 	fprintf(stderr, "      --x264-param=NAME[,VALUE]   set any x264 parameter, for fine tuning\n");
 	fprintf(stderr, "      --http-mux=NAME             mux to use for HTTP streams (default " DEFAULT_STREAM_MUX_NAME ")\n");
 	fprintf(stderr, "      --http-audio-codec=NAME     audio codec to use for HTTP streams\n");
@@ -156,6 +158,7 @@ void parse_flags(int argc, char * const argv[])
 		{ "x264-bitrate", required_argument, 0, OPTION_X264_BITRATE },
 		{ "x264-vbv-bufsize", required_argument, 0, OPTION_X264_VBV_BUFSIZE },
 		{ "x264-vbv-max-bitrate", required_argument, 0, OPTION_X264_VBV_MAX_BITRATE },
+		{ "x264-10-bit", no_argument, 0, OPTION_X264_10_BIT },
 		{ "x264-param", required_argument, 0, OPTION_X264_PARAM },
 		{ "http-mux", required_argument, 0, OPTION_HTTP_MUX },
 		{ "http-coarse-timebase", no_argument, 0, OPTION_HTTP_COARSE_TIMEBASE },
@@ -286,6 +289,9 @@ void parse_flags(int argc, char * const argv[])
 			break;
 		case OPTION_X264_VBV_BUFSIZE:
 			global_flags.x264_vbv_buffer_size = atoi(optarg);
+			break;
+		case OPTION_X264_10_BIT:
+			global_flags.x264_bit_depth = 10;
 			break;
 		case OPTION_X264_VBV_MAX_BITRATE:
 			global_flags.x264_vbv_max_bitrate = atoi(optarg);

@@ -35,6 +35,7 @@ struct Flags {
 	int x264_bitrate = DEFAULT_X264_OUTPUT_BIT_RATE;  // In kilobit/sec.
 	int x264_vbv_max_bitrate = -1;  // In kilobits. 0 = no limit, -1 = same as <x264_bitrate> (CBR).
 	int x264_vbv_buffer_size = -1;  // In kilobits. 0 = one-frame VBV, -1 = same as <x264_bitrate> (one-second VBV).
+	int x264_bit_depth = 8;
 	std::vector<std::string> x264_extra_param;  // In “key[,value]” format.
 	bool enable_alsa_output = true;
 	std::map<int, int> default_stream_mapping;

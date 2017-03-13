@@ -1,6 +1,7 @@
 #include "x264_encoder.h"
 
 #include <assert.h>
+#include <dlfcn.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -13,6 +14,7 @@
 #include "mux.h"
 #include "print_latency.h"
 #include "timebase.h"
+#include "x264_dynamic.h"
 #include "x264_speed_control.h"
 
 extern "C" {
@@ -43,7 +45,8 @@ void update_vbv_settings(x264_param_t *param)
 }  // namespace
 
 X264Encoder::X264Encoder(AVOutputFormat *oformat)
-	: wants_global_headers(oformat->flags & AVFMT_GLOBALHEADER)
+	: wants_global_headers(oformat->flags & AVFMT_GLOBALHEADER),
+	  dyn(load_x264_for_bit_depth(global_flags.x264_bit_depth))
 {
 	frame_pool.reset(new uint8_t[global_flags.width * global_flags.height * 2 * X264_QUEUE_LENGTH]);
 	for (unsigned i = 0; i < X264_QUEUE_LENGTH; ++i) {
@@ -57,6 +60,9 @@ X264Encoder::~X264Encoder()
 	should_quit = true;
 	queued_frames_nonempty.notify_all();
 	encoder_thread.join();
+	if (dyn.handle) {
+		dlclose(dyn.handle);
+	}
 }
 
 void X264Encoder::add_frame(int64_t pts, int64_t duration, YCbCrLumaCoefficients ycbcr_coefficients, const uint8_t *data, const ReceivedTimestamps &received_ts)
@@ -92,7 +98,7 @@ void X264Encoder::add_frame(int64_t pts, int64_t duration, YCbCrLumaCoefficients
 void X264Encoder::init_x264()
 {
 	x264_param_t param;
-	x264_param_default_preset(&param, global_flags.x264_preset.c_str(), global_flags.x264_tune.c_str());
+	dyn.x264_param_default_preset(&param, global_flags.x264_preset.c_str(), global_flags.x264_tune.c_str());
 
 	param.i_width = global_flags.width;
 	param.i_height = global_flags.height;
@@ -154,24 +160,28 @@ void X264Encoder::init_x264()
 	for (const string &str : global_flags.x264_extra_param) {
 		const size_t pos = str.find(',');
 		if (pos == string::npos) {
-			if (x264_param_parse(&param, str.c_str(), nullptr) != 0) {
+			if (dyn.x264_param_parse(&param, str.c_str(), nullptr) != 0) {
 				fprintf(stderr, "ERROR: x264 rejected parameter '%s'\n", str.c_str());
 			}
 		} else {
 			const string key = str.substr(0, pos);
 			const string value = str.substr(pos + 1);
-			if (x264_param_parse(&param, key.c_str(), value.c_str()) != 0) {
+			if (dyn.x264_param_parse(&param, key.c_str(), value.c_str()) != 0) {
 				fprintf(stderr, "ERROR: x264 rejected parameter '%s' set to '%s'\n",
 					key.c_str(), value.c_str());
 			}
 		}
 	}
 
-	x264_param_apply_profile(&param, "high");
+	if (global_flags.x264_bit_depth > 8) {
+		dyn.x264_param_apply_profile(&param, "high10");
+	} else {
+		dyn.x264_param_apply_profile(&param, "high");
+	}
 
 	param.b_repeat_headers = !wants_global_headers;
 
-	x264 = x264_encoder_open(&param);
+	x264 = dyn.x264_encoder_open(&param);
 	if (x264 == nullptr) {
 		fprintf(stderr, "ERROR: x264 initialization failed.\n");
 		exit(1);
@@ -185,7 +195,7 @@ void X264Encoder::init_x264()
 		x264_nal_t *nal;
 		int num_nal;
 
-		x264_encoder_headers(x264, &nal, &num_nal);
+		dyn.x264_encoder_headers(x264, &nal, &num_nal);
 
 		for (int i = 0; i < num_nal; ++i) {
 			if (nal[i].i_type == NAL_SEI) {
@@ -237,9 +247,9 @@ void X264Encoder::encoder_thread_func()
 
 		// We should quit only if the should_quit flag is set _and_ we have nothing
 		// in either queue.
-	} while (!should_quit || frames_left || x264_encoder_delayed_frames(x264) > 0);
+	} while (!should_quit || frames_left || dyn.x264_encoder_delayed_frames(x264) > 0);
 
-	x264_encoder_close(x264);
+	dyn.x264_encoder_close(x264);
 }
 
 void X264Encoder::encode_frame(X264Encoder::QueuedFrame qf)
@@ -250,7 +260,7 @@ void X264Encoder::encode_frame(X264Encoder::QueuedFrame qf)
 	x264_picture_t *input_pic = nullptr;
 
 	if (qf.data) {
-		x264_picture_init(&pic);
+		dyn.x264_picture_init(&pic);
 
 		pic.i_pts = qf.pts;
 		pic.img.i_csp = X264_CSP_NV12;
@@ -293,18 +303,18 @@ void X264Encoder::encode_frame(X264Encoder::QueuedFrame qf)
 		});
 	} else {
 		x264_param_t param;
-		x264_encoder_parameters(x264, &param);
+		dyn.x264_encoder_parameters(x264, &param);
 		if (bitrate_override_func) {
 			bitrate_override_func(&param);
 		}
 		ycbcr_coefficients_override_func(&param);
-		x264_encoder_reconfig(x264, &param);
+		dyn.x264_encoder_reconfig(x264, &param);
 	}
 
 	if (speed_control) {
 		speed_control->before_frame(float(free_frames.size()) / X264_QUEUE_LENGTH, X264_QUEUE_LENGTH, 1e6 * qf.duration / TIMEBASE);
 	}
-	x264_encoder_encode(x264, &nal, &num_nal, input_pic, &pic);
+	dyn.x264_encoder_encode(x264, &nal, &num_nal, input_pic, &pic);
 	if (speed_control) {
 		speed_control->after_frame();
 	}

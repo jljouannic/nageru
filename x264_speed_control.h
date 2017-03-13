@@ -48,8 +48,10 @@
 #include <functional>
 
 extern "C" {
-#include "x264.h"
+#include <x264.h>
 }
+
+#include "x264_dynamic.h"
 
 class X264SpeedControl {
 public:
@@ -94,6 +96,8 @@ private:
 	void set_buffer_size(int new_buffer_size);
 	int dither_preset(float f);
 	void apply_preset(int new_preset);
+
+	X264Dynamic dyn;
 
 	// Not owned by us.
 	x264_t *x264;

@@ -1,5 +1,6 @@
 #include "x264_speed_control.h"
 
+#include <dlfcn.h>
 #include <math.h>
 #include <stdio.h>
 #include <x264.h>
@@ -15,10 +16,11 @@ using namespace std;
 using namespace std::chrono;
 
 X264SpeedControl::X264SpeedControl(x264_t *x264, float f_speed, int i_buffer_size, float f_buffer_init)
-	: x264(x264), f_speed(f_speed)
+	: dyn(load_x264_for_bit_depth(global_flags.x264_bit_depth)),
+	  x264(x264), f_speed(f_speed)
 {
 	x264_param_t param;
-	x264_encoder_parameters(x264, &param);
+	dyn.x264_encoder_parameters(x264, &param);
 
 	float fps = (float)param.i_fps_num / param.i_fps_den;
 	uspf = 1e6 / fps;
@@ -43,6 +45,9 @@ X264SpeedControl::~X264SpeedControl()
 		(float)stat.min_buffer / buffer_size,
 		(float)stat.max_buffer / buffer_size );
 	//  x264_log( x264, X264_LOG_INFO, "speedcontrol: avg cplx=%.5f\n", cplx_num / cplx_den );
+	if (dyn.handle) {
+		dlclose(dyn.handle);
+	}
 }
 
 typedef struct
@@ -302,7 +307,7 @@ void X264SpeedControl::apply_preset(int new_preset)
 
 	const sc_preset_t *s = &presets[new_preset];
 	x264_param_t p;
-	x264_encoder_parameters(x264, &p);
+	dyn.x264_encoder_parameters(x264, &p);
 
 	p.i_frame_reference = s->refs;
 	p.i_bframe_adaptive = s->badapt;
@@ -317,6 +322,6 @@ void X264SpeedControl::apply_preset(int new_preset)
 	if (override_func) {
 		override_func(&p);
 	}
-	x264_encoder_reconfig(x264, &p);
+	dyn.x264_encoder_reconfig(x264, &p);
 	preset = new_preset;
 }
