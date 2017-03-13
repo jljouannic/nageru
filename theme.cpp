@@ -274,11 +274,13 @@ int EffectChain_finalize(lua_State* L)
 		}
 
 		output_ycbcr_format.full_range = false;
-		output_ycbcr_format.num_levels = 256;
+		output_ycbcr_format.num_levels = 1 << global_flags.x264_bit_depth;
 
-		chain->add_ycbcr_output(inout_format, OUTPUT_ALPHA_FORMAT_POSTMULTIPLIED, output_ycbcr_format, YCBCR_OUTPUT_SPLIT_Y_AND_CBCR);
-		chain->add_ycbcr_output(inout_format, OUTPUT_ALPHA_FORMAT_POSTMULTIPLIED, output_ycbcr_format, YCBCR_OUTPUT_INTERLEAVED);  // Add a copy where we'll only be using the Y component.
-		chain->set_dither_bits(8);
+		GLenum type = global_flags.x264_bit_depth > 8 ? GL_UNSIGNED_SHORT : GL_UNSIGNED_BYTE;
+
+		chain->add_ycbcr_output(inout_format, OUTPUT_ALPHA_FORMAT_POSTMULTIPLIED, output_ycbcr_format, YCBCR_OUTPUT_SPLIT_Y_AND_CBCR, type);
+		chain->add_ycbcr_output(inout_format, OUTPUT_ALPHA_FORMAT_POSTMULTIPLIED, output_ycbcr_format, YCBCR_OUTPUT_INTERLEAVED, type);  // Add a copy where we'll only be using the Y component.
+		chain->set_dither_bits(global_flags.x264_bit_depth > 8 ? 16 : 8);
 		chain->set_output_origin(OUTPUT_ORIGIN_TOP_LEFT);
 	} else {
 		chain->add_output(inout_format, OUTPUT_ALPHA_FORMAT_POSTMULTIPLIED);

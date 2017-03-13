@@ -48,9 +48,10 @@ X264Encoder::X264Encoder(AVOutputFormat *oformat)
 	: wants_global_headers(oformat->flags & AVFMT_GLOBALHEADER),
 	  dyn(load_x264_for_bit_depth(global_flags.x264_bit_depth))
 {
-	frame_pool.reset(new uint8_t[global_flags.width * global_flags.height * 2 * X264_QUEUE_LENGTH]);
+	size_t bytes_per_pixel = global_flags.x264_bit_depth > 8 ? 2 : 1;
+	frame_pool.reset(new uint8_t[global_flags.width * global_flags.height * 2 * bytes_per_pixel * X264_QUEUE_LENGTH]);
 	for (unsigned i = 0; i < X264_QUEUE_LENGTH; ++i) {
-		free_frames.push(frame_pool.get() + i * (global_flags.width * global_flags.height * 2));
+		free_frames.push(frame_pool.get() + i * (global_flags.width * global_flags.height * 2 * bytes_per_pixel));
 	}
 	encoder_thread = thread(&X264Encoder::encoder_thread_func, this);
 }
@@ -86,7 +87,8 @@ void X264Encoder::add_frame(int64_t pts, int64_t duration, YCbCrLumaCoefficients
 		free_frames.pop();
 	}
 
-	memcpy(qf.data, data, global_flags.width * global_flags.height * 2);
+	size_t bytes_per_pixel = global_flags.x264_bit_depth > 8 ? 2 : 1;
+	memcpy(qf.data, data, global_flags.width * global_flags.height * 2 * bytes_per_pixel);
 
 	{
 		lock_guard<mutex> lock(mu);
@@ -103,6 +105,9 @@ void X264Encoder::init_x264()
 	param.i_width = global_flags.width;
 	param.i_height = global_flags.height;
 	param.i_csp = X264_CSP_NV12;
+	if (global_flags.x264_bit_depth > 8) {
+		param.i_csp |= X264_CSP_HIGH_DEPTH;
+	}
 	param.b_vfr_input = 1;
 	param.i_timebase_num = 1;
 	param.i_timebase_den = TIMEBASE;
@@ -263,12 +268,21 @@ void X264Encoder::encode_frame(X264Encoder::QueuedFrame qf)
 		dyn.x264_picture_init(&pic);
 
 		pic.i_pts = qf.pts;
-		pic.img.i_csp = X264_CSP_NV12;
-		pic.img.i_plane = 2;
-		pic.img.plane[0] = qf.data;
-		pic.img.i_stride[0] = global_flags.width;
-		pic.img.plane[1] = qf.data + global_flags.width * global_flags.height;
-		pic.img.i_stride[1] = global_flags.width / 2 * sizeof(uint16_t);
+		if (global_flags.x264_bit_depth > 8) {
+			pic.img.i_csp = X264_CSP_NV12 | X264_CSP_HIGH_DEPTH;
+			pic.img.i_plane = 2;
+			pic.img.plane[0] = qf.data;
+			pic.img.i_stride[0] = global_flags.width * sizeof(uint16_t);
+			pic.img.plane[1] = qf.data + global_flags.width * global_flags.height * sizeof(uint16_t);
+			pic.img.i_stride[1] = global_flags.width / 2 * sizeof(uint32_t);
+		} else {
+			pic.img.i_csp = X264_CSP_NV12;
+			pic.img.i_plane = 2;
+			pic.img.plane[0] = qf.data;
+			pic.img.i_stride[0] = global_flags.width;
+			pic.img.plane[1] = qf.data + global_flags.width * global_flags.height;
+			pic.img.i_stride[1] = global_flags.width / 2 * sizeof(uint16_t);
+		}
 		pic.opaque = reinterpret_cast<void *>(intptr_t(qf.duration));
 
 		input_pic = &pic;

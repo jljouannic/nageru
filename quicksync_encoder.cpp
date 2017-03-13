@@ -994,17 +994,25 @@ int QuickSyncEncoderImpl::setup_encode()
 			gl_surfaces[i].y_tex = resource_pool->create_2d_texture(GL_R8, 1, 1);
 			gl_surfaces[i].cbcr_tex = resource_pool->create_2d_texture(GL_RG8, 1, 1);
 		} else {
-			gl_surfaces[i].y_tex = resource_pool->create_2d_texture(GL_R8, frame_width, frame_height);
-			gl_surfaces[i].cbcr_tex = resource_pool->create_2d_texture(GL_RG8, frame_width / 2, frame_height / 2);
+			size_t bytes_per_pixel;
+			if (global_flags.x264_bit_depth > 8) {
+				bytes_per_pixel = 2;
+				gl_surfaces[i].y_tex = resource_pool->create_2d_texture(GL_R16, frame_width, frame_height);
+				gl_surfaces[i].cbcr_tex = resource_pool->create_2d_texture(GL_RG16, frame_width / 2, frame_height / 2);
+			} else {
+				bytes_per_pixel = 1;
+				gl_surfaces[i].y_tex = resource_pool->create_2d_texture(GL_R8, frame_width, frame_height);
+				gl_surfaces[i].cbcr_tex = resource_pool->create_2d_texture(GL_RG8, frame_width / 2, frame_height / 2);
+			}
 
 			// Generate a PBO to read into. It doesn't necessarily fit 1:1 with the VA-API
 			// buffers, due to potentially differing pitch.
 			glGenBuffers(1, &gl_surfaces[i].pbo);
 			glBindBuffer(GL_PIXEL_PACK_BUFFER, gl_surfaces[i].pbo);
-			glBufferStorage(GL_PIXEL_PACK_BUFFER, frame_width * frame_height * 2, nullptr, GL_MAP_READ_BIT | GL_MAP_WRITE_BIT | GL_MAP_PERSISTENT_BIT);
-			uint8_t *ptr = (uint8_t *)glMapBufferRange(GL_PIXEL_PACK_BUFFER, 0, frame_width * frame_height * 2, GL_MAP_READ_BIT | GL_MAP_PERSISTENT_BIT);
+			glBufferStorage(GL_PIXEL_PACK_BUFFER, frame_width * frame_height * 2 * bytes_per_pixel, nullptr, GL_MAP_READ_BIT | GL_MAP_WRITE_BIT | GL_MAP_PERSISTENT_BIT);
+			uint8_t *ptr = (uint8_t *)glMapBufferRange(GL_PIXEL_PACK_BUFFER, 0, frame_width * frame_height * 2 * bytes_per_pixel, GL_MAP_READ_BIT | GL_MAP_PERSISTENT_BIT);
 			gl_surfaces[i].y_offset = 0;
-			gl_surfaces[i].cbcr_offset = frame_width * frame_height;
+			gl_surfaces[i].cbcr_offset = frame_width * frame_height * bytes_per_pixel;
 			gl_surfaces[i].y_ptr = ptr + gl_surfaces[i].y_offset;
 			gl_surfaces[i].cbcr_ptr = ptr + gl_surfaces[i].cbcr_offset;
 			glBindBuffer(GL_PIXEL_PACK_BUFFER, 0);
@@ -1695,6 +1703,7 @@ RefCountedGLsync QuickSyncEncoderImpl::end_frame()
 	assert(!is_shutdown);
 
 	if (!use_zerocopy) {
+		GLenum type = global_flags.x264_bit_depth > 8 ? GL_UNSIGNED_SHORT : GL_UNSIGNED_BYTE;
 		GLSurface *surf;
 		{
 			unique_lock<mutex> lock(storage_task_queue_mutex);
@@ -1710,12 +1719,12 @@ RefCountedGLsync QuickSyncEncoderImpl::end_frame()
 
 		glBindTexture(GL_TEXTURE_2D, surf->y_tex);
 		check_error();
-		glGetTexImage(GL_TEXTURE_2D, 0, GL_RED, GL_UNSIGNED_BYTE, BUFFER_OFFSET(surf->y_offset));
+		glGetTexImage(GL_TEXTURE_2D, 0, GL_RED, type, BUFFER_OFFSET(surf->y_offset));
 		check_error();
 
 		glBindTexture(GL_TEXTURE_2D, surf->cbcr_tex);
 		check_error();
-		glGetTexImage(GL_TEXTURE_2D, 0, GL_RG, GL_UNSIGNED_BYTE, BUFFER_OFFSET(surf->cbcr_offset));
+		glGetTexImage(GL_TEXTURE_2D, 0, GL_RG, type, BUFFER_OFFSET(surf->cbcr_offset));
 		check_error();
 
 		glBindTexture(GL_TEXTURE_2D, 0);

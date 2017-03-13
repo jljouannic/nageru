@@ -213,7 +213,7 @@ Mixer::Mixer(const QSurfaceFormat &format, unsigned num_cards)
 		ycbcr_format.luma_coefficients = YCBCR_REC_601;
 	}
 	ycbcr_format.full_range = false;
-	ycbcr_format.num_levels = 256;
+	ycbcr_format.num_levels = 1 << global_flags.x264_bit_depth;
 	ycbcr_format.cb_x_position = 0.0f;
 	ycbcr_format.cr_x_position = 0.0f;
 	ycbcr_format.cb_y_position = 0.5f;
@@ -222,7 +222,8 @@ Mixer::Mixer(const QSurfaceFormat &format, unsigned num_cards)
 	// Display chain; shows the live output produced by the main chain (or rather, a copy of it).
 	display_chain.reset(new EffectChain(global_flags.width, global_flags.height, resource_pool.get()));
 	check_error();
-	display_input = new YCbCrInput(inout_format, ycbcr_format, global_flags.width, global_flags.height, YCBCR_INPUT_SPLIT_Y_AND_CBCR);
+	GLenum type = global_flags.x264_bit_depth > 8 ? GL_UNSIGNED_SHORT : GL_UNSIGNED_BYTE;
+	display_input = new YCbCrInput(inout_format, ycbcr_format, global_flags.width, global_flags.height, YCBCR_INPUT_SPLIT_Y_AND_CBCR, type);
 	display_chain->add_input(display_input);
 	display_chain->add_output(inout_format, OUTPUT_ALPHA_FORMAT_POSTMULTIPLIED);
 	display_chain->set_dither_bits(0);  // Don't bother.
@@ -1027,7 +1028,7 @@ void Mixer::render_one_frame(int64_t duration)
 	output_ycbcr_format.chroma_subsampling_y = 1;
 	output_ycbcr_format.luma_coefficients = ycbcr_output_coefficients;
 	output_ycbcr_format.full_range = false;
-	output_ycbcr_format.num_levels = 256;
+	output_ycbcr_format.num_levels = 1 << global_flags.x264_bit_depth;
 	chain->change_ycbcr_output_format(output_ycbcr_format);
 
 	const int64_t av_delay = lrint(global_flags.audio_queue_length_ms * 0.001 * TIMEBASE);  // Corresponds to the delay in ResamplingQueue.
@@ -1042,8 +1043,16 @@ void Mixer::render_one_frame(int64_t duration)
 	// for display as well, but if they're used for zero-copy Quick Sync encoding
 	// (the default case), they're just views into VA-API memory and must be
 	// unmapped during encoding, so we can't use them for display, unfortunately.
-	GLuint cbcr_full_tex = resource_pool->create_2d_texture(GL_RG8, global_flags.width, global_flags.height);
-	GLuint y_copy_tex = resource_pool->create_2d_texture(GL_R8, global_flags.width, global_flags.height);
+	GLuint cbcr_full_tex, cbcr_copy_tex, y_copy_tex;
+	if (global_flags.x264_bit_depth > 8) {
+		cbcr_full_tex = resource_pool->create_2d_texture(GL_RG16, global_flags.width, global_flags.height);
+		y_copy_tex = resource_pool->create_2d_texture(GL_R16, global_flags.width, global_flags.height);
+		cbcr_copy_tex = resource_pool->create_2d_texture(GL_RG16, global_flags.width / 2, global_flags.height / 2);
+	} else {
+		cbcr_full_tex = resource_pool->create_2d_texture(GL_RG8, global_flags.width, global_flags.height);
+		y_copy_tex = resource_pool->create_2d_texture(GL_R8, global_flags.width, global_flags.height);
+		cbcr_copy_tex = resource_pool->create_2d_texture(GL_RG8, global_flags.width / 2, global_flags.height / 2);
+	}
 	GLuint fbo = resource_pool->create_fbo(y_tex, cbcr_full_tex, y_copy_tex);
 	check_error();
 	chain->render_to_fbo(fbo, global_flags.width, global_flags.height);
@@ -1055,7 +1064,6 @@ void Mixer::render_one_frame(int64_t duration)
 
 	resource_pool->release_fbo(fbo);
 
-	GLuint cbcr_copy_tex = resource_pool->create_2d_texture(GL_RG8, global_flags.width / 2, global_flags.height / 2);
 	chroma_subsampler->subsample_chroma(cbcr_full_tex, global_flags.width, global_flags.height, cbcr_tex, cbcr_copy_tex);
 	if (output_card_index != -1) {
 		cards[output_card_index].output->send_frame(y_tex, cbcr_full_tex, ycbcr_output_coefficients, theme_main_chain.input_frames, pts_int, duration);
