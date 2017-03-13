@@ -83,6 +83,7 @@ private:
 	std::string stream_mux_header;
 
 	std::atomic<int> quicksync_encoders_in_shutdown{0};
+	std::atomic<int> overriding_bitrate{0};
 
 	// Encoders that are shutdown, but need to call release_gl_resources()
 	// (or be deleted) from some thread with an OpenGL context.

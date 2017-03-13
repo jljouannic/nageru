@@ -57,7 +57,7 @@ VideoEncoder::VideoEncoder(ResourcePool *resource_pool, QSurface *surface, const
 	} else {
 		stream_audio_encoder.reset(new AudioEncoder(global_flags.stream_audio_codec_name, global_flags.stream_audio_codec_bitrate, oformat));
 	}
-	if (global_flags.x264_video_to_http) {
+	if (global_flags.x264_video_to_http || global_flags.x264_video_to_disk) {
 		x264_encoder.reset(new X264Encoder(oformat));
 	}
 
@@ -68,12 +68,15 @@ VideoEncoder::VideoEncoder(ResourcePool *resource_pool, QSurface *surface, const
 	stream_audio_encoder->add_mux(stream_mux.get());
 	quicksync_encoder->set_stream_mux(stream_mux.get());
 	if (global_flags.x264_video_to_http) {
-		x264_encoder->set_mux(stream_mux.get());
+		x264_encoder->add_mux(stream_mux.get());
 	}
 }
 
 VideoEncoder::~VideoEncoder()
 {
+	quicksync_encoder->shutdown();
+	x264_encoder.reset(nullptr);
+	quicksync_encoder->close_file();
 	quicksync_encoder.reset(nullptr);
 	while (quicksync_encoders_in_shutdown.load() > 0) {
 		usleep(10000);
@@ -94,8 +97,14 @@ void VideoEncoder::do_cut(int frame)
 	stream_mux->plug();
 	lock_guard<mutex> lock(qs_mu);
 	QuickSyncEncoder *old_encoder = quicksync_encoder.release();  // When we go C++14, we can use move capture instead.
-	thread([old_encoder, this]{
+	X264Encoder *old_x264_encoder = nullptr;
+	if (global_flags.x264_video_to_disk) {
+		old_x264_encoder = x264_encoder.release();
+	}
+	thread([old_encoder, old_x264_encoder, this]{
 		old_encoder->shutdown();
+		delete old_x264_encoder;
+		old_encoder->close_file();
 		stream_mux->unplug();
 
 		// We cannot delete the encoder here, as this thread has no OpenGL context.
@@ -104,12 +113,23 @@ void VideoEncoder::do_cut(int frame)
 		qs_needing_cleanup.emplace_back(old_encoder);
 	}).detach();
 
+	if (global_flags.x264_video_to_disk) {
+		x264_encoder.reset(new X264Encoder(oformat));
+		if (global_flags.x264_video_to_http) {
+			x264_encoder->add_mux(stream_mux.get());
+		}
+		if (overriding_bitrate != 0) {
+			x264_encoder->change_bitrate(overriding_bitrate);
+		}
+	}
+
 	quicksync_encoder.reset(new QuickSyncEncoder(filename, resource_pool, surface, va_display, width, height, oformat, x264_encoder.get(), disk_space_estimator));
 	quicksync_encoder->set_stream_mux(stream_mux.get());
 }
 
 void VideoEncoder::change_x264_bitrate(unsigned rate_kbit)
 {
+	overriding_bitrate = rate_kbit;
 	x264_encoder->change_bitrate(rate_kbit);
 }
 
@@ -153,7 +173,7 @@ void VideoEncoder::open_output_stream()
 	avctx->flags = AVFMT_FLAG_CUSTOM_IO;
 
 	string video_extradata;
-	if (global_flags.x264_video_to_http) {
+	if (global_flags.x264_video_to_http || global_flags.x264_video_to_disk) {
 		video_extradata = x264_encoder->get_global_headers();
 	}
 

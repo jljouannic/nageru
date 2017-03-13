@@ -19,6 +19,7 @@ enum LongOption {
 	OPTION_FAKE_CARDS_AUDIO,
 	OPTION_HTTP_UNCOMPRESSED_VIDEO,
 	OPTION_HTTP_X264_VIDEO,
+	OPTION_RECORD_X264_VIDEO,
 	OPTION_X264_PRESET,
 	OPTION_X264_TUNE,
 	OPTION_X264_SPEEDCONTROL,
@@ -76,6 +77,8 @@ void usage()
 	fprintf(stderr, "      --fake-cards-audio          make fake (disconnected) cards output a simple tone\n");
 	fprintf(stderr, "      --http-uncompressed-video   send uncompressed NV12 video to HTTP clients\n");
 	fprintf(stderr, "      --http-x264-video           send x264-compressed video to HTTP clients\n");
+	fprintf(stderr, "      --record-x264-video         store x264-compressed video to disk (implies --http-x264-video,\n");
+	fprintf(stderr, "                                    removes the need for working VA-API encoding)\n");
 	fprintf(stderr, "      --x264-preset               x264 quality preset (default " X264_DEFAULT_PRESET ")\n");
 	fprintf(stderr, "      --x264-tune                 x264 tuning (default " X264_DEFAULT_TUNE ", can be blank)\n");
 	fprintf(stderr, "      --x264-speedcontrol         try to match x264 preset to available CPU speed\n");
@@ -145,6 +148,7 @@ void parse_flags(int argc, char * const argv[])
 		{ "fake-cards-audio", no_argument, 0, OPTION_FAKE_CARDS_AUDIO },
 		{ "http-uncompressed-video", no_argument, 0, OPTION_HTTP_UNCOMPRESSED_VIDEO },
 		{ "http-x264-video", no_argument, 0, OPTION_HTTP_X264_VIDEO },
+		{ "record-x264-video", no_argument, 0, OPTION_RECORD_X264_VIDEO },
 		{ "x264-preset", required_argument, 0, OPTION_X264_PRESET },
 		{ "x264-tune", required_argument, 0, OPTION_X264_TUNE },
 		{ "x264-speedcontrol", no_argument, 0, OPTION_X264_SPEEDCONTROL },
@@ -259,6 +263,10 @@ void parse_flags(int argc, char * const argv[])
 			global_flags.stream_audio_codec_bitrate = atoi(optarg) * 1000;
 			break;
 		case OPTION_HTTP_X264_VIDEO:
+			global_flags.x264_video_to_http = true;
+			break;
+		case OPTION_RECORD_X264_VIDEO:
+			global_flags.x264_video_to_disk = true;
 			global_flags.x264_video_to_http = true;
 			break;
 		case OPTION_X264_PRESET:

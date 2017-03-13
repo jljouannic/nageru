@@ -61,6 +61,8 @@ X264Encoder::~X264Encoder()
 
 void X264Encoder::add_frame(int64_t pts, int64_t duration, YCbCrLumaCoefficients ycbcr_coefficients, const uint8_t *data, const ReceivedTimestamps &received_ts)
 {
+	assert(!should_quit);
+
 	QueuedFrame qf;
 	qf.pts = pts;
 	qf.duration = duration;
@@ -354,5 +356,7 @@ void X264Encoder::encode_frame(X264Encoder::QueuedFrame qf)
 	}
 	pkt.duration = reinterpret_cast<intptr_t>(pic.opaque);
 
-	mux->add_packet(pkt, pic.i_pts, pic.i_dts);
+	for (Mux *mux : muxes) {
+		mux->add_packet(pkt, pic.i_pts, pic.i_dts);
+	}
 }

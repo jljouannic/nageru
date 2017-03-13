@@ -724,7 +724,10 @@ static const char *rc_to_string(int rc_mode)
 
 void QuickSyncEncoderImpl::enable_zerocopy_if_possible()
 {
-	if (global_flags.uncompressed_video_to_http) {
+	if (global_flags.x264_video_to_disk) {
+		// Quick Sync is entirely disabled.
+		use_zerocopy = false;
+	} else if (global_flags.uncompressed_video_to_http) {
 		fprintf(stderr, "Disabling zerocopy H.264 encoding due to --http-uncompressed-video.\n");
 		use_zerocopy = false;
 	} else if (global_flags.x264_video_to_http) {
@@ -743,7 +746,6 @@ VADisplay QuickSyncEncoderImpl::va_open_display(const string &va_display)
 			fprintf(stderr, "error: can't connect to X server!\n");
 			return NULL;
 		}
-		enable_zerocopy_if_possible();
 		return vaGetDisplay(x11_display);
 	} else if (va_display[0] != '/') {
 		x11_display = XOpenDisplay(va_display.c_str());
@@ -751,7 +753,6 @@ VADisplay QuickSyncEncoderImpl::va_open_display(const string &va_display)
 			fprintf(stderr, "error: can't connect to X server!\n");
 			return NULL;
 		}
-		enable_zerocopy_if_possible();
 		return vaGetDisplay(x11_display);
 	} else {
 		drm_fd = open(va_display.c_str(), O_RDWR);
@@ -929,88 +930,88 @@ int QuickSyncEncoderImpl::init_va(const string &va_display)
 
 int QuickSyncEncoderImpl::setup_encode()
 {
-    VAStatus va_status;
-    VASurfaceID *tmp_surfaceid;
-    int codedbuf_size, i;
-    VASurfaceID src_surface[SURFACE_NUM];
-    VASurfaceID ref_surface[SURFACE_NUM];
-    
-    va_status = vaCreateConfig(va_dpy, h264_profile, VAEntrypointEncSlice,
-            &config_attrib[0], config_attrib_num, &config_id);
-    CHECK_VASTATUS(va_status, "vaCreateConfig");
+	if (!global_flags.x264_video_to_disk) {
+		VAStatus va_status;
+		VASurfaceID *tmp_surfaceid;
+		int codedbuf_size;
+		VASurfaceID src_surface[SURFACE_NUM];
+		VASurfaceID ref_surface[SURFACE_NUM];
 
-    /* create source surfaces */
-    va_status = vaCreateSurfaces(va_dpy,
-                                 VA_RT_FORMAT_YUV420, frame_width_mbaligned, frame_height_mbaligned,
-                                 &src_surface[0], SURFACE_NUM,
-                                 NULL, 0);
-    CHECK_VASTATUS(va_status, "vaCreateSurfaces");
+		va_status = vaCreateConfig(va_dpy, h264_profile, VAEntrypointEncSlice,
+				&config_attrib[0], config_attrib_num, &config_id);
+		CHECK_VASTATUS(va_status, "vaCreateConfig");
 
-    /* create reference surfaces */
-    va_status = vaCreateSurfaces(va_dpy,
-                                 VA_RT_FORMAT_YUV420, frame_width_mbaligned, frame_height_mbaligned,
-				 &ref_surface[0], SURFACE_NUM,
-				 NULL, 0);
-    CHECK_VASTATUS(va_status, "vaCreateSurfaces");
+		/* create source surfaces */
+		va_status = vaCreateSurfaces(va_dpy,
+				VA_RT_FORMAT_YUV420, frame_width_mbaligned, frame_height_mbaligned,
+				&src_surface[0], SURFACE_NUM,
+				NULL, 0);
+		CHECK_VASTATUS(va_status, "vaCreateSurfaces");
 
-    tmp_surfaceid = (VASurfaceID *)calloc(2 * SURFACE_NUM, sizeof(VASurfaceID));
-    memcpy(tmp_surfaceid, src_surface, SURFACE_NUM * sizeof(VASurfaceID));
-    memcpy(tmp_surfaceid + SURFACE_NUM, ref_surface, SURFACE_NUM * sizeof(VASurfaceID));
-    
-    /* Create a context for this encode pipe */
-    va_status = vaCreateContext(va_dpy, config_id,
-                                frame_width_mbaligned, frame_height_mbaligned,
-                                VA_PROGRESSIVE,
-                                tmp_surfaceid, 2 * SURFACE_NUM,
-                                &context_id);
-    CHECK_VASTATUS(va_status, "vaCreateContext");
-    free(tmp_surfaceid);
+		/* create reference surfaces */
+		va_status = vaCreateSurfaces(va_dpy,
+				VA_RT_FORMAT_YUV420, frame_width_mbaligned, frame_height_mbaligned,
+				&ref_surface[0], SURFACE_NUM,
+				NULL, 0);
+		CHECK_VASTATUS(va_status, "vaCreateSurfaces");
 
-    codedbuf_size = (frame_width_mbaligned * frame_height_mbaligned * 400) / (16*16);
+		tmp_surfaceid = (VASurfaceID *)calloc(2 * SURFACE_NUM, sizeof(VASurfaceID));
+		memcpy(tmp_surfaceid, src_surface, SURFACE_NUM * sizeof(VASurfaceID));
+		memcpy(tmp_surfaceid + SURFACE_NUM, ref_surface, SURFACE_NUM * sizeof(VASurfaceID));
 
-    for (i = 0; i < SURFACE_NUM; i++) {
-        /* create coded buffer once for all
-         * other VA buffers which won't be used again after vaRenderPicture.
-         * so APP can always vaCreateBuffer for every frame
-         * but coded buffer need to be mapped and accessed after vaRenderPicture/vaEndPicture
-         * so VA won't maintain the coded buffer
-         */
-        va_status = vaCreateBuffer(va_dpy, context_id, VAEncCodedBufferType,
-                codedbuf_size, 1, NULL, &gl_surfaces[i].coded_buf);
-        CHECK_VASTATUS(va_status, "vaCreateBuffer");
-    }
+		for (int i = 0; i < SURFACE_NUM; i++) {
+			gl_surfaces[i].src_surface = src_surface[i];
+			gl_surfaces[i].ref_surface = ref_surface[i];
+		}
 
-    /* create OpenGL objects */
-    //glGenFramebuffers(SURFACE_NUM, fbos);
-    
-    for (i = 0; i < SURFACE_NUM; i++) {
-        if (use_zerocopy) {
-            gl_surfaces[i].y_tex = resource_pool->create_2d_texture(GL_R8, 1, 1);
-            gl_surfaces[i].cbcr_tex = resource_pool->create_2d_texture(GL_RG8, 1, 1);
-        } else {
-            gl_surfaces[i].y_tex = resource_pool->create_2d_texture(GL_R8, frame_width, frame_height);
-            gl_surfaces[i].cbcr_tex = resource_pool->create_2d_texture(GL_RG8, frame_width / 2, frame_height / 2);
+		/* Create a context for this encode pipe */
+		va_status = vaCreateContext(va_dpy, config_id,
+				frame_width_mbaligned, frame_height_mbaligned,
+				VA_PROGRESSIVE,
+				tmp_surfaceid, 2 * SURFACE_NUM,
+				&context_id);
+		CHECK_VASTATUS(va_status, "vaCreateContext");
+		free(tmp_surfaceid);
 
-            // Generate a PBO to read into. It doesn't necessarily fit 1:1 with the VA-API
-            // buffers, due to potentially differing pitch.
-            glGenBuffers(1, &gl_surfaces[i].pbo);
-            glBindBuffer(GL_PIXEL_PACK_BUFFER, gl_surfaces[i].pbo);
-            glBufferStorage(GL_PIXEL_PACK_BUFFER, frame_width * frame_height * 2, nullptr, GL_MAP_READ_BIT | GL_MAP_WRITE_BIT | GL_MAP_PERSISTENT_BIT);
-            uint8_t *ptr = (uint8_t *)glMapBufferRange(GL_PIXEL_PACK_BUFFER, 0, frame_width * frame_height * 2, GL_MAP_READ_BIT | GL_MAP_PERSISTENT_BIT);
-            gl_surfaces[i].y_offset = 0;
-            gl_surfaces[i].cbcr_offset = frame_width * frame_height;
-            gl_surfaces[i].y_ptr = ptr + gl_surfaces[i].y_offset;
-            gl_surfaces[i].cbcr_ptr = ptr + gl_surfaces[i].cbcr_offset;
-            glBindBuffer(GL_PIXEL_PACK_BUFFER, 0);
-        }
-    }
+		codedbuf_size = (frame_width_mbaligned * frame_height_mbaligned * 400) / (16*16);
 
-    for (i = 0; i < SURFACE_NUM; i++) {
-        gl_surfaces[i].src_surface = src_surface[i];
-        gl_surfaces[i].ref_surface = ref_surface[i];
-    }
-    
-    return 0;
+		for (int i = 0; i < SURFACE_NUM; i++) {
+			/* create coded buffer once for all
+			 * other VA buffers which won't be used again after vaRenderPicture.
+			 * so APP can always vaCreateBuffer for every frame
+			 * but coded buffer need to be mapped and accessed after vaRenderPicture/vaEndPicture
+			 * so VA won't maintain the coded buffer
+			 */
+			va_status = vaCreateBuffer(va_dpy, context_id, VAEncCodedBufferType,
+					codedbuf_size, 1, NULL, &gl_surfaces[i].coded_buf);
+			CHECK_VASTATUS(va_status, "vaCreateBuffer");
+		}
+	}
+
+	/* create OpenGL objects */
+	for (int i = 0; i < SURFACE_NUM; i++) {
+		if (use_zerocopy) {
+			gl_surfaces[i].y_tex = resource_pool->create_2d_texture(GL_R8, 1, 1);
+			gl_surfaces[i].cbcr_tex = resource_pool->create_2d_texture(GL_RG8, 1, 1);
+		} else {
+			gl_surfaces[i].y_tex = resource_pool->create_2d_texture(GL_R8, frame_width, frame_height);
+			gl_surfaces[i].cbcr_tex = resource_pool->create_2d_texture(GL_RG8, frame_width / 2, frame_height / 2);
+
+			// Generate a PBO to read into. It doesn't necessarily fit 1:1 with the VA-API
+			// buffers, due to potentially differing pitch.
+			glGenBuffers(1, &gl_surfaces[i].pbo);
+			glBindBuffer(GL_PIXEL_PACK_BUFFER, gl_surfaces[i].pbo);
+			glBufferStorage(GL_PIXEL_PACK_BUFFER, frame_width * frame_height * 2, nullptr, GL_MAP_READ_BIT | GL_MAP_WRITE_BIT | GL_MAP_PERSISTENT_BIT);
+			uint8_t *ptr = (uint8_t *)glMapBufferRange(GL_PIXEL_PACK_BUFFER, 0, frame_width * frame_height * 2, GL_MAP_READ_BIT | GL_MAP_PERSISTENT_BIT);
+			gl_surfaces[i].y_offset = 0;
+			gl_surfaces[i].cbcr_offset = frame_width * frame_height;
+			gl_surfaces[i].y_ptr = ptr + gl_surfaces[i].y_offset;
+			gl_surfaces[i].cbcr_ptr = ptr + gl_surfaces[i].cbcr_offset;
+			glBindBuffer(GL_PIXEL_PACK_BUFFER, 0);
+		}
+	}
+
+	return 0;
 }
 
 // Given a list like 1 9 3 0 2 8 4 and a pivot element 3, will produce
@@ -1541,23 +1542,27 @@ QuickSyncEncoderImpl::QuickSyncEncoderImpl(const std::string &filename, Resource
 
 	//print_input();
 
-	if (global_flags.x264_video_to_http) {
+	if (global_flags.x264_video_to_http || global_flags.x264_video_to_disk) {
 		assert(x264_encoder != nullptr);
 	} else {
 		assert(x264_encoder == nullptr);
 	}
 
-	init_va(va_display);
+	enable_zerocopy_if_possible();
+	if (!global_flags.x264_video_to_disk) {
+		init_va(va_display);
+	}
 	setup_encode();
 
-	memset(&seq_param, 0, sizeof(seq_param));
-	memset(&pic_param, 0, sizeof(pic_param));
-	memset(&slice_param, 0, sizeof(slice_param));
+	if (!global_flags.x264_video_to_disk) {
+		memset(&seq_param, 0, sizeof(seq_param));
+		memset(&pic_param, 0, sizeof(pic_param));
+		memset(&slice_param, 0, sizeof(slice_param));
+	}
 
 	storage_thread = thread(&QuickSyncEncoderImpl::storage_task_thread, this);
 
 	encode_thread = thread([this]{
-		//SDL_GL_MakeCurrent(window, context);
 		QOpenGLContext *context = create_context(this->surface);
 		eglBindAPI(EGL_OPENGL_API);
 		if (!make_current(context, this->surface)) {
@@ -1624,52 +1629,54 @@ bool QuickSyncEncoderImpl::begin_frame(int64_t pts, int64_t duration, YCbCrLumaC
 	*y_tex = surf->y_tex;
 	*cbcr_tex = surf->cbcr_tex;
 
-	VAStatus va_status = vaDeriveImage(va_dpy, surf->src_surface, &surf->surface_image);
-	CHECK_VASTATUS(va_status, "vaDeriveImage");
+	if (!global_flags.x264_video_to_disk) {
+		VAStatus va_status = vaDeriveImage(va_dpy, surf->src_surface, &surf->surface_image);
+		CHECK_VASTATUS(va_status, "vaDeriveImage");
 
-	if (use_zerocopy) {
-		VABufferInfo buf_info;
-		buf_info.mem_type = VA_SURFACE_ATTRIB_MEM_TYPE_DRM_PRIME;  // or VA_SURFACE_ATTRIB_MEM_TYPE_KERNEL_DRM?
-		va_status = vaAcquireBufferHandle(va_dpy, surf->surface_image.buf, &buf_info);
-		CHECK_VASTATUS(va_status, "vaAcquireBufferHandle");
+		if (use_zerocopy) {
+			VABufferInfo buf_info;
+			buf_info.mem_type = VA_SURFACE_ATTRIB_MEM_TYPE_DRM_PRIME;  // or VA_SURFACE_ATTRIB_MEM_TYPE_KERNEL_DRM?
+			va_status = vaAcquireBufferHandle(va_dpy, surf->surface_image.buf, &buf_info);
+			CHECK_VASTATUS(va_status, "vaAcquireBufferHandle");
 
-		// Create Y image.
-		surf->y_egl_image = EGL_NO_IMAGE_KHR;
-		EGLint y_attribs[] = {
-			EGL_WIDTH, frame_width,
-			EGL_HEIGHT, frame_height,
-			EGL_LINUX_DRM_FOURCC_EXT, fourcc_code('R', '8', ' ', ' '),
-			EGL_DMA_BUF_PLANE0_FD_EXT, EGLint(buf_info.handle),
-			EGL_DMA_BUF_PLANE0_OFFSET_EXT, EGLint(surf->surface_image.offsets[0]),
-			EGL_DMA_BUF_PLANE0_PITCH_EXT, EGLint(surf->surface_image.pitches[0]),
-			EGL_NONE
-		};
+			// Create Y image.
+			surf->y_egl_image = EGL_NO_IMAGE_KHR;
+			EGLint y_attribs[] = {
+				EGL_WIDTH, frame_width,
+				EGL_HEIGHT, frame_height,
+				EGL_LINUX_DRM_FOURCC_EXT, fourcc_code('R', '8', ' ', ' '),
+				EGL_DMA_BUF_PLANE0_FD_EXT, EGLint(buf_info.handle),
+				EGL_DMA_BUF_PLANE0_OFFSET_EXT, EGLint(surf->surface_image.offsets[0]),
+				EGL_DMA_BUF_PLANE0_PITCH_EXT, EGLint(surf->surface_image.pitches[0]),
+				EGL_NONE
+			};
 
-		surf->y_egl_image = eglCreateImageKHR(eglGetCurrentDisplay(), EGL_NO_CONTEXT, EGL_LINUX_DMA_BUF_EXT, NULL, y_attribs);
-		assert(surf->y_egl_image != EGL_NO_IMAGE_KHR);
+			surf->y_egl_image = eglCreateImageKHR(eglGetCurrentDisplay(), EGL_NO_CONTEXT, EGL_LINUX_DMA_BUF_EXT, NULL, y_attribs);
+			assert(surf->y_egl_image != EGL_NO_IMAGE_KHR);
 
-		// Associate Y image to a texture.
-		glBindTexture(GL_TEXTURE_2D, *y_tex);
-		glEGLImageTargetTexture2DOES(GL_TEXTURE_2D, surf->y_egl_image);
+			// Associate Y image to a texture.
+			glBindTexture(GL_TEXTURE_2D, *y_tex);
+			glEGLImageTargetTexture2DOES(GL_TEXTURE_2D, surf->y_egl_image);
 
-		// Create CbCr image.
-		surf->cbcr_egl_image = EGL_NO_IMAGE_KHR;
-		EGLint cbcr_attribs[] = {
-			EGL_WIDTH, frame_width,
-			EGL_HEIGHT, frame_height,
-			EGL_LINUX_DRM_FOURCC_EXT, fourcc_code('G', 'R', '8', '8'),
-			EGL_DMA_BUF_PLANE0_FD_EXT, EGLint(buf_info.handle),
-			EGL_DMA_BUF_PLANE0_OFFSET_EXT, EGLint(surf->surface_image.offsets[1]),
-			EGL_DMA_BUF_PLANE0_PITCH_EXT, EGLint(surf->surface_image.pitches[1]),
-			EGL_NONE
-		};
+			// Create CbCr image.
+			surf->cbcr_egl_image = EGL_NO_IMAGE_KHR;
+			EGLint cbcr_attribs[] = {
+				EGL_WIDTH, frame_width,
+				EGL_HEIGHT, frame_height,
+				EGL_LINUX_DRM_FOURCC_EXT, fourcc_code('G', 'R', '8', '8'),
+				EGL_DMA_BUF_PLANE0_FD_EXT, EGLint(buf_info.handle),
+				EGL_DMA_BUF_PLANE0_OFFSET_EXT, EGLint(surf->surface_image.offsets[1]),
+				EGL_DMA_BUF_PLANE0_PITCH_EXT, EGLint(surf->surface_image.pitches[1]),
+				EGL_NONE
+			};
 
-		surf->cbcr_egl_image = eglCreateImageKHR(eglGetCurrentDisplay(), EGL_NO_CONTEXT, EGL_LINUX_DMA_BUF_EXT, NULL, cbcr_attribs);
-		assert(surf->cbcr_egl_image != EGL_NO_IMAGE_KHR);
+			surf->cbcr_egl_image = eglCreateImageKHR(eglGetCurrentDisplay(), EGL_NO_CONTEXT, EGL_LINUX_DMA_BUF_EXT, NULL, cbcr_attribs);
+			assert(surf->cbcr_egl_image != EGL_NO_IMAGE_KHR);
 
-		// Associate CbCr image to a texture.
-		glBindTexture(GL_TEXTURE_2D, *cbcr_tex);
-		glEGLImageTargetTexture2DOES(GL_TEXTURE_2D, surf->cbcr_egl_image);
+			// Associate CbCr image to a texture.
+			glBindTexture(GL_TEXTURE_2D, *cbcr_tex);
+			glEGLImageTargetTexture2DOES(GL_TEXTURE_2D, surf->cbcr_egl_image);
+		}
 	}
 
 	current_video_frame = PendingFrame{ {}, input_frames, pts, duration, ycbcr_coefficients };
@@ -1758,10 +1765,16 @@ void QuickSyncEncoderImpl::shutdown()
 	// Encode any leftover audio in the queues, and also any delayed frames.
 	file_audio_encoder->encode_last_audio();
 
-	release_encode();
-	deinit_va();
-	file_mux.reset();
+	if (!global_flags.x264_video_to_disk) {
+		release_encode();
+		deinit_va();
+	}
 	is_shutdown = true;
+}
+
+void QuickSyncEncoderImpl::close_file()
+{
+	file_mux.reset();
 }
 
 void QuickSyncEncoderImpl::open_output_file(const std::string &filename)
@@ -1779,10 +1792,18 @@ void QuickSyncEncoderImpl::open_output_file(const std::string &filename)
 		exit(1);
 	}
 
-	string video_extradata = "";  // FIXME: See other comment about global headers.
+	string video_extradata;  // FIXME: See other comment about global headers.
+	if (global_flags.x264_video_to_disk) {
+		video_extradata = x264_encoder->get_global_headers();
+	}
+
 	AVCodecParametersWithDeleter audio_codecpar = file_audio_encoder->get_codec_parameters();
 	file_mux.reset(new Mux(avctx, frame_width, frame_height, Mux::CODEC_H264, video_extradata, audio_codecpar.get(), TIMEBASE,
 		std::bind(&DiskSpaceEstimator::report_write, disk_space_estimator, filename, _1)));
+
+	if (global_flags.x264_video_to_disk) {
+		x264_encoder->add_mux(file_mux.get());
+	}
 }
 
 void QuickSyncEncoderImpl::encode_thread_func()
@@ -1818,6 +1839,13 @@ void QuickSyncEncoderImpl::encode_thread_func()
 		// Pass the frame on to x264 (or uncompressed to HTTP) as needed.
 		// Note that this implicitly waits for the frame to be done rendering.
 		pass_frame(frame, display_frame_num, frame.pts, frame.duration);
+
+		if (global_flags.x264_video_to_disk) {
+			unique_lock<mutex> lock(storage_task_queue_mutex);
+			release_gl_surface(display_frame_num);
+			continue;
+		}
+
 		reorder_buffer[display_frame_num] = move(frame);
 
 		// Now encode as many QuickSync frames as we can using the frames we have available.
@@ -1933,7 +1961,7 @@ void QuickSyncEncoderImpl::pass_frame(QuickSyncEncoderImpl::PendingFrame frame, 
 	uint8_t *data = reinterpret_cast<uint8_t *>(surf->y_ptr);
 	if (global_flags.uncompressed_video_to_http) {
 		add_packet_for_uncompressed_frame(pts, duration, data);
-	} else if (global_flags.x264_video_to_http) {
+	} else if (global_flags.x264_video_to_http || global_flags.x264_video_to_disk) {
 		x264_encoder->add_frame(pts, duration, frame.ycbcr_coefficients, data, received_ts);
 	}
 }
@@ -2054,6 +2082,11 @@ RefCountedGLsync QuickSyncEncoder::end_frame()
 }
 
 void QuickSyncEncoder::shutdown()
+{
+	impl->shutdown();
+}
+
+void QuickSyncEncoder::close_file()
 {
 	impl->shutdown();
 }

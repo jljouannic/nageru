@@ -39,6 +39,7 @@ public:
 	bool begin_frame(int64_t pts, int64_t duration, movit::YCbCrLumaCoefficients ycbcr_coefficients, const std::vector<RefCountedFrame> &input_frames, GLuint *y_tex, GLuint *cbcr_tex);
 	RefCountedGLsync end_frame();
 	void shutdown();
+	void close_file();
 	void release_gl_resources();
 	void set_stream_mux(Mux *mux)
 	{
@@ -67,13 +68,14 @@ private:
 		movit::YCbCrLumaCoefficients ycbcr_coefficients;
 	};
 	struct GLSurface {
-		VASurfaceID src_surface, ref_surface;
-		VABufferID coded_buf;
-
-		VAImage surface_image;
 		GLuint y_tex, cbcr_tex;
 
-		// Only if use_zerocopy == true.
+		// Only if x264_video_to_disk == false.
+		VASurfaceID src_surface, ref_surface;
+		VABufferID coded_buf;
+		VAImage surface_image;
+
+		// Only if use_zerocopy == true (which implies x264_video_to_disk == false).
 		EGLImage y_egl_image, cbcr_egl_image;
 
 		// Only if use_zerocopy == false.

@@ -1,5 +1,10 @@
-// Hardware H.264 encoding via VAAPI. Heavily modified based on example
-// code by Intel. Intel's original copyright and license is reproduced below:
+// Hardware H.264 encoding via VAAPI. Also orchestrates the H.264 encoding
+// in general; this is unfortunate, and probably needs a cleanup. In particular,
+// even if you don't actually use Quick Sync for anything, this class
+// (or actually, QuickSyncEncoderImpl) still takes on a pretty central role.
+//
+// Heavily modified based on example code by Intel. Intel's original copyright
+// and license is reproduced below:
 //
 // Copyright (c) 2007-2013 Intel Corporation. All Rights Reserved.
 //
@@ -64,6 +69,7 @@ public:
 	bool begin_frame(int64_t pts, int64_t duration, movit::YCbCrLumaCoefficients ycbcr_coefficients, const std::vector<RefCountedFrame> &input_frames, GLuint *y_tex, GLuint *cbcr_tex);
 	RefCountedGLsync end_frame();
 	void shutdown();  // Blocking. Does not require an OpenGL context.
+	void close_file();  // Does not require an OpenGL context. Must be run after shutdown.
 	void release_gl_resources();  // Requires an OpenGL context. Must be run after shutdown.
 	int64_t global_delay() const;  // So we never get negative dts.
 

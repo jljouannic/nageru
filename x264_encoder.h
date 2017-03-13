@@ -24,6 +24,7 @@
 #include <string>
 #include <thread>
 #include <unordered_map>
+#include <vector>
 
 extern "C" {
 #include <libavformat/avformat.h>
@@ -45,7 +46,7 @@ public:
 	~X264Encoder();
 
 	// Must be called before first frame. Does not take ownership.
-	void set_mux(Mux *mux) { this->mux = mux; }
+	void add_mux(Mux *mux) { muxes.push_back(mux); }
 
 	// <data> is taken to be raw NV12 data of WIDTHxHEIGHT resolution.
 	// Does not block.
@@ -78,7 +79,7 @@ private:
 	// pool.
 	std::unique_ptr<uint8_t[]> frame_pool;
 
-	Mux *mux = nullptr;
+	std::vector<Mux *> muxes;
 	bool wants_global_headers;
 
 	std::string global_headers;
