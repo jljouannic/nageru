@@ -1,6 +1,8 @@
 #ifndef _FLAGS_H
 #define _FLAGS_H
 
+#include <math.h>
+
 #include <map>
 #include <string>
 #include <vector>
@@ -32,7 +34,8 @@ struct Flags {
 	std::string x264_tune = X264_DEFAULT_TUNE;
 	bool x264_speedcontrol = false;
 	bool x264_speedcontrol_verbose = false;
-	int x264_bitrate = DEFAULT_X264_OUTPUT_BIT_RATE;  // In kilobit/sec.
+	int x264_bitrate = -1;  // In kilobit/sec. -1 = not set = DEFAULT_X264_OUTPUT_BIT_RATE.
+	float x264_crf = HUGE_VAL;  // From 51 - QP_MAX_SPEC to 51. HUGE_VAL = not set = use x264_bitrate instead.
 	int x264_vbv_max_bitrate = -1;  // In kilobits. 0 = no limit, -1 = same as <x264_bitrate> (CBR).
 	int x264_vbv_buffer_size = -1;  // In kilobits. 0 = one-frame VBV, -1 = same as <x264_bitrate> (one-second VBV).
 	std::vector<std::string> x264_extra_param;  // In “key[,value]” format.

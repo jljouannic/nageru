@@ -210,7 +210,7 @@ MainWindow::MainWindow()
 	ui->timecode_stream_action->setChecked(global_flags.display_timecode_in_stream);
 	ui->timecode_stdout_action->setChecked(global_flags.display_timecode_on_stdout);
 
-	if (global_flags.x264_video_to_http) {
+	if (global_flags.x264_video_to_http && isinf(global_flags.x264_crf)) {
 		connect(ui->x264_bitrate_action, &QAction::triggered, this, &MainWindow::x264_bitrate_triggered);
 	} else {
 		ui->x264_bitrate_action->setEnabled(false);

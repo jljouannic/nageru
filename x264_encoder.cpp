@@ -30,6 +30,9 @@ namespace {
 
 void update_vbv_settings(x264_param_t *param)
 {
+	if (global_flags.x264_bitrate == -1) {
+		return;
+	}
 	if (global_flags.x264_vbv_buffer_size < 0) {
 		param->rc.i_vbv_buffer_size = param->rc.i_bitrate;  // One-second VBV.
 	} else {
@@ -127,8 +130,13 @@ void X264Encoder::init_x264()
 		param.vui.i_colmatrix = 6;  // BT.601/SMPTE 170M.
 	}
 
-	param.rc.i_rc_method = X264_RC_ABR;
-	param.rc.i_bitrate = global_flags.x264_bitrate;
+	if (!isinf(global_flags.x264_crf)) {
+		param.rc.i_rc_method = X264_RC_CRF;
+		param.rc.f_rf_constant = global_flags.x264_crf;
+	} else {
+		param.rc.i_rc_method = X264_RC_ABR;
+		param.rc.i_bitrate = global_flags.x264_bitrate;
+	}
 	update_vbv_settings(&param);
 	if (param.rc.i_vbv_max_bitrate > 0) {
 		// If the user wants VBV control to cap the max rate, it is

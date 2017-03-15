@@ -25,6 +25,7 @@ enum LongOption {
 	OPTION_X264_SPEEDCONTROL,
 	OPTION_X264_SPEEDCONTROL_VERBOSE,
 	OPTION_X264_BITRATE,
+	OPTION_X264_CRF,
 	OPTION_X264_VBV_BUFSIZE,
 	OPTION_X264_VBV_MAX_BITRATE,
 	OPTION_X264_PARAM,
@@ -86,6 +87,7 @@ void usage()
 	fprintf(stderr, "      --x264-speedcontrol-verbose  output speedcontrol debugging statistics\n");
 	fprintf(stderr, "      --x264-bitrate              x264 bitrate (in kilobit/sec, default %d)\n",
 		DEFAULT_X264_OUTPUT_BIT_RATE);
+	fprintf(stderr, "      --x264-crf=VALUE            quality-based VBR (-12 to 51), incompatible with --x264-bitrate and VBV\n");
 	fprintf(stderr, "      --x264-vbv-bufsize          x264 VBV size (in kilobits, 0 = one-frame VBV,\n");
 	fprintf(stderr, "                                  default: same as --x264-bitrate, that is, one-second VBV)\n");
 	fprintf(stderr, "      --x264-vbv-max-bitrate      x264 local max bitrate (in kilobit/sec per --vbv-bufsize,\n");
@@ -157,6 +159,7 @@ void parse_flags(int argc, char * const argv[])
 		{ "x264-speedcontrol", no_argument, 0, OPTION_X264_SPEEDCONTROL },
 		{ "x264-speedcontrol-verbose", no_argument, 0, OPTION_X264_SPEEDCONTROL_VERBOSE },
 		{ "x264-bitrate", required_argument, 0, OPTION_X264_BITRATE },
+		{ "x264-crf", required_argument, 0, OPTION_X264_CRF },
 		{ "x264-vbv-bufsize", required_argument, 0, OPTION_X264_VBV_BUFSIZE },
 		{ "x264-vbv-max-bitrate", required_argument, 0, OPTION_X264_VBV_MAX_BITRATE },
 		{ "x264-param", required_argument, 0, OPTION_X264_PARAM },
@@ -287,6 +290,9 @@ void parse_flags(int argc, char * const argv[])
 			break;
 		case OPTION_X264_BITRATE:
 			global_flags.x264_bitrate = atoi(optarg);
+			break;
+		case OPTION_X264_CRF:
+			global_flags.x264_crf = atof(optarg);
 			break;
 		case OPTION_X264_VBV_BUFSIZE:
 			global_flags.x264_vbv_buffer_size = atoi(optarg);
@@ -480,5 +486,17 @@ void parse_flags(int argc, char * const argv[])
 	}
 	if (global_flags.max_input_queue_frames > 10) {
 		fprintf(stderr, "WARNING: --max-input-queue-frames has little effect over 10.\n");
+	}
+
+	if (!isinf(global_flags.x264_crf)) {  // CRF mode is selected.
+		if (global_flags.x264_bitrate != -1) {
+			fprintf(stderr, "ERROR: --x264-bitrate and --x264-crf are mutually incompatible.\n");
+			exit(1);
+		}
+		if (global_flags.x264_vbv_max_bitrate != -1 && global_flags.x264_vbv_buffer_size != -1) {
+			fprintf(stderr, "WARNING: VBV settings are ignored with --x264-crf.\n");
+		}
+	} else if (global_flags.x264_bitrate == -1) {
+		global_flags.x264_bitrate = DEFAULT_X264_OUTPUT_BIT_RATE;
 	}
 }
