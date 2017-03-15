@@ -102,7 +102,7 @@ private:
 		movit::ResourcePool *resource_pool;
 
 		// These members are persistently allocated, and reused when the frame object is.
-		GLuint uyvy_tex;  // Owned by <resource_pool>.
+		GLuint uyvy_tex;  // Owned by <resource_pool>. Can also hold v210 data.
 		GLuint pbo;
 		uint8_t *uyvy_ptr;  // Persistent mapping into the PBO.
 

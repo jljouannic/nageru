@@ -12,6 +12,7 @@
 #include "print_latency.h"
 #include "resource_pool.h"
 #include "timebase.h"
+#include "v210_converter.h"
 
 using namespace movit;
 using namespace std;
@@ -96,7 +97,8 @@ void DeckLinkOutput::start_output(uint32_t mode, int64_t base_pts)
 
 	BMDDisplayModeSupport support;
 	IDeckLinkDisplayMode *display_mode;
-	if (output->DoesSupportVideoMode(mode, bmdFormat8BitYUV, bmdVideoOutputFlagDefault,
+	BMDPixelFormat pixel_format = global_flags.ten_bit_output ? bmdFormat10BitYUV : bmdFormat8BitYUV;
+	if (output->DoesSupportVideoMode(mode, pixel_format, bmdVideoOutputFlagDefault,
 	                                 &support, &display_mode) != S_OK) {
 		fprintf(stderr, "Couldn't ask for format support\n");
 		exit(1);
@@ -198,7 +200,11 @@ void DeckLinkOutput::send_frame(GLuint y_tex, GLuint cbcr_tex, YCbCrLumaCoeffici
 	}
 
 	unique_ptr<Frame> frame = move(get_frame());
-	chroma_subsampler->create_uyvy(y_tex, cbcr_tex, width, height, frame->uyvy_tex);
+	if (global_flags.ten_bit_output) {
+		chroma_subsampler->create_v210(y_tex, cbcr_tex, width, height, frame->uyvy_tex);
+	} else {
+		chroma_subsampler->create_uyvy(y_tex, cbcr_tex, width, height, frame->uyvy_tex);
+	}
 
 	// Download the UYVY texture to the PBO.
 	glPixelStorei(GL_PACK_ROW_LENGTH, 0);
@@ -207,10 +213,17 @@ void DeckLinkOutput::send_frame(GLuint y_tex, GLuint cbcr_tex, YCbCrLumaCoeffici
 	glBindBuffer(GL_PIXEL_PACK_BUFFER, frame->pbo);
 	check_error();
 
-	glBindTexture(GL_TEXTURE_2D, frame->uyvy_tex);
-	check_error();
-	glGetTexImage(GL_TEXTURE_2D, 0, GL_BGRA, GL_UNSIGNED_INT_8_8_8_8_REV, BUFFER_OFFSET(0));
-	check_error();
+	if (global_flags.ten_bit_output) {
+		glBindTexture(GL_TEXTURE_2D, frame->uyvy_tex);
+		check_error();
+		glGetTexImage(GL_TEXTURE_2D, 0, GL_RGBA, GL_UNSIGNED_INT_2_10_10_10_REV, BUFFER_OFFSET(0));
+		check_error();
+	} else {
+		glBindTexture(GL_TEXTURE_2D, frame->uyvy_tex);
+		check_error();
+		glGetTexImage(GL_TEXTURE_2D, 0, GL_BGRA, GL_UNSIGNED_INT_8_8_8_8_REV, BUFFER_OFFSET(0));
+		check_error();
+	}
 
 	glBindTexture(GL_TEXTURE_2D, 0);
 	check_error();
@@ -406,17 +419,31 @@ unique_ptr<DeckLinkOutput::Frame> DeckLinkOutput::get_frame()
 
 	unique_ptr<Frame> frame(new Frame);
 
-	frame->uyvy_tex = resource_pool->create_2d_texture(GL_RGBA8, width / 2, height);
+	size_t stride;
+	if (global_flags.ten_bit_output) {
+		stride = v210Converter::get_v210_stride(width);
+		GLint v210_width = stride / sizeof(uint32_t);
+		frame->uyvy_tex = resource_pool->create_2d_texture(GL_RGB10_A2, v210_width, height);
+
+		// We need valid texture state, or NVIDIA won't allow us to write to the texture.
+		glBindTexture(GL_TEXTURE_2D, frame->uyvy_tex);
+		check_error();
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+		check_error();
+	} else {
+		stride = width * 2;
+		frame->uyvy_tex = resource_pool->create_2d_texture(GL_RGBA8, width / 2, height);
+	}
 
 	glGenBuffers(1, &frame->pbo);
 	check_error();
 	glBindBuffer(GL_PIXEL_PACK_BUFFER, frame->pbo);
 	check_error();
-	glBufferStorage(GL_PIXEL_PACK_BUFFER, width * height * 2, NULL, GL_MAP_READ_BIT | GL_MAP_PERSISTENT_BIT);
+	glBufferStorage(GL_PIXEL_PACK_BUFFER, stride * height, NULL, GL_MAP_READ_BIT | GL_MAP_PERSISTENT_BIT);
 	check_error();
-	frame->uyvy_ptr = (uint8_t *)glMapBufferRange(GL_PIXEL_PACK_BUFFER, 0, width * height * 2, GL_MAP_READ_BIT | GL_MAP_PERSISTENT_BIT);
+	frame->uyvy_ptr = (uint8_t *)glMapBufferRange(GL_PIXEL_PACK_BUFFER, 0, stride * height, GL_MAP_READ_BIT | GL_MAP_PERSISTENT_BIT);
 	check_error();
-	frame->uyvy_ptr_local.reset(new uint8_t[width * height * 2]);
+	frame->uyvy_ptr_local.reset(new uint8_t[stride * height]);
 	frame->resource_pool = resource_pool;
 
 	return frame;
@@ -444,7 +471,11 @@ void DeckLinkOutput::present_thread_func()
 		check_error();
 		frame->fence.reset();
 
-		memcpy(frame->uyvy_ptr_local.get(), frame->uyvy_ptr, width * height * 2);
+		if (global_flags.ten_bit_output) {
+			memcpy(frame->uyvy_ptr_local.get(), frame->uyvy_ptr, v210Converter::get_v210_stride(width) * height);
+		} else {
+			memcpy(frame->uyvy_ptr_local.get(), frame->uyvy_ptr, width * height * 2);
+		}
 
 		// Release any input frames we needed to render this frame.
 		frame->input_frames.clear();
@@ -526,12 +557,20 @@ long DeckLinkOutput::Frame::GetHeight()
 
 long DeckLinkOutput::Frame::GetRowBytes()
 {
-	return global_flags.width * 2;
+	if (global_flags.ten_bit_output) {
+		return v210Converter::get_v210_stride(global_flags.width);
+	} else {
+		return global_flags.width * 2;
+	}
 }
 
 BMDPixelFormat DeckLinkOutput::Frame::GetPixelFormat()
 {
-	return bmdFormat8BitYUV;
+	if (global_flags.ten_bit_output) {
+		return bmdFormat10BitYUV;
+	} else {
+		return bmdFormat8BitYUV;
+	}
 }
 
 BMDFrameFlags DeckLinkOutput::Frame::GetFlags()

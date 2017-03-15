@@ -27,7 +27,6 @@ enum LongOption {
 	OPTION_X264_BITRATE,
 	OPTION_X264_VBV_BUFSIZE,
 	OPTION_X264_VBV_MAX_BITRATE,
-	OPTION_X264_10_BIT,
 	OPTION_X264_PARAM,
 	OPTION_HTTP_MUX,
 	OPTION_HTTP_COARSE_TIMEBASE,
@@ -56,6 +55,7 @@ enum LongOption {
 	OPTION_TIMECODE_STREAM,
 	OPTION_TIMECODE_STDOUT,
 	OPTION_10_BIT_INPUT,
+	OPTION_10_BIT_OUTPUT,
 };
 
 void usage()
@@ -90,7 +90,6 @@ void usage()
 	fprintf(stderr, "                                  default: same as --x264-bitrate, that is, one-second VBV)\n");
 	fprintf(stderr, "      --x264-vbv-max-bitrate      x264 local max bitrate (in kilobit/sec per --vbv-bufsize,\n");
 	fprintf(stderr, "                                  0 = no limit, default: same as --x264-bitrate, i.e., CBR)\n");
-	fprintf(stderr, "      --x264-10-bit               enable 10-bit x264 encoding\n");
 	fprintf(stderr, "      --x264-param=NAME[,VALUE]   set any x264 parameter, for fine tuning\n");
 	fprintf(stderr, "      --http-mux=NAME             mux to use for HTTP streams (default " DEFAULT_STREAM_MUX_NAME ")\n");
 	fprintf(stderr, "      --http-audio-codec=NAME     audio codec to use for HTTP streams\n");
@@ -130,6 +129,8 @@ void usage()
 	fprintf(stderr, "      --timecode-stream           show timestamp and timecode in stream\n");
 	fprintf(stderr, "      --timecode-stdout           show timestamp and timecode on standard output\n");
 	fprintf(stderr, "      --10-bit-input              use 10-bit video input (requires compute shaders)\n");
+	fprintf(stderr, "      --10-bit-output             use 10-bit video output (requires compute shaders,\n");
+	fprintf(stderr, "                                    implies --record-x264-video)\n");
 }
 
 void parse_flags(int argc, char * const argv[])
@@ -158,7 +159,6 @@ void parse_flags(int argc, char * const argv[])
 		{ "x264-bitrate", required_argument, 0, OPTION_X264_BITRATE },
 		{ "x264-vbv-bufsize", required_argument, 0, OPTION_X264_VBV_BUFSIZE },
 		{ "x264-vbv-max-bitrate", required_argument, 0, OPTION_X264_VBV_MAX_BITRATE },
-		{ "x264-10-bit", no_argument, 0, OPTION_X264_10_BIT },
 		{ "x264-param", required_argument, 0, OPTION_X264_PARAM },
 		{ "http-mux", required_argument, 0, OPTION_HTTP_MUX },
 		{ "http-coarse-timebase", no_argument, 0, OPTION_HTTP_COARSE_TIMEBASE },
@@ -187,6 +187,7 @@ void parse_flags(int argc, char * const argv[])
 		{ "timecode-stream", no_argument, 0, OPTION_TIMECODE_STREAM },
 		{ "timecode-stdout", no_argument, 0, OPTION_TIMECODE_STDOUT },
 		{ "10-bit-input", no_argument, 0, OPTION_10_BIT_INPUT },
+		{ "10-bit-output", no_argument, 0, OPTION_10_BIT_OUTPUT },
 		{ 0, 0, 0, 0 }
 	};
 	vector<string> theme_dirs;
@@ -290,9 +291,6 @@ void parse_flags(int argc, char * const argv[])
 		case OPTION_X264_VBV_BUFSIZE:
 			global_flags.x264_vbv_buffer_size = atoi(optarg);
 			break;
-		case OPTION_X264_10_BIT:
-			global_flags.x264_bit_depth = 10;
-			break;
 		case OPTION_X264_VBV_MAX_BITRATE:
 			global_flags.x264_vbv_max_bitrate = atoi(optarg);
 			break;
@@ -373,6 +371,12 @@ void parse_flags(int argc, char * const argv[])
 			break;
 		case OPTION_10_BIT_INPUT:
 			global_flags.ten_bit_input = true;
+			break;
+		case OPTION_10_BIT_OUTPUT:
+			global_flags.ten_bit_output = true;
+			global_flags.x264_video_to_disk = true;
+			global_flags.x264_video_to_http = true;
+			global_flags.x264_bit_depth = 10;
 			break;
 		case OPTION_HELP:
 			usage();

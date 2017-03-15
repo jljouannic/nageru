@@ -1,4 +1,5 @@
 #include "chroma_subsampler.h"
+#include "v210_converter.h"
 
 #include <vector>
 
@@ -170,6 +171,78 @@ ChromaSubsampler::ChromaSubsampler(ResourcePool *resource_pool)
 	};
 	vbo = generate_vbo(2, GL_FLOAT, sizeof(vertices), vertices);
 	check_error();
+
+	// v210 compute shader.
+	if (v210Converter::has_hardware_support()) {
+		string v210_shader_src = R"(#version 150
+#extension GL_ARB_compute_shader : enable
+#extension GL_ARB_shader_image_load_store : enable
+layout(local_size_x=2, local_size_y=16) in;
+layout(r16) uniform restrict readonly image2D in_y;
+uniform sampler2D in_cbcr;  // Of type RG16.
+layout(rgb10_a2) uniform restrict writeonly image2D outbuf;
+uniform float inv_width, inv_height;
+
+void main()
+{
+	int xb = int(gl_GlobalInvocationID.x);  // X block number.
+	int y = int(gl_GlobalInvocationID.y);  // Y (actual line).
+	float yf = (gl_GlobalInvocationID.y + 0.5f) * inv_height;  // Y float coordinate.
+
+	// Load and scale CbCr values, sampling in-between the texels to get
+	// to (left/4 + center/2 + right/4).
+	vec2 pix_cbcr[3];
+	for (int i = 0; i < 3; ++i) {
+		vec2 a = texture(in_cbcr, vec2((xb * 6 + i * 2) * inv_width, yf)).xy;
+		vec2 b = texture(in_cbcr, vec2((xb * 6 + i * 2 + 1) * inv_width, yf)).xy;
+		pix_cbcr[i] = (a + b) * (0.5 * 65535.0 / 1023.0);
+	}
+
+	// Load and scale the Y values. Note that we use integer coordinates here,
+	// so we don't need to offset by 0.5.
+	float pix_y[6];
+	for (int i = 0; i < 6; ++i) {
+		pix_y[i] = imageLoad(in_y, ivec2(xb * 6 + i, y)).x * (65535.0 / 1023.0);
+	}
+
+	imageStore(outbuf, ivec2(xb * 4 + 0, y), vec4(pix_cbcr[0].x, pix_y[0],      pix_cbcr[0].y, 1.0));
+	imageStore(outbuf, ivec2(xb * 4 + 1, y), vec4(pix_y[1],      pix_cbcr[1].x, pix_y[2],      1.0));
+	imageStore(outbuf, ivec2(xb * 4 + 2, y), vec4(pix_cbcr[1].y, pix_y[3],      pix_cbcr[2].x, 1.0));
+	imageStore(outbuf, ivec2(xb * 4 + 3, y), vec4(pix_y[4],      pix_cbcr[2].y, pix_y[5],      1.0));
+}
+)";
+		GLuint shader_num = movit::compile_shader(v210_shader_src, GL_COMPUTE_SHADER);
+		check_error();
+		v210_program_num = glCreateProgram();
+		check_error();
+		glAttachShader(v210_program_num, shader_num);
+		check_error();
+		glLinkProgram(v210_program_num);
+		check_error();
+
+		GLint success;
+		glGetProgramiv(v210_program_num, GL_LINK_STATUS, &success);
+		check_error();
+		if (success == GL_FALSE) {
+			GLchar error_log[1024] = {0};
+			glGetProgramInfoLog(v210_program_num, 1024, NULL, error_log);
+			fprintf(stderr, "Error linking program: %s\n", error_log);
+			exit(1);
+		}
+
+		v210_in_y_pos = glGetUniformLocation(v210_program_num, "in_y");
+		check_error();
+		v210_in_cbcr_pos = glGetUniformLocation(v210_program_num, "in_cbcr");
+		check_error();
+		v210_outbuf_pos = glGetUniformLocation(v210_program_num, "outbuf");
+		check_error();
+		v210_inv_width_pos = glGetUniformLocation(v210_program_num, "inv_width");
+		check_error();
+		v210_inv_height_pos = glGetUniformLocation(v210_program_num, "inv_height");
+		check_error();
+	} else {
+		v210_program_num = 0;
+	}
 }
 
 ChromaSubsampler::~ChromaSubsampler()
@@ -180,6 +253,10 @@ ChromaSubsampler::~ChromaSubsampler()
 	check_error();
 	glDeleteBuffers(1, &vbo);
 	check_error();
+	if (v210_program_num != 0) {
+		glDeleteProgram(v210_program_num);
+		check_error();
+	}
 }
 
 void ChromaSubsampler::subsample_chroma(GLuint cbcr_tex, unsigned width, unsigned height, GLuint dst_tex, GLuint dst2_tex)
@@ -333,4 +410,61 @@ void ChromaSubsampler::create_uyvy(GLuint y_tex, GLuint cbcr_tex, unsigned width
 
 	resource_pool->release_fbo(fbo);
 	glDeleteVertexArrays(1, &vao);
+}
+
+void ChromaSubsampler::create_v210(GLuint y_tex, GLuint cbcr_tex, unsigned width, unsigned height, GLuint dst_tex)
+{
+	assert(v210_program_num != 0);
+
+	glUseProgram(v210_program_num);
+	check_error();
+
+	glUniform1i(v210_in_y_pos, 0);
+	check_error();
+	glUniform1i(v210_in_cbcr_pos, 1);
+	check_error();
+	glUniform1i(v210_outbuf_pos, 2);
+	check_error();
+	glUniform1f(v210_inv_width_pos, 1.0 / width);
+	check_error();
+	glUniform1f(v210_inv_height_pos, 1.0 / height);
+	check_error();
+
+	glActiveTexture(GL_TEXTURE0);
+	check_error();
+	glBindTexture(GL_TEXTURE_2D, y_tex);  // We don't actually need to bind it, but we need to set the state.
+	check_error();
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+	check_error();
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+	check_error();
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+	check_error();
+	glBindImageTexture(0, y_tex, 0, GL_FALSE, 0, GL_READ_ONLY, GL_R16);  // This is the real bind.
+	check_error();
+
+	glActiveTexture(GL_TEXTURE1);
+	check_error();
+	glBindTexture(GL_TEXTURE_2D, cbcr_tex);
+	check_error();
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+	check_error();
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+	check_error();
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+	check_error();
+
+	glBindImageTexture(2, dst_tex, 0, GL_FALSE, 0, GL_WRITE_ONLY, GL_RGB10_A2);
+	check_error();
+
+	// Actually run the shader. We use workgroups of size 2x16 threadst , and each thread
+	// processes 6x1 input pixels, so round up to number of 12x16 pixel blocks.
+	glDispatchCompute((width + 11) / 12, (height + 15) / 16, 1);
+
+	glBindTexture(GL_TEXTURE_2D, 0);
+	check_error();
+	glActiveTexture(GL_TEXTURE0);
+	check_error();
+	glUseProgram(0);
+	check_error();
 }

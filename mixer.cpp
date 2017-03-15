@@ -305,6 +305,13 @@ Mixer::Mixer(const QSurfaceFormat &format, unsigned num_cards)
 		v210_converter->precompile_shader(3840);
 		v210_converter->precompile_shader(4096);
 	}
+	if (global_flags.ten_bit_output) {
+		if (!v210Converter::has_hardware_support()) {
+			fprintf(stderr, "ERROR: --ten-bit-output requires support for OpenGL compute shaders\n");
+			fprintf(stderr, "       (OpenGL 4.3, or GL_ARB_compute_shader + GL_ARB_shader_image_load_store).\n");
+			exit(1);
+		}
+	}
 
 	timecode_renderer.reset(new TimecodeRenderer(resource_pool.get(), global_flags.width, global_flags.height));
 	display_timecode_in_stream = global_flags.display_timecode_in_stream;

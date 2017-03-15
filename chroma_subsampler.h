@@ -27,6 +27,14 @@ public:
 	// width and height are the dimensions (in pixels) of the input textures.
 	void create_uyvy(GLuint y_tex, GLuint cbcr_tex, unsigned width, unsigned height, GLuint dst_tex);
 
+	// Subsamples and interleaves luma and chroma to give 10-bit 4:2:2
+	// packed Y'CbCr (v210); see v210converter.h for more information on
+	// the format. Luma and chroma are assumed to be 10-bit data packed
+	// into 16-bit textures. Chroma positioning is left (H.264 convention).
+	// width and height are the dimensions (in pixels) of the input textures;
+	// Requires compute shaders; check v210Converter::has_hardware_support().
+	void create_v210(GLuint y_tex, GLuint cbcr_tex, unsigned width, unsigned height, GLuint dst_tex);
+
 private:
 	movit::ResourcePool *resource_pool;
 
@@ -39,6 +47,10 @@ private:
 	GLuint uyvy_program_num;  // Owned by <resource_pool>.
 	GLuint uyvy_y_texture_sampler_uniform, uyvy_cbcr_texture_sampler_uniform;
 	GLuint uyvy_position_attribute_index, uyvy_texcoord_attribute_index;
+
+	GLuint v210_program_num;  // Compute shader, so owned by ourselves. Can be 0.
+	GLuint v210_in_y_pos, v210_in_cbcr_pos, v210_outbuf_pos;
+	GLuint v210_inv_width_pos, v210_inv_height_pos;
 };
 
 #endif  // !defined(_CHROMA_SUBSAMPLER_H)
