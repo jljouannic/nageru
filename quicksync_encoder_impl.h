@@ -36,6 +36,7 @@ public:
 	QuickSyncEncoderImpl(const std::string &filename, movit::ResourcePool *resource_pool, QSurface *surface, const std::string &va_display, int width, int height, AVOutputFormat *oformat, X264Encoder *x264_encoder, DiskSpaceEstimator *disk_space_estimator);
 	~QuickSyncEncoderImpl();
 	void add_audio(int64_t pts, std::vector<float> audio);
+	bool is_zerocopy() const;
 	bool begin_frame(int64_t pts, int64_t duration, movit::YCbCrLumaCoefficients ycbcr_coefficients, const std::vector<RefCountedFrame> &input_frames, GLuint *y_tex, GLuint *cbcr_tex);
 	RefCountedGLsync end_frame();
 	void shutdown();
@@ -68,14 +69,13 @@ private:
 		movit::YCbCrLumaCoefficients ycbcr_coefficients;
 	};
 	struct GLSurface {
-		GLuint y_tex, cbcr_tex;
-
 		// Only if x264_video_to_disk == false.
 		VASurfaceID src_surface, ref_surface;
 		VABufferID coded_buf;
 		VAImage surface_image;
 
 		// Only if use_zerocopy == true (which implies x264_video_to_disk == false).
+		GLuint y_tex, cbcr_tex;
 		EGLImage y_egl_image, cbcr_egl_image;
 
 		// Only if use_zerocopy == false.

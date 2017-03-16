@@ -279,7 +279,13 @@ int EffectChain_finalize(lua_State* L)
 		GLenum type = global_flags.x264_bit_depth > 8 ? GL_UNSIGNED_SHORT : GL_UNSIGNED_BYTE;
 
 		chain->add_ycbcr_output(inout_format, OUTPUT_ALPHA_FORMAT_POSTMULTIPLIED, output_ycbcr_format, YCBCR_OUTPUT_SPLIT_Y_AND_CBCR, type);
-		chain->add_ycbcr_output(inout_format, OUTPUT_ALPHA_FORMAT_POSTMULTIPLIED, output_ycbcr_format, YCBCR_OUTPUT_INTERLEAVED, type);  // Add a copy where we'll only be using the Y component.
+
+		// If we're using zerocopy video encoding (so the destination
+		// Y texture is owned by VA-API and will be unavailable for
+		// display), add a copy, where we'll only be using the Y component.
+		if (global_flags.use_zerocopy) {
+			chain->add_ycbcr_output(inout_format, OUTPUT_ALPHA_FORMAT_POSTMULTIPLIED, output_ycbcr_format, YCBCR_OUTPUT_INTERLEAVED, type);  // Add a copy where we'll only be using the Y component.
+		}
 		chain->set_dither_bits(global_flags.x264_bit_depth > 8 ? 16 : 8);
 		chain->set_output_origin(OUTPUT_ORIGIN_TOP_LEFT);
 	} else {

@@ -140,6 +140,12 @@ void VideoEncoder::add_audio(int64_t pts, std::vector<float> audio)
 	stream_audio_encoder->encode_audio(audio, pts + quicksync_encoder->global_delay());
 }
 
+bool VideoEncoder::is_zerocopy() const
+{
+	lock_guard<mutex> lock(qs_mu);
+	return quicksync_encoder->is_zerocopy();
+}
+
 bool VideoEncoder::begin_frame(int64_t pts, int64_t duration, movit::YCbCrLumaCoefficients ycbcr_coefficients, const std::vector<RefCountedFrame> &input_frames, GLuint *y_tex, GLuint *cbcr_tex)
 {
 	lock_guard<mutex> lock(qs_mu);

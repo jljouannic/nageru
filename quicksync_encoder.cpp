@@ -736,6 +736,7 @@ void QuickSyncEncoderImpl::enable_zerocopy_if_possible()
 	} else {
 		use_zerocopy = true;
 	}
+	global_flags.use_zerocopy = use_zerocopy;
 }
 
 VADisplay QuickSyncEncoderImpl::va_open_display(const string &va_display)
@@ -994,16 +995,7 @@ int QuickSyncEncoderImpl::setup_encode()
 			gl_surfaces[i].y_tex = resource_pool->create_2d_texture(GL_R8, 1, 1);
 			gl_surfaces[i].cbcr_tex = resource_pool->create_2d_texture(GL_RG8, 1, 1);
 		} else {
-			size_t bytes_per_pixel;
-			if (global_flags.x264_bit_depth > 8) {
-				bytes_per_pixel = 2;
-				gl_surfaces[i].y_tex = resource_pool->create_2d_texture(GL_R16, frame_width, frame_height);
-				gl_surfaces[i].cbcr_tex = resource_pool->create_2d_texture(GL_RG16, frame_width / 2, frame_height / 2);
-			} else {
-				bytes_per_pixel = 1;
-				gl_surfaces[i].y_tex = resource_pool->create_2d_texture(GL_R8, frame_width, frame_height);
-				gl_surfaces[i].cbcr_tex = resource_pool->create_2d_texture(GL_RG8, frame_width / 2, frame_height / 2);
-			}
+			size_t bytes_per_pixel = (global_flags.x264_bit_depth > 8) ? 2 : 1;
 
 			// Generate a PBO to read into. It doesn't necessarily fit 1:1 with the VA-API
 			// buffers, due to potentially differing pitch.
@@ -1516,14 +1508,15 @@ void QuickSyncEncoderImpl::release_gl_resources()
 	}
 
 	for (unsigned i = 0; i < SURFACE_NUM; i++) {
-		if (!use_zerocopy) {
+		if (use_zerocopy) {
+			resource_pool->release_2d_texture(gl_surfaces[i].y_tex);
+			resource_pool->release_2d_texture(gl_surfaces[i].cbcr_tex);
+		} else {
 			glBindBuffer(GL_PIXEL_PACK_BUFFER, gl_surfaces[i].pbo);
 			glUnmapBuffer(GL_PIXEL_PACK_BUFFER);
 			glBindBuffer(GL_PIXEL_PACK_BUFFER, 0);
 			glDeleteBuffers(1, &gl_surfaces[i].pbo);
 		}
-		resource_pool->release_2d_texture(gl_surfaces[i].y_tex);
-		resource_pool->release_2d_texture(gl_surfaces[i].cbcr_tex);
 	}
 
 	has_released_gl_resources = true;
@@ -1611,6 +1604,11 @@ void QuickSyncEncoderImpl::release_gl_surface(size_t display_frame_num)
 	}
 }
 
+bool QuickSyncEncoderImpl::is_zerocopy() const
+{
+	return use_zerocopy;
+}
+
 bool QuickSyncEncoderImpl::begin_frame(int64_t pts, int64_t duration, YCbCrLumaCoefficients ycbcr_coefficients, const vector<RefCountedFrame> &input_frames, GLuint *y_tex, GLuint *cbcr_tex)
 {
 	assert(!is_shutdown);
@@ -1634,8 +1632,13 @@ bool QuickSyncEncoderImpl::begin_frame(int64_t pts, int64_t duration, YCbCrLumaC
 		surface_for_frame[current_storage_frame] = surf;
 	}
 
-	*y_tex = surf->y_tex;
-	*cbcr_tex = surf->cbcr_tex;
+	if (use_zerocopy) {
+		*y_tex = surf->y_tex;
+		*cbcr_tex = surf->cbcr_tex;
+	} else {
+		surf->y_tex = *y_tex;
+		surf->cbcr_tex = *cbcr_tex;
+	}
 
 	if (!global_flags.x264_video_to_disk) {
 		VAStatus va_status = vaDeriveImage(va_dpy, surf->src_surface, &surf->surface_image);
@@ -1726,6 +1729,9 @@ RefCountedGLsync QuickSyncEncoderImpl::end_frame()
 		check_error();
 		glGetTexImage(GL_TEXTURE_2D, 0, GL_RG, type, BUFFER_OFFSET(surf->cbcr_offset));
 		check_error();
+
+		// We don't own these; the caller does.
+		surf->y_tex = surf->cbcr_tex = 0;
 
 		glBindTexture(GL_TEXTURE_2D, 0);
 		check_error();
@@ -2078,6 +2084,11 @@ QuickSyncEncoder::~QuickSyncEncoder() {}
 void QuickSyncEncoder::add_audio(int64_t pts, vector<float> audio)
 {
 	impl->add_audio(pts, audio);
+}
+
+bool QuickSyncEncoder::is_zerocopy() const
+{
+	return impl->is_zerocopy();
 }
 
 bool QuickSyncEncoder::begin_frame(int64_t pts, int64_t duration, YCbCrLumaCoefficients ycbcr_coefficients, const vector<RefCountedFrame> &input_frames, GLuint *y_tex, GLuint *cbcr_tex)

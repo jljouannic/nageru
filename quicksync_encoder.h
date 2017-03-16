@@ -66,6 +66,9 @@ public:
 
 	void set_stream_mux(Mux *mux);  // Does not take ownership. Must be called unless x264 is used for the stream.
 	void add_audio(int64_t pts, std::vector<float> audio);
+	bool is_zerocopy() const;
+
+	// See VideoEncoder::begin_frame().
 	bool begin_frame(int64_t pts, int64_t duration, movit::YCbCrLumaCoefficients ycbcr_coefficients, const std::vector<RefCountedFrame> &input_frames, GLuint *y_tex, GLuint *cbcr_tex);
 	RefCountedGLsync end_frame();
 	void shutdown();  // Blocking. Does not require an OpenGL context.

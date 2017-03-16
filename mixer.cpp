@@ -193,7 +193,6 @@ Mixer::Mixer(const QSurfaceFormat &format, unsigned num_cards)
 	movit_texel_subpixel_precision /= 2.0;
 
 	resource_pool.reset(new ResourcePool);
-	theme.reset(new Theme(global_flags.theme_filename, global_flags.theme_dirs, resource_pool.get(), num_cards));
 	for (unsigned i = 0; i < NUM_OUTPUTS; ++i) {
 		output_channel[i].parent = this;
 		output_channel[i].channel = i;
@@ -230,6 +229,9 @@ Mixer::Mixer(const QSurfaceFormat &format, unsigned num_cards)
 	display_chain->finalize();
 
 	video_encoder.reset(new VideoEncoder(resource_pool.get(), h264_encoder_surface, global_flags.va_display, global_flags.width, global_flags.height, &httpd, global_disk_space_estimator));
+
+	// Must be instantiated after VideoEncoder has initialized global_flags.use_zerocopy.
+	theme.reset(new Theme(global_flags.theme_filename, global_flags.theme_dirs, resource_pool.get(), num_cards));
 
 	// Start listening for clients only once VideoEncoder has written its header, if any.
 	httpd.start(9095);
@@ -1038,29 +1040,47 @@ void Mixer::render_one_frame(int64_t duration)
 	output_ycbcr_format.num_levels = 1 << global_flags.x264_bit_depth;
 	chain->change_ycbcr_output_format(output_ycbcr_format);
 
-	const int64_t av_delay = lrint(global_flags.audio_queue_length_ms * 0.001 * TIMEBASE);  // Corresponds to the delay in ResamplingQueue.
-	GLuint y_tex, cbcr_tex;
-	bool got_frame = video_encoder->begin_frame(pts_int + av_delay, duration, ycbcr_output_coefficients, theme_main_chain.input_frames, &y_tex, &cbcr_tex);
-	assert(got_frame);
-
-	// Render main chain. We take an extra copy of the created outputs,
+	// Render main chain. If we're using zerocopy Quick Sync encoding
+	// (the default case), we take an extra copy of the created outputs,
 	// so that we can display it back to the screen later (it's less memory
 	// bandwidth than writing and reading back an RGBA texture, even at 16-bit).
 	// Ideally, we'd like to avoid taking copies and just use the main textures
-	// for display as well, but if they're used for zero-copy Quick Sync encoding
-	// (the default case), they're just views into VA-API memory and must be
+	// for display as well, but they're just views into VA-API memory and must be
 	// unmapped during encoding, so we can't use them for display, unfortunately.
-	GLuint cbcr_full_tex, cbcr_copy_tex, y_copy_tex;
-	if (global_flags.x264_bit_depth > 8) {
-		cbcr_full_tex = resource_pool->create_2d_texture(GL_RG16, global_flags.width, global_flags.height);
-		y_copy_tex = resource_pool->create_2d_texture(GL_R16, global_flags.width, global_flags.height);
-		cbcr_copy_tex = resource_pool->create_2d_texture(GL_RG16, global_flags.width / 2, global_flags.height / 2);
+	GLuint y_tex, cbcr_full_tex, cbcr_tex;
+	GLuint y_copy_tex, cbcr_copy_tex = 0;
+	GLuint y_display_tex, cbcr_display_tex;
+	GLenum y_type = (global_flags.x264_bit_depth > 8) ? GL_R16 : GL_R8;
+	GLenum cbcr_type = (global_flags.x264_bit_depth > 8) ? GL_RG16 : GL_RG8;
+	const bool is_zerocopy = video_encoder->is_zerocopy();
+	if (is_zerocopy) {
+		cbcr_full_tex = resource_pool->create_2d_texture(cbcr_type, global_flags.width, global_flags.height);
+		y_copy_tex = resource_pool->create_2d_texture(y_type, global_flags.width, global_flags.height);
+		cbcr_copy_tex = resource_pool->create_2d_texture(cbcr_type, global_flags.width / 2, global_flags.height / 2);
+
+		y_display_tex = y_copy_tex;
+		cbcr_display_tex = cbcr_copy_tex;
+
+		// y_tex and cbcr_tex will be given by VideoEncoder.
 	} else {
-		cbcr_full_tex = resource_pool->create_2d_texture(GL_RG8, global_flags.width, global_flags.height);
-		y_copy_tex = resource_pool->create_2d_texture(GL_R8, global_flags.width, global_flags.height);
-		cbcr_copy_tex = resource_pool->create_2d_texture(GL_RG8, global_flags.width / 2, global_flags.height / 2);
+		cbcr_full_tex = resource_pool->create_2d_texture(cbcr_type, global_flags.width, global_flags.height);
+		y_tex = resource_pool->create_2d_texture(y_type, global_flags.width, global_flags.height);
+		cbcr_tex = resource_pool->create_2d_texture(cbcr_type, global_flags.width / 2, global_flags.height / 2);
+
+		y_display_tex = y_tex;
+		cbcr_display_tex = cbcr_tex;
 	}
-	GLuint fbo = resource_pool->create_fbo(y_tex, cbcr_full_tex, y_copy_tex);
+
+	const int64_t av_delay = lrint(global_flags.audio_queue_length_ms * 0.001 * TIMEBASE);  // Corresponds to the delay in ResamplingQueue.
+	bool got_frame = video_encoder->begin_frame(pts_int + av_delay, duration, ycbcr_output_coefficients, theme_main_chain.input_frames, &y_tex, &cbcr_tex);
+	assert(got_frame);
+
+	GLuint fbo;
+	if (is_zerocopy) {
+		fbo = resource_pool->create_fbo(y_tex, cbcr_full_tex, y_copy_tex);
+	} else {
+		fbo = resource_pool->create_fbo(y_tex, cbcr_full_tex);
+	}
 	check_error();
 	chain->render_to_fbo(fbo, global_flags.width, global_flags.height);
 
@@ -1071,20 +1091,24 @@ void Mixer::render_one_frame(int64_t duration)
 
 	resource_pool->release_fbo(fbo);
 
-	chroma_subsampler->subsample_chroma(cbcr_full_tex, global_flags.width, global_flags.height, cbcr_tex, cbcr_copy_tex);
+	if (is_zerocopy) {
+		chroma_subsampler->subsample_chroma(cbcr_full_tex, global_flags.width, global_flags.height, cbcr_tex, cbcr_copy_tex);
+	} else {
+		chroma_subsampler->subsample_chroma(cbcr_full_tex, global_flags.width, global_flags.height, cbcr_tex);
+	}
 	if (output_card_index != -1) {
 		cards[output_card_index].output->send_frame(y_tex, cbcr_full_tex, ycbcr_output_coefficients, theme_main_chain.input_frames, pts_int, duration);
 	}
 	resource_pool->release_2d_texture(cbcr_full_tex);
 
-	// Set the right state for the Y' and CbCr copies.
+	// Set the right state for the Y' and CbCr textures we use for display.
 	glBindFramebuffer(GL_FRAMEBUFFER, 0);
-	glBindTexture(GL_TEXTURE_2D, y_copy_tex);
+	glBindTexture(GL_TEXTURE_2D, y_display_tex);
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
 
-	glBindTexture(GL_TEXTURE_2D, cbcr_copy_tex);
+	glBindTexture(GL_TEXTURE_2D, cbcr_display_tex);
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
@@ -1092,16 +1116,16 @@ void Mixer::render_one_frame(int64_t duration)
 	RefCountedGLsync fence = video_encoder->end_frame();
 
 	// The live frame pieces the Y'CbCr texture copies back into RGB and displays them.
-	// It owns y_copy_tex and cbcr_copy_tex now.
+	// It owns y_display_tex and cbcr_display_tex now (whichever textures they are).
 	DisplayFrame live_frame;
 	live_frame.chain = display_chain.get();
-	live_frame.setup_chain = [this, y_copy_tex, cbcr_copy_tex]{
-		display_input->set_texture_num(0, y_copy_tex);
-		display_input->set_texture_num(1, cbcr_copy_tex);
+	live_frame.setup_chain = [this, y_display_tex, cbcr_display_tex]{
+		display_input->set_texture_num(0, y_display_tex);
+		display_input->set_texture_num(1, cbcr_display_tex);
 	};
 	live_frame.ready_fence = fence;
 	live_frame.input_frames = {};
-	live_frame.temp_textures = { y_copy_tex, cbcr_copy_tex };
+	live_frame.temp_textures = { y_display_tex, cbcr_display_tex };
 	output_channel[OUTPUT_LIVE].output_frame(live_frame);
 
 	// Set up preview and any additional channels.

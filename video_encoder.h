@@ -42,9 +42,22 @@ public:
 
 	void add_audio(int64_t pts, std::vector<float> audio);
 
+	bool is_zerocopy() const;
+
 	// Allocate a frame to render into. The returned two textures
 	// are yours to render into (build them into an FBO).
 	// Call end_frame() when you're done.
+	//
+	// The semantics of y_tex and cbcr_tex depend on is_zerocopy():
+	//
+	//   - If false, the are input parameters, ie., the caller
+	//     allocates textures. (The contents are not read before
+	//     end_frame() is called.)
+	//   - If true, they are output parameters, ie., VideoEncoder
+	//     allocates textures and borrow them to you for rendering.
+	//     In this case, after end_frame(), you are no longer allowed
+	//     to use the textures; they are torn down and given to the
+	//     H.264 encoder.
 	bool begin_frame(int64_t pts, int64_t duration, movit::YCbCrLumaCoefficients ycbcr_coefficients, const std::vector<RefCountedFrame> &input_frames, GLuint *y_tex, GLuint *cbcr_tex);
 
 	// Call after you are done rendering into the frame; at this point,
@@ -65,7 +78,7 @@ private:
 	int write_packet2(uint8_t *buf, int buf_size, AVIODataMarkerType type, int64_t time);
 
 	AVOutputFormat *oformat;
-	std::mutex qs_mu;
+	mutable std::mutex qs_mu;
 	std::unique_ptr<QuickSyncEncoder> quicksync_encoder;  // Under <qs_mu>.
 	movit::ResourcePool *resource_pool;
 	QSurface *surface;

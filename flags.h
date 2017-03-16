@@ -57,6 +57,7 @@ struct Flags {
 	bool ten_bit_input = false;
 	bool ten_bit_output = false;  // Implies x264_video_to_disk == true and x264_bit_depth == 10.
 	int x264_bit_depth = 8;  // Not user-settable.
+	bool use_zerocopy = false;  // Not user-settable.
 };
 extern Flags global_flags;
 
