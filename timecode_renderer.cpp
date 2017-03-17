@@ -43,22 +43,22 @@ TimecodeRenderer::TimecodeRenderer(movit::ResourcePool *resource_pool, unsigned 
 		"#version 130 \n"
 		"in vec2 tc0; \n"
 		"uniform sampler2D tex; \n"
-		"out vec4 Y, CbCr, RGBA; \n"
+		"out vec4 Y, CbCr, YCbCr; \n"
 		"void main() { \n"
-		"    vec4 gray = texture(tex, tc0); \n"
-		"    RGBA = gray.rrra; \n";
+		"    vec4 gray = texture(tex, tc0); \n";
 	if (global_flags.ten_bit_output) {
 		frag_shader +=
 			"    gray.r = gray.r * ((940.0-16.0)/65535.0) + 16.0/65535.0; \n"  // Limited-range Y'CbCr.
-			"    Y = gray.rrra; \n"
 			"    CbCr = vec4(512.0/65535.0, 512.0/65535.0, 0.0, 1.0); \n";
 	} else {
 		frag_shader +=
 			"    gray.r = gray.r * ((235.0-16.0)/255.0) + 16.0/255.0; \n"  // Limited-range Y'CbCr.
-			"    Y = gray.rrra; \n"
 			"    CbCr = vec4(128.0/255.0, 128.0/255.0, 0.0, 1.0); \n";
 	}
-	frag_shader += "} \n";
+	frag_shader +=
+		"    Y = gray.rrra; \n"
+		"    YCbCr = vec4(Y.r, CbCr.r, CbCr.g, CbCr.a); \n"
+		"} \n";
 
 	vector<string> frag_shader_outputs;
 	program_num = resource_pool->compile_glsl_program(vert_shader, frag_shader, frag_shader_outputs);
