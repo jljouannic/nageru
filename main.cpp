@@ -52,6 +52,10 @@ int main(int argc, char *argv[])
 	QGLFormat::setDefaultFormat(QGLFormat::fromSurfaceFormat(fmt));
 
 	global_share_widget = new QGLWidget();
+	if (!global_share_widget->isValid()) {
+		fprintf(stderr, "Failed to initialize OpenGL. Nageru needs at least OpenGL 3.1 to function properly.\n");
+		exit(1);
+	}
 
 	MainWindow mainWindow;
 	mainWindow.resize(QSize(1500, 850));
