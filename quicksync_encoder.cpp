@@ -1413,7 +1413,7 @@ void QuickSyncEncoderImpl::save_codeddata(GLSurface *surf, storage_task task)
 	vaUnmapBuffer(va_dpy, surf->coded_buf);
 
 	static int frameno = 0;
-	print_latency("Current QuickSync latency (video inputs → disk mux):",
+	print_latency("Current Quick Sync latency (video inputs → disk mux):",
 		task.received_ts, (task.frame_type == FRAME_B), &frameno);
 
 	{
