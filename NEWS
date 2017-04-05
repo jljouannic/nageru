@@ -1,3 +1,43 @@
+Nageru 1.5.0, April 5th, 2017
+
+  - Support for low-latency HDMI/SDI output in addition to (or instead of) the
+    stream. This currently only works with DeckLink cards, not bmusb. See the
+    manual for more information.
+
+  - Support changing the resolution from the command line, instead of locking
+    everything to 1280x720.
+
+  - The A/V sync code has been rewritten to be more in line with Fons
+    Adriaensen's original paper. It handles several cases much better,
+    in particular when trying to match 59.94 and 60 Hz sources to each other.
+    However, it might occasionally need a few extra seconds on startup to
+    lock properly if startup is slow.
+
+  - Add support for using x264 for the disk recording. This makes it possible,
+    among other things, to run Nageru on a machine entirely without VA-API
+    support.
+
+  - Support for 10-bit Y'CbCr, both on input and output. (Output requires
+    x264 disk recording, as Quick Sync Video does not support 10-bit H.264.)
+    This requires compute shader support, and is in general a little bit
+    slower on input and output, due to the extra amount of data being shuffled
+    around. Intermediate precision is 16-bit floating-point or better,
+    as before.
+
+  - Enable input mode autodetection for DeckLink cards that support it.
+    (bmusb mode has always been autodetected.)
+
+  - Add functionality to add a time code to the stream; useful for debugging
+    latency.
+
+  - The live display is now both more performant and of higher image quality.
+
+  - Fix a long-standing issue where the preview displays would be too bright
+    when using an NVIDIA GPU. (This did not affect the finished stream.)
+
+  - Many other bugfixes and small improvements.
+
+
 Nageru 1.4.2, November 24th, 2016
 
   - Fix a thread race that would sometimes cause x264 streaming to go awry.
