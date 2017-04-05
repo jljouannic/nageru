@@ -854,10 +854,12 @@ void Mixer::trim_queue(CaptureCard *card, unsigned card_index)
 		++dropped_frames;
 	}
 
+#if 0
 	if (dropped_frames > 0) {
 		fprintf(stderr, "Card %u dropped %u frame(s) to keep latency down.\n",
 			card_index, dropped_frames);
 	}
+#endif
 }
 
 
