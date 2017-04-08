@@ -7,13 +7,12 @@
 #include <stdio.h>
 #include <cstddef>
 
-#include "flags.h"
 #include "v210_converter.h"
 
 using namespace std;
 
-PBOFrameAllocator::PBOFrameAllocator(size_t frame_size, GLuint width, GLuint height, size_t num_queued_frames, GLenum buffer, GLenum permissions, GLenum map_bits)
-        : buffer(buffer)
+PBOFrameAllocator::PBOFrameAllocator(bmusb::PixelFormat pixel_format, size_t frame_size, GLuint width, GLuint height, size_t num_queued_frames, GLenum buffer, GLenum permissions, GLenum map_bits)
+        : pixel_format(pixel_format), buffer(buffer)
 {
 	userdata.reset(new Userdata[num_queued_frames]);
 	for (size_t i = 0; i < num_queued_frames; ++i) {
@@ -32,18 +31,19 @@ PBOFrameAllocator::PBOFrameAllocator(size_t frame_size, GLuint width, GLuint hei
 		frame.size = frame_size;
 		frame.userdata = &userdata[i];
 		userdata[i].pbo = pbo;
+		userdata[i].pixel_format = pixel_format;
 		frame.owner = this;
 
 		// For 8-bit Y'CbCr, we ask the driver to split Y' and Cb/Cr
 		// into separate textures. For 10-bit, the input format (v210)
 		// is complicated enough that we need to interpolate up to 4:4:4,
 		// which we do in a compute shader ourselves.
-		frame.interleaved = !global_flags.ten_bit_input;
+		frame.interleaved = (pixel_format == bmusb::PixelFormat_8BitYCbCr);
 
 		// Create textures. We don't allocate any data for the second field at this point
 		// (just create the texture state with the samplers), since our default assumed
 		// resolution is progressive.
-		if (global_flags.ten_bit_input) {
+		if (pixel_format == bmusb::PixelFormat_10BitYCbCr) {
 			glGenTextures(2, userdata[i].tex_v210);
 			check_error();
 			glGenTextures(2, userdata[i].tex_444);
@@ -67,7 +67,7 @@ PBOFrameAllocator::PBOFrameAllocator(size_t frame_size, GLuint width, GLuint hei
 		userdata[i].last_has_signal = false;
 		userdata[i].last_is_connected = false;
 		for (unsigned field = 0; field < 2; ++field) {
-			if (global_flags.ten_bit_input) {
+			if (pixel_format == bmusb::PixelFormat_10BitYCbCr) {
 				const size_t v210_width = v210Converter::get_minimum_v210_texture_width(width);
 
 				// Seemingly we need to set the minification filter even though
@@ -146,7 +146,7 @@ PBOFrameAllocator::~PBOFrameAllocator()
 		check_error();
 		glDeleteBuffers(1, &pbo);
 		check_error();
-		if (global_flags.ten_bit_input) {
+		if (pixel_format == bmusb::PixelFormat_10BitYCbCr) {
 			glDeleteTextures(2, ((Userdata *)frame.userdata)->tex_v210);
 			check_error();
 			glDeleteTextures(2, ((Userdata *)frame.userdata)->tex_444);

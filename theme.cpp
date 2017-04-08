@@ -202,7 +202,8 @@ int EffectChain_add_live_input(lua_State* L)
 	EffectChain *chain = (EffectChain *)luaL_checkudata(L, 1, "EffectChain");
 	bool override_bounce = checkbool(L, 2);
 	bool deinterlace = checkbool(L, 3);
-	return wrap_lua_object<LiveInputWrapper>(L, "LiveInputWrapper", theme, chain, override_bounce, deinterlace);
+	bmusb::PixelFormat pixel_format = global_flags.ten_bit_input ? bmusb::PixelFormat_10BitYCbCr : bmusb::PixelFormat_8BitYCbCr;
+	return wrap_lua_object<LiveInputWrapper>(L, "LiveInputWrapper", theme, chain, pixel_format, override_bounce, deinterlace);
 }
 
 int EffectChain_add_effect(lua_State* L)
@@ -595,8 +596,9 @@ const luaL_Reg InputStateInfo_funcs[] = {
 
 }  // namespace
 
-LiveInputWrapper::LiveInputWrapper(Theme *theme, EffectChain *chain, bool override_bounce, bool deinterlace)
+LiveInputWrapper::LiveInputWrapper(Theme *theme, EffectChain *chain, bmusb::PixelFormat pixel_format, bool override_bounce, bool deinterlace)
 	: theme(theme),
+	  pixel_format(pixel_format),
 	  deinterlace(deinterlace)
 {
 	ImageFormat inout_format;
@@ -616,9 +618,9 @@ LiveInputWrapper::LiveInputWrapper(Theme *theme, EffectChain *chain, bool overri
 	// Perhaps 601 was only to indicate the subsampling positions, not the
 	// colorspace itself? Tested with a Lenovo X1 gen 3 as input.
 	YCbCrFormat input_ycbcr_format;
-	input_ycbcr_format.chroma_subsampling_x = global_flags.ten_bit_input ? 1 : 2;
+	input_ycbcr_format.chroma_subsampling_x = (pixel_format == bmusb::PixelFormat_10BitYCbCr) ? 1 : 2;
 	input_ycbcr_format.chroma_subsampling_y = 1;
-	input_ycbcr_format.num_levels = global_flags.ten_bit_input ? 1024 : 256;
+	input_ycbcr_format.num_levels = (pixel_format == bmusb::PixelFormat_10BitYCbCr) ? 1024 : 256;
 	input_ycbcr_format.cb_x_position = 0.0;
 	input_ycbcr_format.cr_x_position = 0.0;
 	input_ycbcr_format.cb_y_position = 0.5;
@@ -643,7 +645,7 @@ LiveInputWrapper::LiveInputWrapper(Theme *theme, EffectChain *chain, bool overri
 	}
 	for (unsigned i = 0; i < num_inputs; ++i) {
 		// When using 10-bit input, we're converting to interleaved through v210Converter.
-		YCbCrInputSplitting splitting = global_flags.ten_bit_input ? YCBCR_INPUT_INTERLEAVED : YCBCR_INPUT_SPLIT_Y_AND_CBCR;
+		YCbCrInputSplitting splitting = (pixel_format == bmusb::PixelFormat_10BitYCbCr) ? YCBCR_INPUT_INTERLEAVED : YCBCR_INPUT_SPLIT_Y_AND_CBCR;
 		if (override_bounce) {
 			inputs.push_back(new NonBouncingYCbCrInput(inout_format, input_ycbcr_format, global_flags.width, global_flags.height, splitting));
 		} else {
@@ -696,7 +698,8 @@ void LiveInputWrapper::connect_signal(int signal_num)
 			userdata = (const PBOFrameAllocator::Userdata *)frame.frame->userdata;
 		}
 
-		if (global_flags.ten_bit_input) {
+		assert(userdata->pixel_format == pixel_format);
+		if (pixel_format == bmusb::PixelFormat_10BitYCbCr) {
 			inputs[i]->set_texture_num(0, userdata->tex_444[frame.field_number]);
 		} else {
 			inputs[i]->set_texture_num(0, userdata->tex_y[frame.field_number]);

@@ -17,7 +17,8 @@ class PBOFrameAllocator : public bmusb::FrameAllocator {
 public:
 	// Note: You need to have an OpenGL context when calling
 	// the constructor.
-	PBOFrameAllocator(size_t frame_size,
+	PBOFrameAllocator(bmusb::PixelFormat pixel_format,
+	                  size_t frame_size,
 	                  GLuint width, GLuint height,
 	                  size_t num_queued_frames = 16,  // FIXME: should be 6
 	                  GLenum buffer = GL_PIXEL_UNPACK_BUFFER_ARB,
@@ -30,16 +31,23 @@ public:
 	struct Userdata {
 		GLuint pbo;
 
+		// NOTE: These frames typically go into LiveInputWrapper, which is
+		// configured to accept one type of frame only. In other words,
+		// the existence of a format field doesn't mean you can set it
+		// freely at runtime.
+		bmusb::PixelFormat pixel_format;
+
 		// The second set is only used for the second field of interlaced inputs.
-		GLuint tex_y[2], tex_cbcr[2];  // For 8-bit.
-		GLuint tex_v210[2], tex_444[2];  // For 10-bit.
+		GLuint tex_y[2], tex_cbcr[2];  // For FRAME_FORMAT_YCBCR_8BIT.
+		GLuint tex_v210[2], tex_444[2];  // For FRAME_FORMAT_YCBCR_10BIT.
 		GLuint last_width[2], last_height[2];
-		GLuint last_v210_width[2];  // For 10-bit.
+		GLuint last_v210_width[2];  // FRAME_FORMAT_YCBCR_10BIT.
 		bool last_interlaced, last_has_signal, last_is_connected;
 		unsigned last_frame_rate_nom, last_frame_rate_den;
 	};
 
 private:
+	bmusb::PixelFormat pixel_format;
 	std::mutex freelist_mutex;
 	std::queue<Frame> freelist;
 	GLenum buffer;

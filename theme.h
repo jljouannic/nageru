@@ -10,6 +10,7 @@
 #include <string>
 #include <vector>
 
+#include "bmusb/bmusb.h"
 #include "ref_counted_frame.h"
 
 struct InputState;
@@ -87,7 +88,7 @@ private:
 // the mixer, and communicates that state over to the actual YCbCrInput.
 class LiveInputWrapper {
 public:
-	LiveInputWrapper(Theme *theme, movit::EffectChain *chain, bool override_bounce, bool deinterlace);
+	LiveInputWrapper(Theme *theme, movit::EffectChain *chain, bmusb::PixelFormat pixel_format, bool override_bounce, bool deinterlace);
 
 	void connect_signal(int signal_num);
 	movit::Effect *get_effect() const
@@ -101,6 +102,7 @@ public:
 
 private:
 	Theme *theme;  // Not owned by us.
+	bmusb::PixelFormat pixel_format;
 	std::vector<movit::YCbCrInput *> inputs;  // Multiple ones if deinterlacing. Owned by the chain.
 	movit::Effect *deinterlace_effect = nullptr;  // Owned by the chain.
 	bool deinterlace;

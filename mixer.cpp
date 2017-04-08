@@ -81,7 +81,7 @@ void insert_new_frame(RefCountedFrame frame, unsigned field_num, bool interlaced
 void ensure_texture_resolution(PBOFrameAllocator::Userdata *userdata, unsigned field, unsigned width, unsigned height, unsigned v210_width)
 {
 	bool first;
-	if (global_flags.ten_bit_input) {
+	if (userdata->pixel_format == bmusb::PixelFormat_10BitYCbCr) {
 		first = userdata->tex_v210[field] == 0 || userdata->tex_444[field] == 0;
 	} else {
 		first = userdata->tex_y[field] == 0 || userdata->tex_cbcr[field] == 0;
@@ -93,7 +93,7 @@ void ensure_texture_resolution(PBOFrameAllocator::Userdata *userdata, unsigned f
 		// We changed resolution since last use of this texture, so we need to create
 		// a new object. Note that this each card has its own PBOFrameAllocator,
 		// we don't need to worry about these flip-flopping between resolutions.
-		if (global_flags.ten_bit_input) {
+		if (userdata->pixel_format == bmusb::PixelFormat_10BitYCbCr) {
 			glBindTexture(GL_TEXTURE_2D, userdata->tex_444[field]);
 			check_error();
 			glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB10_A2, width, height, 0, GL_RGBA, GL_UNSIGNED_INT_2_10_10_10_REV, nullptr);
@@ -361,9 +361,12 @@ void Mixer::configure_card(unsigned card_index, CaptureInterface *capture, bool 
 	if (card->output.get() != output) {
 		card->output.reset(output);
 	}
+
+	bmusb::PixelFormat pixel_format = global_flags.ten_bit_input ? PixelFormat_10BitYCbCr : PixelFormat_8BitYCbCr;
+
 	card->capture->set_frame_callback(bind(&Mixer::bm_frame, this, card_index, _1, _2, _3, _4, _5, _6, _7));
 	if (card->frame_allocator == nullptr) {
-		card->frame_allocator.reset(new PBOFrameAllocator(8 << 20, global_flags.width, global_flags.height));  // 8 MB.
+		card->frame_allocator.reset(new PBOFrameAllocator(pixel_format, 8 << 20, global_flags.width, global_flags.height));  // 8 MB.
 	}
 	card->capture->set_video_frame_allocator(card->frame_allocator.get());
 	if (card->surface == nullptr) {
@@ -371,7 +374,7 @@ void Mixer::configure_card(unsigned card_index, CaptureInterface *capture, bool 
 	}
 	while (!card->new_frames.empty()) card->new_frames.pop_front();
 	card->last_timecode = -1;
-	card->capture->set_pixel_format(global_flags.ten_bit_input ? PixelFormat_10BitYCbCr : PixelFormat_8BitYCbCr);
+	card->capture->set_pixel_format(pixel_format);
 	card->capture->configure_card();
 
 	// NOTE: start_bm_capture() happens in thread_func().
@@ -595,7 +598,7 @@ void Mixer::bm_frame(unsigned card_index, uint16_t timecode,
 			glBindBuffer(GL_PIXEL_UNPACK_BUFFER, userdata->pbo);
 			check_error();
 
-			if (global_flags.ten_bit_input) {
+			if (userdata->pixel_format == bmusb::PixelFormat_10BitYCbCr) {
 				size_t field_start = video_offset + video_format.stride * field_start_line;
 				upload_texture(userdata->tex_v210[field], v210_width, video_format.height, video_format.stride, interlaced_stride, GL_RGBA, GL_UNSIGNED_INT_2_10_10_10_REV, field_start);
 				v210_converter->convert(userdata->tex_v210[field], userdata->tex_444[field], video_format.width, video_format.height);
