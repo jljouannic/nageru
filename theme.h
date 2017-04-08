@@ -81,6 +81,11 @@ private:
 	friend class LiveInputWrapper;
 };
 
+// LiveInputWrapper is a facade on top of an YCbCrInput, exposed to
+// the Lua code. It contains a function (connect_signal()) intended
+// to be called during chain setup, that picks out the current frame
+// (in the form of a set of textures) from the input state given by
+// the mixer, and communicates that state over to the actual YCbCrInput.
 class LiveInputWrapper {
 public:
 	LiveInputWrapper(Theme *theme, movit::EffectChain *chain, bool override_bounce, bool deinterlace);
