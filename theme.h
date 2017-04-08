@@ -2,6 +2,7 @@
 #define _THEME_H 1
 
 #include <lua.hpp>
+#include <movit/flat_input.h>
 #include <movit/ycbcr_input.h>
 #include <stdbool.h>
 #include <functional>
@@ -16,9 +17,9 @@
 struct InputState;
 
 namespace movit {
-class ResourcePool;
 class Effect;
 class EffectChain;
+class ResourcePool;
 struct ImageFormat;
 struct YCbCrFormat;
 }  // namespace movit
@@ -88,6 +89,7 @@ private:
 // the mixer, and communicates that state over to the actual YCbCrInput.
 class LiveInputWrapper {
 public:
+	// Note: <override_bounce> is irrelevant for PixelFormat_8BitRGBA.
 	LiveInputWrapper(Theme *theme, movit::EffectChain *chain, bmusb::PixelFormat pixel_format, bool override_bounce, bool deinterlace);
 
 	void connect_signal(int signal_num);
@@ -95,15 +97,18 @@ public:
 	{
 		if (deinterlace) {
 			return deinterlace_effect;
+		} else if (pixel_format == bmusb::PixelFormat_8BitRGBA) {
+			return rgba_inputs[0];
 		} else {
-			return inputs[0];
+			return ycbcr_inputs[0];
 		}
 	}
 
 private:
 	Theme *theme;  // Not owned by us.
 	bmusb::PixelFormat pixel_format;
-	std::vector<movit::YCbCrInput *> inputs;  // Multiple ones if deinterlacing. Owned by the chain.
+	std::vector<movit::YCbCrInput *> ycbcr_inputs;  // Multiple ones if deinterlacing. Owned by the chain.
+	std::vector<movit::FlatInput *> rgba_inputs;  // Multiple ones if deinterlacing. Owned by the chain.
 	movit::Effect *deinterlace_effect = nullptr;  // Owned by the chain.
 	bool deinterlace;
 };

@@ -40,6 +40,7 @@ public:
 		// The second set is only used for the second field of interlaced inputs.
 		GLuint tex_y[2], tex_cbcr[2];  // For FRAME_FORMAT_YCBCR_8BIT.
 		GLuint tex_v210[2], tex_444[2];  // For FRAME_FORMAT_YCBCR_10BIT.
+		GLuint tex_rgba[2];  // For FRAME_FORMAT_RGBA_8BIT.
 		GLuint last_width[2], last_height[2];
 		GLuint last_v210_width[2];  // FRAME_FORMAT_YCBCR_10BIT.
 		bool last_interlaced, last_has_signal, last_is_connected;

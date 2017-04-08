@@ -612,22 +612,6 @@ LiveInputWrapper::LiveInputWrapper(Theme *theme, EffectChain *chain, bmusb::Pixe
 	// So we pick sRGB as the least evil here.
 	inout_format.gamma_curve = GAMMA_sRGB;
 
-	// The Blackmagic driver docs claim that the device outputs Y'CbCr
-	// according to Rec. 601, but practical testing indicates it definitely
-	// is Rec. 709 (at least up to errors attributable to rounding errors).
-	// Perhaps 601 was only to indicate the subsampling positions, not the
-	// colorspace itself? Tested with a Lenovo X1 gen 3 as input.
-	YCbCrFormat input_ycbcr_format;
-	input_ycbcr_format.chroma_subsampling_x = (pixel_format == bmusb::PixelFormat_10BitYCbCr) ? 1 : 2;
-	input_ycbcr_format.chroma_subsampling_y = 1;
-	input_ycbcr_format.num_levels = (pixel_format == bmusb::PixelFormat_10BitYCbCr) ? 1024 : 256;
-	input_ycbcr_format.cb_x_position = 0.0;
-	input_ycbcr_format.cr_x_position = 0.0;
-	input_ycbcr_format.cb_y_position = 0.5;
-	input_ycbcr_format.cr_y_position = 0.5;
-	input_ycbcr_format.luma_coefficients = YCBCR_REC_709;
-	input_ycbcr_format.full_range = false;
-
 	unsigned num_inputs;
 	if (deinterlace) {
 		deinterlace_effect = new movit::DeinterlaceEffect();
@@ -643,20 +627,50 @@ LiveInputWrapper::LiveInputWrapper(Theme *theme, EffectChain *chain, bmusb::Pixe
 	} else {
 		num_inputs = 1;
 	}
-	for (unsigned i = 0; i < num_inputs; ++i) {
-		// When using 10-bit input, we're converting to interleaved through v210Converter.
-		YCbCrInputSplitting splitting = (pixel_format == bmusb::PixelFormat_10BitYCbCr) ? YCBCR_INPUT_INTERLEAVED : YCBCR_INPUT_SPLIT_Y_AND_CBCR;
-		if (override_bounce) {
-			inputs.push_back(new NonBouncingYCbCrInput(inout_format, input_ycbcr_format, global_flags.width, global_flags.height, splitting));
-		} else {
-			inputs.push_back(new YCbCrInput(inout_format, input_ycbcr_format, global_flags.width, global_flags.height, splitting));
-		}
-		chain->add_input(inputs.back());
-	}
 
-	if (deinterlace) {
-		vector<Effect *> reverse_inputs(inputs.rbegin(), inputs.rend());
-		chain->add_effect(deinterlace_effect, reverse_inputs);
+	if (pixel_format == bmusb::PixelFormat_8BitRGBA) {
+		for (unsigned i = 0; i < num_inputs; ++i) {
+			rgba_inputs.push_back(new FlatInput(inout_format, FORMAT_RGBA_POSTMULTIPLIED_ALPHA, GL_UNSIGNED_BYTE, global_flags.width, global_flags.height));
+			chain->add_input(rgba_inputs.back());
+		}
+
+		if (deinterlace) {
+			vector<Effect *> reverse_inputs(rgba_inputs.rbegin(), rgba_inputs.rend());
+			chain->add_effect(deinterlace_effect, reverse_inputs);
+		}
+	} else {
+		assert(pixel_format == bmusb::PixelFormat_8BitYCbCr || pixel_format == bmusb::PixelFormat_10BitYCbCr);
+		// The Blackmagic driver docs claim that the device outputs Y'CbCr
+		// according to Rec. 601, but practical testing indicates it definitely
+		// is Rec. 709 (at least up to errors attributable to rounding errors).
+		// Perhaps 601 was only to indicate the subsampling positions, not the
+		// colorspace itself? Tested with a Lenovo X1 gen 3 as input.
+		YCbCrFormat input_ycbcr_format;
+		input_ycbcr_format.chroma_subsampling_x = (pixel_format == bmusb::PixelFormat_10BitYCbCr) ? 1 : 2;
+		input_ycbcr_format.chroma_subsampling_y = 1;
+		input_ycbcr_format.num_levels = (pixel_format == bmusb::PixelFormat_10BitYCbCr) ? 1024 : 256;
+		input_ycbcr_format.cb_x_position = 0.0;
+		input_ycbcr_format.cr_x_position = 0.0;
+		input_ycbcr_format.cb_y_position = 0.5;
+		input_ycbcr_format.cr_y_position = 0.5;
+		input_ycbcr_format.luma_coefficients = YCBCR_REC_709;
+		input_ycbcr_format.full_range = false;
+
+		for (unsigned i = 0; i < num_inputs; ++i) {
+			// When using 10-bit input, we're converting to interleaved through v210Converter.
+			YCbCrInputSplitting splitting = (pixel_format == bmusb::PixelFormat_10BitYCbCr) ? YCBCR_INPUT_INTERLEAVED : YCBCR_INPUT_SPLIT_Y_AND_CBCR;
+			if (override_bounce) {
+				ycbcr_inputs.push_back(new NonBouncingYCbCrInput(inout_format, input_ycbcr_format, global_flags.width, global_flags.height, splitting));
+			} else {
+				ycbcr_inputs.push_back(new YCbCrInput(inout_format, input_ycbcr_format, global_flags.width, global_flags.height, splitting));
+			}
+			chain->add_input(ycbcr_inputs.back());
+		}
+
+		if (deinterlace) {
+			vector<Effect *> reverse_inputs(ycbcr_inputs.rbegin(), ycbcr_inputs.rend());
+			chain->add_effect(deinterlace_effect, reverse_inputs);
+		}
 	}
 }
 
@@ -682,7 +696,7 @@ void LiveInputWrapper::connect_signal(int signal_num)
 	}
 
 	BufferedFrame last_good_frame = first_frame;
-	for (unsigned i = 0; i < inputs.size(); ++i) {
+	for (unsigned i = 0; i < max(ycbcr_inputs.size(), rgba_inputs.size()); ++i) {
 		BufferedFrame frame = theme->input_state->buffered_frames[signal_num][i];
 		if (frame.frame == nullptr) {
 			// Not enough data; reuse last frame (well, field).
@@ -691,22 +705,35 @@ void LiveInputWrapper::connect_signal(int signal_num)
 		}
 		const PBOFrameAllocator::Userdata *userdata = (const PBOFrameAllocator::Userdata *)frame.frame->userdata;
 
-		if (userdata->last_width[frame.field_number] != width ||
-		    userdata->last_height[frame.field_number] != height) {
+		unsigned this_width = userdata->last_width[frame.field_number];
+		unsigned this_height = userdata->last_height[frame.field_number];
+		if (this_width != width || this_height != height) {
 			// Resolution changed; reuse last frame/field.
 			frame = last_good_frame;
 			userdata = (const PBOFrameAllocator::Userdata *)frame.frame->userdata;
 		}
 
 		assert(userdata->pixel_format == pixel_format);
-		if (pixel_format == bmusb::PixelFormat_10BitYCbCr) {
-			inputs[i]->set_texture_num(0, userdata->tex_444[frame.field_number]);
-		} else {
-			inputs[i]->set_texture_num(0, userdata->tex_y[frame.field_number]);
-			inputs[i]->set_texture_num(1, userdata->tex_cbcr[frame.field_number]);
+		switch (pixel_format) {
+		case bmusb::PixelFormat_8BitYCbCr:
+			ycbcr_inputs[i]->set_texture_num(0, userdata->tex_y[frame.field_number]);
+			ycbcr_inputs[i]->set_texture_num(1, userdata->tex_cbcr[frame.field_number]);
+			ycbcr_inputs[i]->set_width(this_width);
+			ycbcr_inputs[i]->set_height(this_height);
+			break;
+		case bmusb::PixelFormat_10BitYCbCr:
+			ycbcr_inputs[i]->set_texture_num(0, userdata->tex_444[frame.field_number]);
+			ycbcr_inputs[i]->set_width(this_width);
+			ycbcr_inputs[i]->set_height(this_height);
+			break;
+		case bmusb::PixelFormat_8BitRGBA:
+			rgba_inputs[i]->set_texture_num(userdata->tex_rgba[frame.field_number]);
+			rgba_inputs[i]->set_width(this_width);
+			rgba_inputs[i]->set_height(this_height);
+			break;
+		default:
+			assert(false);
 		}
-		inputs[i]->set_width(userdata->last_width[frame.field_number]);
-		inputs[i]->set_height(userdata->last_height[frame.field_number]);
 
 		last_good_frame = frame;
 	}

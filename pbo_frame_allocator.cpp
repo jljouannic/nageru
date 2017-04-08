@@ -37,22 +37,30 @@ PBOFrameAllocator::PBOFrameAllocator(bmusb::PixelFormat pixel_format, size_t fra
 		// For 8-bit Y'CbCr, we ask the driver to split Y' and Cb/Cr
 		// into separate textures. For 10-bit, the input format (v210)
 		// is complicated enough that we need to interpolate up to 4:4:4,
-		// which we do in a compute shader ourselves.
+		// which we do in a compute shader ourselves. For RGBA, the data
+		// is already 4:4:4:4.
 		frame.interleaved = (pixel_format == bmusb::PixelFormat_8BitYCbCr);
 
 		// Create textures. We don't allocate any data for the second field at this point
 		// (just create the texture state with the samplers), since our default assumed
 		// resolution is progressive.
-		if (pixel_format == bmusb::PixelFormat_10BitYCbCr) {
-			glGenTextures(2, userdata[i].tex_v210);
-			check_error();
-			glGenTextures(2, userdata[i].tex_444);
-			check_error();
-		} else {
+		switch (pixel_format) {
+		case bmusb::PixelFormat_8BitYCbCr:
 			glGenTextures(2, userdata[i].tex_y);
 			check_error();
 			glGenTextures(2, userdata[i].tex_cbcr);
 			check_error();
+			break;
+		case bmusb::PixelFormat_10BitYCbCr:
+			glGenTextures(2, userdata[i].tex_v210);
+			check_error();
+			glGenTextures(2, userdata[i].tex_444);
+			check_error();
+			break;
+		case bmusb::PixelFormat_8BitRGBA:
+			glGenTextures(2, userdata[i].tex_rgba);
+			check_error();
+			break;
 		}
 
 		userdata[i].last_width[0] = width;
@@ -67,7 +75,8 @@ PBOFrameAllocator::PBOFrameAllocator(bmusb::PixelFormat pixel_format, size_t fra
 		userdata[i].last_has_signal = false;
 		userdata[i].last_is_connected = false;
 		for (unsigned field = 0; field < 2; ++field) {
-			if (pixel_format == bmusb::PixelFormat_10BitYCbCr) {
+			switch (pixel_format) {
+			case bmusb::PixelFormat_10BitYCbCr: {
 				const size_t v210_width = v210Converter::get_minimum_v210_texture_width(width);
 
 				// Seemingly we need to set the minification filter even though
@@ -95,7 +104,9 @@ PBOFrameAllocator::PBOFrameAllocator(bmusb::PixelFormat pixel_format, size_t fra
 					glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB10_A2, width, height, 0, GL_RGBA, GL_UNSIGNED_INT_2_10_10_10_REV, NULL);
 					check_error();
 				}
-			} else {
+				break;
+			}
+			case bmusb::PixelFormat_8BitYCbCr:
 				glBindTexture(GL_TEXTURE_2D, userdata[i].tex_y[field]);
 				check_error();
 				glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
@@ -121,6 +132,23 @@ PBOFrameAllocator::PBOFrameAllocator(bmusb::PixelFormat pixel_format, size_t fra
 					glTexImage2D(GL_TEXTURE_2D, 0, GL_RG8, width / 2, height, 0, GL_RG, GL_UNSIGNED_BYTE, NULL);
 					check_error();
 				}
+				break;
+			case bmusb::PixelFormat_8BitRGBA:
+				glBindTexture(GL_TEXTURE_2D, userdata[i].tex_rgba[field]);
+				check_error();
+				glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+				check_error();
+				glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+				check_error();
+				glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+				check_error();
+				if (field == 0) {
+					glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, width, height, 0, GL_RGBA, GL_UNSIGNED_BYTE, NULL);
+					check_error();
+				}
+				break;
+			default:
+				assert(false);
 			}
 		}
 
@@ -146,16 +174,25 @@ PBOFrameAllocator::~PBOFrameAllocator()
 		check_error();
 		glDeleteBuffers(1, &pbo);
 		check_error();
-		if (pixel_format == bmusb::PixelFormat_10BitYCbCr) {
+		switch (pixel_format) {
+		case bmusb::PixelFormat_10BitYCbCr:
 			glDeleteTextures(2, ((Userdata *)frame.userdata)->tex_v210);
 			check_error();
 			glDeleteTextures(2, ((Userdata *)frame.userdata)->tex_444);
 			check_error();
-		} else {
+			break;
+		case bmusb::PixelFormat_8BitYCbCr:
 			glDeleteTextures(2, ((Userdata *)frame.userdata)->tex_y);
 			check_error();
 			glDeleteTextures(2, ((Userdata *)frame.userdata)->tex_cbcr);
 			check_error();
+			break;
+		case bmusb::PixelFormat_8BitRGBA:
+			glDeleteTextures(2, ((Userdata *)frame.userdata)->tex_rgba);
+			check_error();
+			break;
+		default:
+			assert(false);
 		}
 	}
 }

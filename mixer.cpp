@@ -81,10 +81,18 @@ void insert_new_frame(RefCountedFrame frame, unsigned field_num, bool interlaced
 void ensure_texture_resolution(PBOFrameAllocator::Userdata *userdata, unsigned field, unsigned width, unsigned height, unsigned v210_width)
 {
 	bool first;
-	if (userdata->pixel_format == bmusb::PixelFormat_10BitYCbCr) {
+	switch (userdata->pixel_format) {
+	case bmusb::PixelFormat_10BitYCbCr:
 		first = userdata->tex_v210[field] == 0 || userdata->tex_444[field] == 0;
-	} else {
+		break;
+	case bmusb::PixelFormat_8BitYCbCr:
 		first = userdata->tex_y[field] == 0 || userdata->tex_cbcr[field] == 0;
+		break;
+	case bmusb::PixelFormat_8BitRGBA:
+		first = userdata->tex_rgba[field] == 0;
+		break;
+	default:
+		assert(false);
 	}
 
 	if (first ||
@@ -93,12 +101,14 @@ void ensure_texture_resolution(PBOFrameAllocator::Userdata *userdata, unsigned f
 		// We changed resolution since last use of this texture, so we need to create
 		// a new object. Note that this each card has its own PBOFrameAllocator,
 		// we don't need to worry about these flip-flopping between resolutions.
-		if (userdata->pixel_format == bmusb::PixelFormat_10BitYCbCr) {
+		switch (userdata->pixel_format) {
+		case bmusb::PixelFormat_10BitYCbCr:
 			glBindTexture(GL_TEXTURE_2D, userdata->tex_444[field]);
 			check_error();
 			glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB10_A2, width, height, 0, GL_RGBA, GL_UNSIGNED_INT_2_10_10_10_REV, nullptr);
 			check_error();
-		} else {
+			break;
+		case bmusb::PixelFormat_8BitYCbCr: {
 			size_t cbcr_width = width / 2;
 
 			glBindTexture(GL_TEXTURE_2D, userdata->tex_cbcr[field]);
@@ -109,6 +119,14 @@ void ensure_texture_resolution(PBOFrameAllocator::Userdata *userdata, unsigned f
 			check_error();
 			glTexImage2D(GL_TEXTURE_2D, 0, GL_R8, width, height, 0, GL_RED, GL_UNSIGNED_BYTE, nullptr);
 			check_error();
+			break;
+		}
+		case bmusb::PixelFormat_8BitRGBA:
+			glBindTexture(GL_TEXTURE_2D, userdata->tex_rgba[field]);
+			check_error();
+			glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, width, height, 0, GL_RGBA, GL_UNSIGNED_BYTE, nullptr);
+			check_error();
+			break;
 		}
 		userdata->last_width[field] = width;
 		userdata->last_height[field] = height;
@@ -591,24 +609,36 @@ void Mixer::bm_frame(unsigned card_index, uint16_t timecode,
 				field_start_line = video_format.extra_lines_top;
 			}
 
-			// For 8-bit input, v210_width will be nonsensical but not used.
+			// For anything not FRAME_FORMAT_YCBCR_10BIT, v210_width will be nonsensical but not used.
 			size_t v210_width = video_format.stride / sizeof(uint32_t);
 			ensure_texture_resolution(userdata, field, video_format.width, video_format.height, v210_width);
 
 			glBindBuffer(GL_PIXEL_UNPACK_BUFFER, userdata->pbo);
 			check_error();
 
-			if (userdata->pixel_format == bmusb::PixelFormat_10BitYCbCr) {
+			switch (userdata->pixel_format) {
+			case bmusb::PixelFormat_10BitYCbCr: {
 				size_t field_start = video_offset + video_format.stride * field_start_line;
 				upload_texture(userdata->tex_v210[field], v210_width, video_format.height, video_format.stride, interlaced_stride, GL_RGBA, GL_UNSIGNED_INT_2_10_10_10_REV, field_start);
 				v210_converter->convert(userdata->tex_v210[field], userdata->tex_444[field], video_format.width, video_format.height);
-			} else {
+				break;
+			}
+			case bmusb::PixelFormat_8BitYCbCr: {
 				size_t field_y_start = y_offset + video_format.width * field_start_line;
 				size_t field_cbcr_start = cbcr_offset + cbcr_width * field_start_line * sizeof(uint16_t);
 
 				// Make up our own strides, since we are interleaving.
 				upload_texture(userdata->tex_y[field], video_format.width, video_format.height, video_format.width, interlaced_stride, GL_RED, GL_UNSIGNED_BYTE, field_y_start);
 				upload_texture(userdata->tex_cbcr[field], cbcr_width, video_format.height, cbcr_width * sizeof(uint16_t), interlaced_stride, GL_RG, GL_UNSIGNED_BYTE, field_cbcr_start);
+				break;
+			}
+			case bmusb::PixelFormat_8BitRGBA: {
+				size_t field_start = video_offset + video_format.stride * field_start_line;
+				upload_texture(userdata->tex_rgba[field], video_format.width, video_format.height, video_format.stride, interlaced_stride, GL_RGBA, GL_UNSIGNED_BYTE, field_start);
+				break;
+			}
+			default:
+				assert(false);
 			}
 
 			glBindBuffer(GL_PIXEL_UNPACK_BUFFER, 0);
