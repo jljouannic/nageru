@@ -7,6 +7,7 @@
 #include <stdio.h>
 #include <cstddef>
 
+#include "flags.h"
 #include "v210_converter.h"
 
 using namespace std;
@@ -143,7 +144,11 @@ PBOFrameAllocator::PBOFrameAllocator(bmusb::PixelFormat pixel_format, size_t fra
 				glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
 				check_error();
 				if (field == 0) {
-					glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, width, height, 0, GL_RGBA, GL_UNSIGNED_BYTE, NULL);
+					if (global_flags.can_disable_srgb_decoder) {  // See the comments in tweaked_inputs.h.
+						glTexImage2D(GL_TEXTURE_2D, 0, GL_SRGB8_ALPHA8, width, height, 0, GL_RGBA, GL_UNSIGNED_BYTE, NULL);
+					} else {
+						glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, width, height, 0, GL_RGBA, GL_UNSIGNED_BYTE, NULL);
+					}
 					check_error();
 				}
 				break;

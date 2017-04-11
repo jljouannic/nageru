@@ -630,7 +630,11 @@ LiveInputWrapper::LiveInputWrapper(Theme *theme, EffectChain *chain, bmusb::Pixe
 
 	if (pixel_format == bmusb::PixelFormat_8BitRGBA) {
 		for (unsigned i = 0; i < num_inputs; ++i) {
-			rgba_inputs.push_back(new FlatInput(inout_format, FORMAT_RGBA_POSTMULTIPLIED_ALPHA, GL_UNSIGNED_BYTE, global_flags.width, global_flags.height));
+			if (global_flags.can_disable_srgb_decoder) {
+				rgba_inputs.push_back(new sRGBSwitchingFlatInput(inout_format, FORMAT_RGBA_POSTMULTIPLIED_ALPHA, GL_UNSIGNED_BYTE, global_flags.width, global_flags.height));
+			} else {
+				rgba_inputs.push_back(new NonsRGBCapableFlatInput(inout_format, FORMAT_RGBA_POSTMULTIPLIED_ALPHA, GL_UNSIGNED_BYTE, global_flags.width, global_flags.height));
+			}
 			chain->add_input(rgba_inputs.back());
 		}
 

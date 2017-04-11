@@ -124,7 +124,11 @@ void ensure_texture_resolution(PBOFrameAllocator::Userdata *userdata, unsigned f
 		case bmusb::PixelFormat_8BitRGBA:
 			glBindTexture(GL_TEXTURE_2D, userdata->tex_rgba[field]);
 			check_error();
-			glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, width, height, 0, GL_RGBA, GL_UNSIGNED_BYTE, nullptr);
+			if (global_flags.can_disable_srgb_decoder) {  // See the comments in tweaked_inputs.h.
+				glTexImage2D(GL_TEXTURE_2D, 0, GL_SRGB8_ALPHA8, width, height, 0, GL_RGBA, GL_UNSIGNED_BYTE, nullptr);
+			} else {
+				glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, width, height, 0, GL_RGBA, GL_UNSIGNED_BYTE, nullptr);
+			}
 			check_error();
 			break;
 		}
@@ -205,6 +209,9 @@ Mixer::Mixer(const QSurfaceFormat &format, unsigned num_cards)
 {
 	CHECK(init_movit(MOVIT_SHADER_DIR, MOVIT_DEBUG_OFF));
 	check_error();
+
+	// This nearly always should be true.
+	global_flags.can_disable_srgb_decoder = epoxy_has_gl_extension("GL_EXT_texture_sRGB_decode");
 
 	// Since we allow non-bouncing 4:2:2 YCbCrInputs, effective subpixel precision
 	// will be halved when sampling them, and we need to compensate here.
