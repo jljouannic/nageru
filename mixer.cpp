@@ -278,7 +278,7 @@ Mixer::Mixer(const QSurfaceFormat &format, unsigned num_cards)
 				DeckLinkCapture *capture = new DeckLinkCapture(decklink, card_index);
 				DeckLinkOutput *output = new DeckLinkOutput(resource_pool.get(), decklink_output_surface, global_flags.width, global_flags.height, card_index);
 				output->set_device(decklink);
-				configure_card(card_index, capture, /*is_fake_capture=*/false, output);
+				configure_card(card_index, capture, CardType::LIVE_CARD, output);
 				++num_pci_devices;
 			}
 			decklink_iterator->Release();
@@ -292,14 +292,14 @@ Mixer::Mixer(const QSurfaceFormat &format, unsigned num_cards)
 	for (unsigned usb_card_index = 0; usb_card_index < num_usb_devices && card_index < num_cards; ++usb_card_index, ++card_index) {
 		BMUSBCapture *capture = new BMUSBCapture(usb_card_index);
 		capture->set_card_disconnected_callback(bind(&Mixer::bm_hotplug_remove, this, card_index));
-		configure_card(card_index, capture, /*is_fake_capture=*/false, /*output=*/nullptr);
+		configure_card(card_index, capture, CardType::LIVE_CARD, /*output=*/nullptr);
 	}
 	fprintf(stderr, "Found %u USB card(s).\n", num_usb_devices);
 
 	unsigned num_fake_cards = 0;
 	for ( ; card_index < num_cards; ++card_index, ++num_fake_cards) {
 		FakeCapture *capture = new FakeCapture(global_flags.width, global_flags.height, FAKE_FPS, OUTPUT_FREQUENCY, card_index, global_flags.fake_cards_audio);
-		configure_card(card_index, capture, /*is_fake_capture=*/true, /*output=*/nullptr);
+		configure_card(card_index, capture, CardType::FAKE_CAPTURE, /*output=*/nullptr);
 	}
 
 	if (num_fake_cards > 0) {
@@ -373,7 +373,7 @@ Mixer::~Mixer()
 	video_encoder.reset(nullptr);
 }
 
-void Mixer::configure_card(unsigned card_index, CaptureInterface *capture, bool is_fake_capture, DeckLinkOutput *output)
+void Mixer::configure_card(unsigned card_index, CaptureInterface *capture, CardType card_type, DeckLinkOutput *output)
 {
 	printf("Configuring card %d...\n", card_index);
 
@@ -382,7 +382,7 @@ void Mixer::configure_card(unsigned card_index, CaptureInterface *capture, bool 
 		card->capture->stop_dequeue_thread();
 	}
 	card->capture.reset(capture);
-	card->is_fake_capture = is_fake_capture;
+	card->is_fake_capture = (card_type == CardType::FAKE_CAPTURE);
 	if (card->output.get() != output) {
 		card->output.reset(output);
 	}
@@ -443,7 +443,7 @@ void Mixer::set_output_card_internal(int card_index)
 		lock.lock();
 		card->parked_capture = move(card->capture);
 		bmusb::CaptureInterface *fake_capture = new FakeCapture(global_flags.width, global_flags.height, FAKE_FPS, OUTPUT_FREQUENCY, card_index, global_flags.fake_cards_audio);
-		configure_card(card_index, fake_capture, /*is_fake_capture=*/true, card->output.release());
+		configure_card(card_index, fake_capture, CardType::FAKE_CAPTURE, card->output.release());
 		card->queue_length_policy.reset(card_index);
 		card->capture->start_bm_capture();
 		desired_output_video_mode = output_video_mode = card->output->pick_video_mode(desired_output_video_mode);
@@ -977,7 +977,7 @@ void Mixer::handle_hotplugged_cards()
 		if (card->capture->get_disconnected()) {
 			fprintf(stderr, "Card %u went away, replacing with a fake card.\n", card_index);
 			FakeCapture *capture = new FakeCapture(global_flags.width, global_flags.height, FAKE_FPS, OUTPUT_FREQUENCY, card_index, global_flags.fake_cards_audio);
-			configure_card(card_index, capture, /*is_fake_capture=*/true, /*output=*/nullptr);
+			configure_card(card_index, capture, CardType::FAKE_CAPTURE, /*output=*/nullptr);
 			card->queue_length_policy.reset(card_index);
 			card->capture->start_bm_capture();
 		}
@@ -1007,7 +1007,7 @@ void Mixer::handle_hotplugged_cards()
 			fprintf(stderr, "New card plugged in, choosing slot %d.\n", free_card_index);
 			CaptureCard *card = &cards[free_card_index];
 			BMUSBCapture *capture = new BMUSBCapture(free_card_index, new_dev);
-			configure_card(free_card_index, capture, /*is_fake_capture=*/false, /*output=*/nullptr);
+			configure_card(free_card_index, capture, CardType::LIVE_CARD, /*output=*/nullptr);
 			card->queue_length_policy.reset(free_card_index);
 			capture->set_card_disconnected_callback(bind(&Mixer::bm_hotplug_remove, this, free_card_index));
 			capture->start_bm_capture();

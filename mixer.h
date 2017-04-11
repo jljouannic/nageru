@@ -334,7 +334,11 @@ public:
 private:
 	struct CaptureCard;
 
-	void configure_card(unsigned card_index, bmusb::CaptureInterface *capture, bool is_fake_capture, DeckLinkOutput *output);
+	enum class CardType {
+		LIVE_CARD,
+		FAKE_CAPTURE
+	};
+	void configure_card(unsigned card_index, bmusb::CaptureInterface *capture, CardType card_type, DeckLinkOutput *output);
 	void set_output_card_internal(int card_index);  // Should only be called from the mixer thread.
 	void bm_frame(unsigned card_index, uint16_t timecode,
 		bmusb::FrameAllocator::Frame video_frame, size_t video_offset, bmusb::VideoFormat video_format,
