@@ -37,8 +37,6 @@ struct SwsContext;
 
 using namespace std;
 
-namespace {
-
 string search_for_file(const string &filename)
 {
 	// Look for the file in all theme_dirs until we find one;
@@ -61,18 +59,25 @@ string search_for_file(const string &filename)
 	for (const string &error : errors) {
 		fprintf(stderr, "%s\n", error.c_str());
 	}
-	fprintf(stderr, "Couldn't find %s in any directory in --theme-dirs, exiting.\n",
-		filename.c_str());
-	exit(1);
+	return "";
 }
 
-}  // namespace
+string search_for_file_or_die(const string &filename)
+{
+	string pathname = search_for_file(filename);
+	if (pathname.empty()) {
+		fprintf(stderr, "Couldn't find %s in any directory in --theme-dirs, exiting.\n",
+			filename.c_str());
+		exit(1);
+	}
+	return pathname;
+}
 
 ImageInput::ImageInput(const string &filename)
 	: movit::FlatInput({movit::COLORSPACE_sRGB, movit::GAMMA_sRGB}, movit::FORMAT_RGBA_POSTMULTIPLIED_ALPHA,
 	                   GL_UNSIGNED_BYTE, 1280, 720),  // Resolution will be overwritten.
 	  filename(filename),
-	  pathname(search_for_file(filename)),
+	  pathname(search_for_file_or_die(filename)),
 	  current_image(load_image(filename, pathname))
 {
 	if (current_image == nullptr) {  // Could happen even though search_for_file() returned.

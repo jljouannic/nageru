@@ -46,4 +46,12 @@ private:
 	static std::condition_variable threads_should_quit_modified;  // Signals when threads_should_quit is set.
 };
 
+// Look for the file in all theme_dirs until we find one;
+// that will be the permanent resolution of this file, whether
+// it is actually valid or not. Returns an empty string on error.
+std::string search_for_file(const std::string &filename);
+
+// Same, but exits on error.
+std::string search_for_file_or_die(const std::string &filename);
+
 #endif // !defined(_IMAGE_INPUT_H)
