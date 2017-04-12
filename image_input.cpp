@@ -44,6 +44,17 @@ string search_for_file(const string &filename)
 		return filename;
 	}
 
+	// See if we match ^[a-z]:/, which is probably a URL of some sort
+	// (FFmpeg understands various forms of these).
+	for (size_t i = 0; i < filename.size() - 1; ++i) {
+		if (filename[i] == ':' && filename[i + 1] == '/') {
+			return filename;
+		}
+		if (!isalpha(filename[i])) {
+			break;
+		}
+	}
+
 	// Look for the file in all theme_dirs until we find one;
 	// that will be the permanent resolution of this file, whether
 	// it is actually valid or not.
