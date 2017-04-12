@@ -39,6 +39,11 @@ using namespace std;
 
 string search_for_file(const string &filename)
 {
+	if (!filename.empty() && filename[0] == '/') {
+		// Absolute path.
+		return filename;
+	}
+
 	// Look for the file in all theme_dirs until we find one;
 	// that will be the permanent resolution of this file, whether
 	// it is actually valid or not.
