@@ -39,6 +39,7 @@
 #include "decklink_output.h"
 #include "defs.h"
 #include "disk_space_estimator.h"
+#include "ffmpeg_capture.h"
 #include "flags.h"
 #include "input_mapping.h"
 #include "pbo_frame_allocator.h"
@@ -306,10 +307,23 @@ Mixer::Mixer(const QSurfaceFormat &format, unsigned num_cards)
 		fprintf(stderr, "Initialized %u fake cards.\n", num_fake_cards);
 	}
 
+	// Initialize all video inputs the theme asked for. Note that these are
+	// all put _after_ the regular cards, which stop at <num_cards> - 1.
+	std::vector<FFmpegCapture *> video_inputs = theme->get_video_inputs();
+	for (unsigned video_card_index = 0; video_card_index < video_inputs.size(); ++card_index, ++video_card_index) {
+		if (card_index >= MAX_VIDEO_CARDS) {
+			fprintf(stderr, "ERROR: Not enough card slots available for the videos the theme requested.\n");
+			exit(1);
+		}
+		configure_card(card_index, video_inputs[video_card_index], CardType::FFMPEG_INPUT, /*output=*/nullptr);
+		video_inputs[video_card_index]->set_card_index(card_index);
+	}
+	num_video_inputs = video_inputs.size();
+
 	BMUSBCapture::set_card_connected_callback(bind(&Mixer::bm_hotplug_add, this, _1));
 	BMUSBCapture::start_bm_thread();
 
-	for (unsigned card_index = 0; card_index < num_cards; ++card_index) {
+	for (unsigned card_index = 0; card_index < num_cards + num_video_inputs; ++card_index) {
 		cards[card_index].queue_length_policy.reset(card_index);
 	}
 
@@ -357,7 +371,7 @@ Mixer::~Mixer()
 {
 	BMUSBCapture::stop_bm_thread();
 
-	for (unsigned card_index = 0; card_index < num_cards; ++card_index) {
+	for (unsigned card_index = 0; card_index < num_cards + num_video_inputs; ++card_index) {
 		{
 			unique_lock<mutex> lock(card_mutex);
 			cards[card_index].should_quit = true;  // Unblock thread.
@@ -387,7 +401,14 @@ void Mixer::configure_card(unsigned card_index, CaptureInterface *capture, CardT
 		card->output.reset(output);
 	}
 
-	bmusb::PixelFormat pixel_format = global_flags.ten_bit_input ? PixelFormat_10BitYCbCr : PixelFormat_8BitYCbCr;
+	bmusb::PixelFormat pixel_format;
+	if (card_type == CardType::FFMPEG_INPUT) {
+		pixel_format = bmusb::PixelFormat_8BitRGBA;
+	} else if (global_flags.ten_bit_input) {
+		pixel_format = PixelFormat_10BitYCbCr;
+	} else {
+		pixel_format = PixelFormat_8BitYCbCr;
+	}
 
 	card->capture->set_frame_callback(bind(&Mixer::bm_frame, this, card_index, _1, _2, _3, _4, _5, _6, _7));
 	if (card->frame_allocator == nullptr) {
@@ -704,7 +725,7 @@ void Mixer::thread_func()
 
 	// Start the actual capture. (We don't want to do it before we're actually ready
 	// to process output frames.)
-	for (unsigned card_index = 0; card_index < num_cards; ++card_index) {
+	for (unsigned card_index = 0; card_index < num_cards + num_video_inputs; ++card_index) {
 		if (int(card_index) != output_card_index) {
 			cards[card_index].capture->start_bm_capture();
 		}
@@ -747,7 +768,7 @@ void Mixer::thread_func()
 
 		handle_hotplugged_cards();
 
-		for (unsigned card_index = 0; card_index < num_cards; ++card_index) {
+		for (unsigned card_index = 0; card_index < num_cards + num_video_inputs; ++card_index) {
 			if (card_index == master_card_index || !has_new_frame[card_index]) {
 				continue;
 			}
@@ -768,7 +789,7 @@ void Mixer::thread_func()
 			continue;
 		}
 
-		for (unsigned card_index = 0; card_index < num_cards; ++card_index) {
+		for (unsigned card_index = 0; card_index < num_cards + num_video_inputs; ++card_index) {
 			if (!has_new_frame[card_index] || new_frames[card_index].frame->len == 0)
 				continue;
 
@@ -935,7 +956,7 @@ start:
 			cards[master_card_index].new_frames.front().received_timestamp;
 	}
 
-	for (unsigned card_index = 0; card_index < num_cards; ++card_index) {
+	for (unsigned card_index = 0; card_index < num_cards + num_video_inputs; ++card_index) {
 		CaptureCard *card = &cards[card_index];
 		if (input_card_is_master_clock(card_index, master_card_index)) {
 			// We don't use the queue length policy for the master card,
@@ -1063,6 +1084,12 @@ void Mixer::render_one_frame(int64_t duration)
 	EffectChain *chain = theme_main_chain.chain;
 	theme_main_chain.setup_chain();
 	//theme_main_chain.chain->enable_phase_timing(true);
+
+	// The theme can't (or at least shouldn't!) call connect_signal() on
+	// each FFmpeg input, so we'll do it here.
+	for (const pair<LiveInputWrapper *, FFmpegCapture *> &conn : theme->get_signal_connections()) {
+		conn.first->connect_signal_raw(conn.second->get_card_index());
+	}
 
 	// If HDMI/SDI output is active and the user has requested auto mode,
 	// its mode overrides the existing Y'CbCr setting for the chain.

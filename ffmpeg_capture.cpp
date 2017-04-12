@@ -1,0 +1,278 @@
+#include "ffmpeg_capture.h"
+
+#include <assert.h>
+#include <pthread.h>
+#include <stdint.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <unistd.h>
+
+extern "C" {
+#include <libavcodec/avcodec.h>
+#include <libavformat/avformat.h>
+#include <libavutil/avutil.h>
+#include <libavutil/error.h>
+#include <libavutil/frame.h>
+#include <libavutil/imgutils.h>
+#include <libavutil/mem.h>
+#include <libavutil/pixfmt.h>
+#include <libswscale/swscale.h>
+}
+
+#include <chrono>
+#include <cstdint>
+#include <utility>
+#include <vector>
+
+#include "bmusb/bmusb.h"
+#include "ffmpeg_raii.h"
+#include "flags.h"
+#include "image_input.h"
+
+#define FRAME_SIZE (8 << 20)  // 8 MB.
+
+using namespace std;
+using namespace std::chrono;
+using namespace bmusb;
+
+FFmpegCapture::FFmpegCapture(const string &filename, unsigned width, unsigned height)
+	: filename(filename), width(width), height(height)
+{
+	// Not really used for anything.
+	description = "Video: " + filename;
+}
+
+FFmpegCapture::~FFmpegCapture()
+{
+	if (has_dequeue_callbacks) {
+		dequeue_cleanup_callback();
+	}
+}
+
+void FFmpegCapture::configure_card()
+{
+	if (video_frame_allocator == nullptr) {
+		owned_video_frame_allocator.reset(new MallocFrameAllocator(FRAME_SIZE, NUM_QUEUED_VIDEO_FRAMES));
+		set_video_frame_allocator(owned_video_frame_allocator.get());
+	}
+	if (audio_frame_allocator == nullptr) {
+		owned_audio_frame_allocator.reset(new MallocFrameAllocator(65536, NUM_QUEUED_AUDIO_FRAMES));
+		set_audio_frame_allocator(owned_audio_frame_allocator.get());
+	}
+}
+
+void FFmpegCapture::start_bm_capture()
+{
+	if (running) {
+		return;
+	}
+	running = true;
+	producer_thread_should_quit = false;
+	producer_thread = thread(&FFmpegCapture::producer_thread_func, this);
+}
+
+void FFmpegCapture::stop_dequeue_thread()
+{
+	if (!running) {
+		return;
+	}
+	running = false;
+	producer_thread_should_quit = true;
+	producer_thread.join();
+}
+
+std::map<uint32_t, VideoMode> FFmpegCapture::get_available_video_modes() const
+{
+	// Note: This will never really be shown in the UI.
+	VideoMode mode;
+
+	char buf[256];
+	snprintf(buf, sizeof(buf), "%ux%u", width, height);
+	mode.name = buf;
+	
+	mode.autodetect = false;
+	mode.width = width;
+	mode.height = height;
+	mode.frame_rate_num = 60;
+	mode.frame_rate_den = 1;
+	mode.interlaced = false;
+
+	return {{ 0, mode }};
+}
+
+void FFmpegCapture::producer_thread_func()
+{
+	char thread_name[16];
+	snprintf(thread_name, sizeof(thread_name), "FFmpeg_C_%d", card_index);
+	pthread_setname_np(pthread_self(), thread_name);
+
+	while (!producer_thread_should_quit) {
+		string pathname = search_for_file(filename);
+		if (filename.empty()) {
+			fprintf(stderr, "%s not found, sleeping one second and trying again...\n", filename.c_str());
+			sleep(1);
+			continue;
+		}
+		if (!play_video(pathname)) {
+			// Error.
+			fprintf(stderr, "Error when playing %s, sleeping one second and trying again...\n", pathname.c_str());
+			sleep(1);
+			continue;
+		}
+
+		// Probably just EOF, will exit the loop above on next test.
+	}
+
+	if (has_dequeue_callbacks) {
+                dequeue_cleanup_callback();
+		has_dequeue_callbacks = false;
+        }
+}
+
+bool FFmpegCapture::play_video(const string &pathname)
+{
+	auto format_ctx = avformat_open_input_unique(pathname.c_str(), nullptr, nullptr);
+	if (format_ctx == nullptr) {
+		fprintf(stderr, "%s: Error opening file\n", pathname.c_str());
+		return false;
+	}
+
+	if (avformat_find_stream_info(format_ctx.get(), nullptr) < 0) {
+		fprintf(stderr, "%s: Error finding stream info\n", pathname.c_str());
+		return false;
+	}
+
+	int video_stream_index = -1, audio_stream_index = -1;
+	AVRational video_timebase{ 1, 1 };
+	for (unsigned i = 0; i < format_ctx->nb_streams; ++i) {
+		if (format_ctx->streams[i]->codecpar->codec_type == AVMEDIA_TYPE_VIDEO &&
+		    video_stream_index == -1) {
+			video_stream_index = i;
+			video_timebase = format_ctx->streams[i]->time_base;
+		}
+		if (format_ctx->streams[i]->codecpar->codec_type == AVMEDIA_TYPE_AUDIO &&
+		    audio_stream_index == -1) {
+			audio_stream_index = i;
+		}
+	}
+	if (video_stream_index == -1) {
+		fprintf(stderr, "%s: No video stream found\n", pathname.c_str());
+		return false;
+	}
+
+	const AVCodecParameters *codecpar = format_ctx->streams[video_stream_index]->codecpar;
+	AVCodecContextWithDeleter codec_ctx = avcodec_alloc_context3_unique(nullptr);
+	if (avcodec_parameters_to_context(codec_ctx.get(), codecpar) < 0) {
+		fprintf(stderr, "%s: Cannot fill codec parameters\n", pathname.c_str());
+		return false;
+	}
+	AVCodec *codec = avcodec_find_decoder(codecpar->codec_id);
+	if (codec == nullptr) {
+		fprintf(stderr, "%s: Cannot find decoder\n", pathname.c_str());
+		return false;
+	}
+	if (avcodec_open2(codec_ctx.get(), codec, nullptr) < 0) {
+		fprintf(stderr, "%s: Cannot open decoder\n", pathname.c_str());
+		return false;
+	}
+	unique_ptr<AVCodecContext, decltype(avcodec_close)*> codec_ctx_cleanup(
+		codec_ctx.get(), avcodec_close);
+
+	steady_clock::time_point start = steady_clock::now();
+
+	unique_ptr<SwsContext, decltype(sws_freeContext)*> sws_ctx(nullptr, sws_freeContext);
+	int sws_last_width = -1, sws_last_height = -1;
+
+	// Main loop.
+	while (!producer_thread_should_quit) {
+		// Read packets until we have a frame or there are none left.
+		int frame_finished = 0;
+		AVFrameWithDeleter frame = av_frame_alloc_unique();
+		bool eof = false;
+		do {
+			AVPacket pkt;
+			unique_ptr<AVPacket, decltype(av_packet_unref)*> pkt_cleanup(
+				&pkt, av_packet_unref);
+			av_init_packet(&pkt);
+			pkt.data = nullptr;
+			pkt.size = 0;
+			if (av_read_frame(format_ctx.get(), &pkt) == 0) {
+				if (pkt.stream_index != video_stream_index) {
+					// Ignore audio for now.
+					continue;
+				}
+				if (avcodec_send_packet(codec_ctx.get(), &pkt) < 0) {
+					fprintf(stderr, "%s: Cannot send packet to codec.\n", pathname.c_str());
+					return false;
+				}
+			} else {
+				eof = true;  // Or error, but ignore that for the time being.
+			}
+
+			int err = avcodec_receive_frame(codec_ctx.get(), frame.get());
+			if (err == 0) {
+				frame_finished = true;
+				break;
+			} else if (err != AVERROR(EAGAIN)) {
+				fprintf(stderr, "%s: Cannot receive frame from codec.\n", pathname.c_str());
+				return false;
+			}
+		} while (!eof);
+
+		if (!frame_finished) {
+			// EOF. Loop back to the start if we can.
+			if (av_seek_frame(format_ctx.get(), /*stream_index=*/-1, /*timestamp=*/0, /*flags=*/0) < 0) {
+				fprintf(stderr, "%s: Rewind failed, not looping.\n", pathname.c_str());
+				return true;
+			}
+			start = steady_clock::now();
+			continue;
+		}
+
+		if (sws_ctx == nullptr || sws_last_width != frame->width || sws_last_height != frame->height) {
+			sws_ctx.reset(
+				sws_getContext(frame->width, frame->height, (AVPixelFormat)frame->format,
+					width, height, AV_PIX_FMT_RGBA,
+					SWS_BICUBIC, nullptr, nullptr, nullptr));
+			sws_last_width = frame->width;
+			sws_last_height = frame->height;
+		}
+		if (sws_ctx == nullptr) {
+			fprintf(stderr, "%s: Could not create scaler context\n", pathname.c_str());
+			return false;
+		}
+
+		VideoFormat video_format;
+		video_format.width = width;
+		video_format.height = height;
+		video_format.stride = width * 4;
+		video_format.frame_rate_nom = video_timebase.den;
+		video_format.frame_rate_den = av_frame_get_pkt_duration(frame.get()) * video_timebase.num;
+		video_format.has_signal = true;
+		video_format.is_connected = true;
+
+		const duration<double> pts(frame->pts * double(video_timebase.num) / double(video_timebase.den));
+		const steady_clock::time_point frame_start = start + duration_cast<steady_clock::duration>(pts);
+
+		FrameAllocator::Frame video_frame = video_frame_allocator->alloc_frame();
+		if (video_frame.data != nullptr) {
+			uint8_t *pic_data[4] = { video_frame.data, nullptr, nullptr, nullptr };
+			int linesizes[4] = { int(video_format.stride), 0, 0, 0 };
+			sws_scale(sws_ctx.get(), frame->data, frame->linesize, 0, frame->height, pic_data, linesizes);
+			video_frame.len = video_format.stride * height;
+			video_frame.received_timestamp = frame_start;
+		}
+
+		FrameAllocator::Frame audio_frame;
+		AudioFormat audio_format;
+                audio_format.bits_per_sample = 32;
+                audio_format.num_channels = 8;
+
+		this_thread::sleep_until(frame_start);
+		frame_callback(timecode++,
+			video_frame, 0, video_format,
+			audio_frame, 0, audio_format);
+	}
+	return true;
+}

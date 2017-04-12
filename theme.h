@@ -15,6 +15,8 @@
 #include "ref_counted_frame.h"
 #include "tweaked_inputs.h"
 
+class FFmpegCapture;
+class LiveInputWrapper;
 struct InputState;
 
 namespace movit {
@@ -54,6 +56,27 @@ public:
 
 	movit::ResourcePool *get_resource_pool() const { return resource_pool; }
 
+	// Should be called as part of VideoInput.new() only.
+	void register_video_input(FFmpegCapture *capture)
+	{
+		video_inputs.push_back(capture);
+	}
+
+	std::vector<FFmpegCapture *> get_video_inputs() const
+	{
+		return video_inputs;
+	}
+
+	void register_signal_connection(LiveInputWrapper *live_input, FFmpegCapture *capture)
+	{
+		signal_connections.emplace_back(live_input, capture);
+	}
+
+	std::vector<std::pair<LiveInputWrapper *, FFmpegCapture *>> get_signal_connections() const
+	{
+		return signal_connections;
+	}
+
 private:
 	void register_class(const char *class_name, const luaL_Reg *funcs);
 
@@ -66,6 +89,9 @@ private:
 
 	std::mutex map_m;
 	std::map<int, int> signal_to_card_mapping;  // Protected by <map_m>.
+
+	std::vector<FFmpegCapture *> video_inputs;
+	std::vector<std::pair<LiveInputWrapper *, FFmpegCapture *>> signal_connections;
 
 	friend class LiveInputWrapper;
 };
@@ -81,6 +107,7 @@ public:
 	LiveInputWrapper(Theme *theme, movit::EffectChain *chain, bmusb::PixelFormat pixel_format, bool override_bounce, bool deinterlace);
 
 	void connect_signal(int signal_num);
+	void connect_signal_raw(int signal_num);
 	movit::Effect *get_effect() const
 	{
 		if (deinterlace) {

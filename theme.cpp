@@ -27,6 +27,7 @@
 
 #include "defs.h"
 #include "deinterlace_effect.h"
+#include "ffmpeg_capture.h"
 #include "flags.h"
 #include "image_input.h"
 #include "input.h"
@@ -203,7 +204,32 @@ int EffectChain_add_live_input(lua_State* L)
 	bool override_bounce = checkbool(L, 2);
 	bool deinterlace = checkbool(L, 3);
 	bmusb::PixelFormat pixel_format = global_flags.ten_bit_input ? bmusb::PixelFormat_10BitYCbCr : bmusb::PixelFormat_8BitYCbCr;
-	return wrap_lua_object<LiveInputWrapper>(L, "LiveInputWrapper", theme, chain, pixel_format, override_bounce, deinterlace);
+
+	// Needs to be nonowned to match add_video_input (see below).
+	return wrap_lua_object_nonowned<LiveInputWrapper>(L, "LiveInputWrapper", theme, chain, pixel_format, override_bounce, deinterlace);
+}
+
+int EffectChain_add_video_input(lua_State* L)
+{
+	assert(lua_gettop(L) == 3);
+	Theme *theme = get_theme_updata(L);
+	EffectChain *chain = (EffectChain *)luaL_checkudata(L, 1, "EffectChain");
+	FFmpegCapture **capture = (FFmpegCapture **)luaL_checkudata(L, 2, "VideoInput");
+	bool deinterlace = checkbool(L, 3);
+
+	// These need to be nonowned, so that the LiveInputWrapper still exists
+	// and can feed frames to the right EffectChain even if the Lua code
+	// doesn't care about the object anymore. (If we change this, we'd need
+	// to also unregister the signal connection on __gc.)
+	int ret = wrap_lua_object_nonowned<LiveInputWrapper>(
+		L, "LiveInputWrapper", theme, chain, bmusb::PixelFormat_8BitRGBA,
+		/*override_bounce=*/false, deinterlace);
+	if (ret == 1) {
+		Theme *theme = get_theme_updata(L);
+		LiveInputWrapper **live_input = (LiveInputWrapper **)lua_touserdata(L, -1);
+		theme->register_signal_connection(*live_input, *capture);
+	}
+	return ret;
 }
 
 int EffectChain_add_effect(lua_State* L)
@@ -223,8 +249,8 @@ int EffectChain_add_effect(lua_State* L)
 		vector<Effect *> inputs;
 		for (int idx = 3; idx <= lua_gettop(L); ++idx) {
 			if (luaL_testudata(L, idx, "LiveInputWrapper")) {
-				LiveInputWrapper *input = (LiveInputWrapper *)lua_touserdata(L, idx);
-				inputs.push_back(input->get_effect());
+				LiveInputWrapper **input = (LiveInputWrapper **)lua_touserdata(L, idx);
+				inputs.push_back((*input)->get_effect());
 			} else {
 				inputs.push_back(get_effect(L, idx));
 			}
@@ -300,9 +326,9 @@ int EffectChain_finalize(lua_State* L)
 int LiveInputWrapper_connect_signal(lua_State* L)
 {
 	assert(lua_gettop(L) == 2);
-	LiveInputWrapper *input = (LiveInputWrapper *)luaL_checkudata(L, 1, "LiveInputWrapper");
+	LiveInputWrapper **input = (LiveInputWrapper **)luaL_checkudata(L, 1, "LiveInputWrapper");
 	int signal_num = luaL_checknumber(L, 2);
-	input->connect_signal(signal_num);
+	(*input)->connect_signal(signal_num);
 	return 0;
 }
 
@@ -311,6 +337,19 @@ int ImageInput_new(lua_State* L)
 	assert(lua_gettop(L) == 1);
 	string filename = checkstdstring(L, 1);
 	return wrap_lua_object_nonowned<ImageInput>(L, "ImageInput", filename);
+}
+
+int VideoInput_new(lua_State* L)
+{
+	assert(lua_gettop(L) == 1);
+	string filename = checkstdstring(L, 1);
+	int ret = wrap_lua_object_nonowned<FFmpegCapture>(L, "VideoInput", filename, global_flags.width, global_flags.height);
+	if (ret == 1) {
+		Theme *theme = get_theme_updata(L);
+		FFmpegCapture **capture = (FFmpegCapture **)lua_touserdata(L, -1);
+		theme->register_video_input(*capture);
+	}
+	return ret;
 }
 
 int WhiteBalanceEffect_new(lua_State* L)
@@ -492,6 +531,7 @@ const luaL_Reg EffectChain_funcs[] = {
 	{ "new", EffectChain_new },
 	{ "__gc", EffectChain_gc },
 	{ "add_live_input", EffectChain_add_live_input },
+	{ "add_video_input", EffectChain_add_video_input },
 	{ "add_effect", EffectChain_add_effect },
 	{ "finalize", EffectChain_finalize },
 	{ NULL, NULL }
@@ -508,6 +548,11 @@ const luaL_Reg ImageInput_funcs[] = {
 	{ "set_int", Effect_set_int },
 	{ "set_vec3", Effect_set_vec3 },
 	{ "set_vec4", Effect_set_vec4 },
+	{ NULL, NULL }
+};
+
+const luaL_Reg VideoInput_funcs[] = {
+	{ "new", VideoInput_new },
 	{ NULL, NULL }
 };
 
@@ -686,7 +731,11 @@ void LiveInputWrapper::connect_signal(int signal_num)
 	}
 
 	signal_num = theme->map_signal(signal_num);
+	connect_signal_raw(signal_num);
+}
 
+void LiveInputWrapper::connect_signal_raw(int signal_num)
+{
 	BufferedFrame first_frame = theme->input_state->buffered_frames[signal_num][0];
 	if (first_frame.frame == nullptr) {
 		// No data yet.
@@ -776,6 +825,7 @@ Theme::Theme(const string &filename, const vector<string> &search_dirs, Resource
 	register_class("EffectChain", EffectChain_funcs); 
 	register_class("LiveInputWrapper", LiveInputWrapper_funcs); 
 	register_class("ImageInput", ImageInput_funcs);
+	register_class("VideoInput", VideoInput_funcs);
 	register_class("WhiteBalanceEffect", WhiteBalanceEffect_funcs);
 	register_class("ResampleEffect", ResampleEffect_funcs);
 	register_class("PaddingEffect", PaddingEffect_funcs);

@@ -336,7 +336,8 @@ private:
 
 	enum class CardType {
 		LIVE_CARD,
-		FAKE_CAPTURE
+		FAKE_CAPTURE,
+		FFMPEG_INPUT
 	};
 	void configure_card(unsigned card_index, bmusb::CaptureInterface *capture, CardType card_type, DeckLinkOutput *output);
 	void set_output_card_internal(int card_index);  // Should only be called from the mixer thread.
@@ -359,7 +360,7 @@ private:
 	void trim_queue(CaptureCard *card, unsigned card_index);
 
 	HTTPD httpd;
-	unsigned num_cards;
+	unsigned num_cards, num_video_inputs;
 
 	QSurface *mixer_surface, *h264_encoder_surface, *decklink_output_surface;
 	std::unique_ptr<movit::ResourcePool> resource_pool;

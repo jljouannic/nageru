@@ -35,6 +35,9 @@ ifeq ($(EMBEDDED_BMUSB),yes)
   OBJS += bmusb/bmusb.o bmusb/fake_capture.o
 endif
 
+# FFmpeg input
+OBJS += ffmpeg_capture.o
+
 # Benchmark program.
 BM_OBJS = benchmark_audio_mixer.o $(AUDIO_MIXER_OBJS) flags.o
 
