@@ -186,6 +186,22 @@ bool FFmpegCapture::play_video(const string &pathname)
 
 	// Main loop.
 	while (!producer_thread_should_quit) {
+		// Process any queued commands from other threads.
+		vector<QueuedCommand> commands;
+		{
+			lock_guard<mutex> lock(queue_mu);
+			swap(commands, command_queue);
+		}
+		for (const QueuedCommand &cmd : commands) {
+			if (cmd.command == QueuedCommand::REWIND) {
+				if (av_seek_frame(format_ctx.get(), /*stream_index=*/-1, /*timestamp=*/0, /*flags=*/0) < 0) {
+					fprintf(stderr, "%s: Rewind failed, stopping play.\n", pathname.c_str());
+				}
+				start = steady_clock::now();
+				continue;
+			}
+		}
+
 		// Read packets until we have a frame or there are none left.
 		int frame_finished = 0;
 		AVFrameWithDeleter frame = av_frame_alloc_unique();

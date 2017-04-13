@@ -26,6 +26,7 @@
 #include <functional>
 #include <map>
 #include <memory>
+#include <mutex>
 #include <set>
 #include <string>
 #include <thread>
@@ -46,6 +47,12 @@ public:
 	int get_card_index() const
 	{
 		return card_index;
+	}
+
+	void rewind()
+	{
+		std::lock_guard<std::mutex> lock(queue_mu);
+		command_queue.push_back(QueuedCommand { QueuedCommand::REWIND });
 	}
 
 	// CaptureInterface.
@@ -147,6 +154,12 @@ private:
 
 	std::atomic<bool> producer_thread_should_quit{false};
 	std::thread producer_thread;
+
+	std::mutex queue_mu;
+	struct QueuedCommand {
+		enum Command { REWIND } command;
+	};
+	std::vector<QueuedCommand> command_queue;  // Protected by <queue_mu>.
 };
 
 #endif  // !defined(_FFMPEG_CAPTURE_H)
