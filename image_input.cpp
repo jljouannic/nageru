@@ -30,64 +30,13 @@ extern "C" {
 #include <vector>
 
 #include "ffmpeg_raii.h"
+#include "ffmpeg_util.h"
 #include "flags.h"
 #include "flat_input.h"
 
 struct SwsContext;
 
 using namespace std;
-
-string search_for_file(const string &filename)
-{
-	if (!filename.empty() && filename[0] == '/') {
-		// Absolute path.
-		return filename;
-	}
-
-	// See if we match ^[a-z]:/, which is probably a URL of some sort
-	// (FFmpeg understands various forms of these).
-	for (size_t i = 0; i < filename.size() - 1; ++i) {
-		if (filename[i] == ':' && filename[i + 1] == '/') {
-			return filename;
-		}
-		if (!isalpha(filename[i])) {
-			break;
-		}
-	}
-
-	// Look for the file in all theme_dirs until we find one;
-	// that will be the permanent resolution of this file, whether
-	// it is actually valid or not.
-	// We store errors from all the attempts, and show them
-	// once we know we can't find any of them.
-	vector<string> errors;
-	for (const string &dir : global_flags.theme_dirs) {
-		string pathname = dir + "/" + filename;
-		if (access(pathname.c_str(), O_RDONLY) == 0) {
-			return pathname;
-		} else {
-			char buf[512];
-			snprintf(buf, sizeof(buf), "%s: %s", pathname.c_str(), strerror(errno));
-			errors.push_back(buf);
-		}
-	}
-
-	for (const string &error : errors) {
-		fprintf(stderr, "%s\n", error.c_str());
-	}
-	return "";
-}
-
-string search_for_file_or_die(const string &filename)
-{
-	string pathname = search_for_file(filename);
-	if (pathname.empty()) {
-		fprintf(stderr, "Couldn't find %s in any directory in --theme-dirs, exiting.\n",
-			filename.c_str());
-		exit(1);
-	}
-	return pathname;
-}
 
 ImageInput::ImageInput(const string &filename)
 	: movit::FlatInput({movit::COLORSPACE_sRGB, movit::GAMMA_sRGB}, movit::FORMAT_RGBA_POSTMULTIPLIED_ALPHA,
@@ -161,13 +110,7 @@ shared_ptr<const ImageInput::Image> ImageInput::load_image_raw(const string &pat
 		return nullptr;
 	}
 
-	int stream_index = -1;
-	for (unsigned i = 0; i < format_ctx->nb_streams; ++i) {
-		if (format_ctx->streams[i]->codecpar->codec_type == AVMEDIA_TYPE_VIDEO) {
-			stream_index = i;
-			break;
-		}
-	}
+	int stream_index = find_stream_index(format_ctx.get(), AVMEDIA_TYPE_VIDEO);
 	if (stream_index == -1) {
 		fprintf(stderr, "%s: No video stream found\n", pathname.c_str());
 		return nullptr;

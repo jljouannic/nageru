@@ -28,6 +28,7 @@ extern "C" {
 
 #include "bmusb/bmusb.h"
 #include "ffmpeg_raii.h"
+#include "ffmpeg_util.h"
 #include "flags.h"
 #include "image_input.h"
 
@@ -179,25 +180,14 @@ bool FFmpegCapture::play_video(const string &pathname)
 		return false;
 	}
 
-	int video_stream_index = -1, audio_stream_index = -1;
-	AVRational video_timebase{ 1, 1 };
-	for (unsigned i = 0; i < format_ctx->nb_streams; ++i) {
-		if (format_ctx->streams[i]->codecpar->codec_type == AVMEDIA_TYPE_VIDEO &&
-		    video_stream_index == -1) {
-			video_stream_index = i;
-			video_timebase = format_ctx->streams[i]->time_base;
-		}
-		if (format_ctx->streams[i]->codecpar->codec_type == AVMEDIA_TYPE_AUDIO &&
-		    audio_stream_index == -1) {
-			audio_stream_index = i;
-		}
-	}
+	int video_stream_index = find_stream_index(format_ctx.get(), AVMEDIA_TYPE_VIDEO);
 	if (video_stream_index == -1) {
 		fprintf(stderr, "%s: No video stream found\n", pathname.c_str());
 		return false;
 	}
 
 	const AVCodecParameters *codecpar = format_ctx->streams[video_stream_index]->codecpar;
+	AVRational video_timebase = format_ctx->streams[video_stream_index]->time_base;
 	AVCodecContextWithDeleter codec_ctx = avcodec_alloc_context3_unique(nullptr);
 	if (avcodec_parameters_to_context(codec_ctx.get(), codecpar) < 0) {
 		fprintf(stderr, "%s: Cannot fill codec parameters\n", pathname.c_str());
