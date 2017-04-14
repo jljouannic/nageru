@@ -141,6 +141,7 @@ public:
 private:
 	void producer_thread_func();
 	bool play_video(const std::string &pathname);
+	void internal_rewind();
 
 	std::string description, filename;
 	uint16_t timecode = 0;
@@ -160,6 +161,9 @@ private:
 
 	QuittableSleeper producer_thread_should_quit;
 	std::thread producer_thread;
+
+	int64_t pts_origin, last_pts;
+	std::chrono::steady_clock::time_point start, next_frame_start;
 
 	std::mutex queue_mu;
 	struct QueuedCommand {

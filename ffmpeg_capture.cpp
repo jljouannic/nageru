@@ -189,9 +189,7 @@ bool FFmpegCapture::play_video(const string &pathname)
 	unique_ptr<AVCodecContext, decltype(avcodec_close)*> codec_ctx_cleanup(
 		codec_ctx.get(), avcodec_close);
 
-	int64_t pts_origin = 0, last_pts = 0;
-	steady_clock::time_point start = steady_clock::now();
-	steady_clock::time_point next_frame_start = start;
+	internal_rewind();
 	double rate = 1.0;
 
 	unique_ptr<SwsContext, decltype(sws_freeContext)*> sws_ctx(nullptr, sws_freeContext);
@@ -211,8 +209,7 @@ bool FFmpegCapture::play_video(const string &pathname)
 				if (av_seek_frame(format_ctx.get(), /*stream_index=*/-1, /*timestamp=*/0, /*flags=*/0) < 0) {
 					fprintf(stderr, "%s: Rewind failed, stopping play.\n", pathname.c_str());
 				}
-				pts_origin = last_pts = 0;
-				start = next_frame_start = steady_clock::now();
+				internal_rewind();
 				break;
 
 			case QueuedCommand::CHANGE_RATE:
@@ -263,8 +260,7 @@ bool FFmpegCapture::play_video(const string &pathname)
 				fprintf(stderr, "%s: Rewind failed, not looping.\n", pathname.c_str());
 				return true;
 			}
-			pts_origin = last_pts = 0;
-			start = steady_clock::now();
+			internal_rewind();
 			continue;
 		}
 
@@ -313,4 +309,10 @@ bool FFmpegCapture::play_video(const string &pathname)
 			audio_frame, 0, audio_format);
 	}
 	return true;
+}
+
+void FFmpegCapture::internal_rewind()
+{				
+	pts_origin = last_pts = 0;
+	start = next_frame_start = steady_clock::now();
 }
