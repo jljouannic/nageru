@@ -6,6 +6,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/stat.h>
 #include <unistd.h>
 
 extern "C" {
@@ -42,6 +43,19 @@ steady_clock::time_point compute_frame_start(int64_t frame_pts, int64_t pts_orig
 {
 	const duration<double> pts((frame_pts - pts_origin) * double(video_timebase.num) / double(video_timebase.den));
 	return origin + duration_cast<steady_clock::duration>(pts / rate);
+}
+
+bool changed_since(const std::string &pathname, const timespec &ts)
+{
+	if (ts.tv_sec < 0) {
+		return false;
+	}
+	struct stat buf;
+	if (stat(pathname.c_str(), &buf) != 0) {
+		fprintf(stderr, "%s: Couldn't check for new version, leaving the old in place.\n", pathname.c_str());
+		return false;
+	}
+	return (buf.st_mtim.tv_sec != ts.tv_sec || buf.st_mtim.tv_nsec != ts.tv_nsec);
 }
 
 }  // namespace
@@ -142,6 +156,18 @@ void FFmpegCapture::producer_thread_func()
 
 bool FFmpegCapture::play_video(const string &pathname)
 {
+	// Note: Call before open, not after; otherwise, there's a race.
+	// (There is now, too, but it tips the correct way. We could use fstat()
+	// if we had the file descriptor.)
+	timespec last_modified;
+	struct stat buf;
+	if (stat(pathname.c_str(), &buf) != 0) {
+		// Probably some sort of protocol, so can't stat.
+		last_modified.tv_sec = -1;
+	} else {
+		last_modified = buf.st_mtim;
+	}
+
 	auto format_ctx = avformat_open_input_unique(pathname.c_str(), nullptr, nullptr);
 	if (format_ctx == nullptr) {
 		fprintf(stderr, "%s: Error opening file\n", pathname.c_str());
@@ -209,6 +235,13 @@ bool FFmpegCapture::play_video(const string &pathname)
 				if (av_seek_frame(format_ctx.get(), /*stream_index=*/-1, /*timestamp=*/0, /*flags=*/0) < 0) {
 					fprintf(stderr, "%s: Rewind failed, stopping play.\n", pathname.c_str());
 				}
+				// If the file has changed since last time, return to get it reloaded.
+				// Note that depending on how you move the file into place, you might
+				// end up corrupting the one you're already playing, so this path
+				// might not trigger.
+				if (changed_since(pathname, last_modified)) {
+					return true;
+				}
 				internal_rewind();
 				break;
 
@@ -258,6 +291,13 @@ bool FFmpegCapture::play_video(const string &pathname)
 			// EOF. Loop back to the start if we can.
 			if (av_seek_frame(format_ctx.get(), /*stream_index=*/-1, /*timestamp=*/0, /*flags=*/0) < 0) {
 				fprintf(stderr, "%s: Rewind failed, not looping.\n", pathname.c_str());
+				return true;
+			}
+			// If the file has changed since last time, return to get it reloaded.
+			// Note that depending on how you move the file into place, you might
+			// end up corrupting the one you're already playing, so this path
+			// might not trigger.
+			if (changed_since(pathname, last_modified)) {
 				return true;
 			}
 			internal_rewind();

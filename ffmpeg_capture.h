@@ -17,8 +17,7 @@
 // CPU conversion), but it would require some more plumbing, and it would also
 // fail if the file changes parameters midway, which is allowed in some formats.
 //
-// There is currently no audio support. There is also no support for changing
-// the video underway (unlike images), although there really should be.
+// There is currently no audio support.
 
 #include <assert.h>
 #include <stdint.h>
