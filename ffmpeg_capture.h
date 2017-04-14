@@ -55,6 +55,12 @@ public:
 		command_queue.push_back(QueuedCommand { QueuedCommand::REWIND });
 	}
 
+	void change_rate(double new_rate)
+	{
+		std::lock_guard<std::mutex> lock(queue_mu);
+		command_queue.push_back(QueuedCommand { QueuedCommand::CHANGE_RATE, new_rate });
+	}
+
 	// CaptureInterface.
 	void set_video_frame_allocator(bmusb::FrameAllocator *allocator) override
 	{
@@ -157,7 +163,8 @@ private:
 
 	std::mutex queue_mu;
 	struct QueuedCommand {
-		enum Command { REWIND } command;
+		enum Command { REWIND, CHANGE_RATE } command;
+		double new_rate;  // For CHANGE_RATE.
 	};
 	std::vector<QueuedCommand> command_queue;  // Protected by <queue_mu>.
 };

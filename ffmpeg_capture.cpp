@@ -36,6 +36,16 @@ using namespace std;
 using namespace std::chrono;
 using namespace bmusb;
 
+namespace {
+
+steady_clock::time_point compute_frame_start(int64_t frame_pts, int64_t pts_origin, const AVRational &video_timebase, const steady_clock::time_point &origin, double rate)
+{
+	const duration<double> pts((frame_pts - pts_origin) * double(video_timebase.num) / double(video_timebase.den));
+	return origin + duration_cast<steady_clock::duration>(pts / rate);
+}
+
+}  // namespace
+
 FFmpegCapture::FFmpegCapture(const string &filename, unsigned width, unsigned height)
 	: filename(filename), width(width), height(height)
 {
@@ -179,7 +189,10 @@ bool FFmpegCapture::play_video(const string &pathname)
 	unique_ptr<AVCodecContext, decltype(avcodec_close)*> codec_ctx_cleanup(
 		codec_ctx.get(), avcodec_close);
 
+	int64_t pts_origin = 0, last_pts = 0;
 	steady_clock::time_point start = steady_clock::now();
+	steady_clock::time_point next_frame_start = start;
+	double rate = 1.0;
 
 	unique_ptr<SwsContext, decltype(sws_freeContext)*> sws_ctx(nullptr, sws_freeContext);
 	int sws_last_width = -1, sws_last_height = -1;
@@ -193,12 +206,20 @@ bool FFmpegCapture::play_video(const string &pathname)
 			swap(commands, command_queue);
 		}
 		for (const QueuedCommand &cmd : commands) {
-			if (cmd.command == QueuedCommand::REWIND) {
+			switch (cmd.command) {
+			case QueuedCommand::REWIND:
 				if (av_seek_frame(format_ctx.get(), /*stream_index=*/-1, /*timestamp=*/0, /*flags=*/0) < 0) {
 					fprintf(stderr, "%s: Rewind failed, stopping play.\n", pathname.c_str());
 				}
-				start = steady_clock::now();
-				continue;
+				pts_origin = last_pts = 0;
+				start = next_frame_start = steady_clock::now();
+				break;
+
+			case QueuedCommand::CHANGE_RATE:
+				start = next_frame_start;
+				pts_origin = last_pts;
+				rate = cmd.new_rate;
+				break;
 			}
 		}
 
@@ -242,6 +263,7 @@ bool FFmpegCapture::play_video(const string &pathname)
 				fprintf(stderr, "%s: Rewind failed, not looping.\n", pathname.c_str());
 				return true;
 			}
+			pts_origin = last_pts = 0;
 			start = steady_clock::now();
 			continue;
 		}
@@ -268,8 +290,8 @@ bool FFmpegCapture::play_video(const string &pathname)
 		video_format.has_signal = true;
 		video_format.is_connected = true;
 
-		const duration<double> pts(frame->pts * double(video_timebase.num) / double(video_timebase.den));
-		const steady_clock::time_point frame_start = start + duration_cast<steady_clock::duration>(pts);
+		next_frame_start = compute_frame_start(frame->pts, pts_origin, video_timebase, start, rate);
+		last_pts = frame->pts;
 
 		FrameAllocator::Frame video_frame = video_frame_allocator->alloc_frame();
 		if (video_frame.data != nullptr) {
@@ -277,7 +299,7 @@ bool FFmpegCapture::play_video(const string &pathname)
 			int linesizes[4] = { int(video_format.stride), 0, 0, 0 };
 			sws_scale(sws_ctx.get(), frame->data, frame->linesize, 0, frame->height, pic_data, linesizes);
 			video_frame.len = video_format.stride * height;
-			video_frame.received_timestamp = frame_start;
+			video_frame.received_timestamp = next_frame_start;
 		}
 
 		FrameAllocator::Frame audio_frame;
@@ -285,7 +307,8 @@ bool FFmpegCapture::play_video(const string &pathname)
                 audio_format.bits_per_sample = 32;
                 audio_format.num_channels = 8;
 
-		this_thread::sleep_until(frame_start);
+		// TODO: Make it interruptable somehow.
+		this_thread::sleep_until(next_frame_start);
 		frame_callback(timecode++,
 			video_frame, 0, video_format,
 			audio_frame, 0, audio_format);

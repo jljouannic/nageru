@@ -360,6 +360,15 @@ int VideoInput_rewind(lua_State* L)
 	return 0;
 }
 
+int VideoInput_change_rate(lua_State* L)
+{
+	assert(lua_gettop(L) == 2);
+	FFmpegCapture **video_input = (FFmpegCapture **)luaL_checkudata(L, 1, "VideoInput");
+	double new_rate = luaL_checknumber(L, 2);
+	(*video_input)->change_rate(new_rate);
+	return 0;
+}
+
 int WhiteBalanceEffect_new(lua_State* L)
 {
 	assert(lua_gettop(L) == 0);
@@ -562,6 +571,7 @@ const luaL_Reg ImageInput_funcs[] = {
 const luaL_Reg VideoInput_funcs[] = {
 	{ "new", VideoInput_new },
 	{ "rewind", VideoInput_rewind },
+	{ "change_rate", VideoInput_change_rate },
 	{ NULL, NULL }
 };
 
