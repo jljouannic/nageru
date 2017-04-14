@@ -19,7 +19,6 @@
 //
 // There is currently no audio support. There is also no support for changing
 // the video underway (unlike images), although there really should be.
-// Finally, there is currently no support for controlling the video from Lua.
 
 #include <assert.h>
 #include <stdint.h>
