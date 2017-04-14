@@ -20,6 +20,7 @@
 #include <thread>
 
 #include "bmusb/bmusb.h"
+#include "quittable_sleeper.h"
 
 class ALSAPool;
 
@@ -68,7 +69,7 @@ private:
 
 	snd_pcm_t *pcm_handle = nullptr;
 	std::thread capture_thread;
-	std::atomic<bool> should_quit{false};
+	QuittableSleeper should_quit;
 	std::unique_ptr<uint8_t[]> buffer;
 	ALSAPool *parent_pool;
 	unsigned internal_dev_index;

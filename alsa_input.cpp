@@ -157,13 +157,13 @@ ALSAInput::~ALSAInput()
 
 void ALSAInput::start_capture_thread()
 {
-	should_quit = false;
+	should_quit.unquit();
 	capture_thread = thread(&ALSAInput::capture_thread_func, this);
 }
 
 void ALSAInput::stop_capture_thread()
 {
-	should_quit = true;
+	should_quit.quit();
 	capture_thread.join();
 }
 
@@ -173,15 +173,15 @@ void ALSAInput::capture_thread_func()
 
 	// If the device hasn't been opened already, we need to do so
 	// before we can capture.
-	while (!should_quit && pcm_handle == nullptr) {
+	while (!should_quit.should_quit() && pcm_handle == nullptr) {
 		if (!open_device()) {
 			fprintf(stderr, "[%s] Waiting one second and trying again...\n",
 				device.c_str());
-			sleep(1);
+			should_quit.sleep_for(seconds(1));
 		}
 	}
 
-	if (should_quit) {
+	if (should_quit.should_quit()) {
 		// Don't call free_card(); that would be a deadlock.
 		WARN_ON_ERROR("snd_pcm_close()", snd_pcm_close(pcm_handle));
 		pcm_handle = nullptr;
@@ -205,7 +205,7 @@ void ALSAInput::capture_thread_func()
 			parent_pool->set_card_state(internal_dev_index, ALSAPool::Device::State::STARTING);
 			fprintf(stderr, "[%s] Sleeping one second and restarting capture...\n",
 				device.c_str());
-			sleep(1);
+			should_quit.sleep_for(seconds(1));
 			break;
 		}
 	}
@@ -218,7 +218,7 @@ ALSAInput::CaptureEndReason ALSAInput::do_capture()
 	parent_pool->set_card_state(internal_dev_index, ALSAPool::Device::State::RUNNING);
 
 	uint64_t num_frames_output = 0;
-	while (!should_quit) {
+	while (!should_quit.should_quit()) {
 		int ret = snd_pcm_wait(pcm_handle, /*timeout=*/100);
 		if (ret == 0) continue;  // Timeout.
 		if (ret == -EPIPE) {
@@ -247,7 +247,7 @@ ALSAInput::CaptureEndReason ALSAInput::do_capture()
 		const steady_clock::time_point now = steady_clock::now();
 		bool success;
 		do {
-			if (should_quit) return CaptureEndReason::REQUESTED_QUIT;
+			if (should_quit.should_quit()) return CaptureEndReason::REQUESTED_QUIT;
 			success = audio_callback(buffer.get(), frames, audio_format, pts - prev_pts, now);
 		} while (!success);
 		num_frames_output += frames;

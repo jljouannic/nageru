@@ -19,6 +19,7 @@
 
 #include "context.h"
 #include "print_latency.h"
+#include "quittable_sleeper.h"
 #include "ref_counted_frame.h"
 #include "ref_counted_gl_sync.h"
 
@@ -127,7 +128,7 @@ private:
 	std::map<uint32_t, bmusb::VideoMode> video_modes;
 
 	std::thread present_thread;
-	std::atomic<bool> should_quit{false};
+	QuittableSleeper should_quit;
 
 	std::mutex frame_queue_mutex;
 	std::queue<std::unique_ptr<Frame>> pending_video_frames;  // Under <frame_queue_mutex>.

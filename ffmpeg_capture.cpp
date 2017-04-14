@@ -78,7 +78,7 @@ void FFmpegCapture::start_bm_capture()
 		return;
 	}
 	running = true;
-	producer_thread_should_quit = false;
+	producer_thread_should_quit.unquit();
 	producer_thread = thread(&FFmpegCapture::producer_thread_func, this);
 }
 
@@ -88,7 +88,7 @@ void FFmpegCapture::stop_dequeue_thread()
 		return;
 	}
 	running = false;
-	producer_thread_should_quit = true;
+	producer_thread_should_quit.quit();
 	producer_thread.join();
 }
 
@@ -117,17 +117,17 @@ void FFmpegCapture::producer_thread_func()
 	snprintf(thread_name, sizeof(thread_name), "FFmpeg_C_%d", card_index);
 	pthread_setname_np(pthread_self(), thread_name);
 
-	while (!producer_thread_should_quit) {
+	while (!producer_thread_should_quit.should_quit()) {
 		string pathname = search_for_file(filename);
 		if (filename.empty()) {
 			fprintf(stderr, "%s not found, sleeping one second and trying again...\n", filename.c_str());
-			sleep(1);
+			producer_thread_should_quit.sleep_for(seconds(1));
 			continue;
 		}
 		if (!play_video(pathname)) {
 			// Error.
 			fprintf(stderr, "Error when playing %s, sleeping one second and trying again...\n", pathname.c_str());
-			sleep(1);
+			producer_thread_should_quit.sleep_for(seconds(1));
 			continue;
 		}
 
@@ -198,7 +198,7 @@ bool FFmpegCapture::play_video(const string &pathname)
 	int sws_last_width = -1, sws_last_height = -1;
 
 	// Main loop.
-	while (!producer_thread_should_quit) {
+	while (!producer_thread_should_quit.should_quit()) {
 		// Process any queued commands from other threads.
 		vector<QueuedCommand> commands;
 		{
@@ -307,8 +307,7 @@ bool FFmpegCapture::play_video(const string &pathname)
                 audio_format.bits_per_sample = 32;
                 audio_format.num_channels = 8;
 
-		// TODO: Make it interruptable somehow.
-		this_thread::sleep_until(next_frame_start);
+		producer_thread_should_quit.sleep_until(next_frame_start);
 		frame_callback(timecode++,
 			video_frame, 0, video_format,
 			audio_frame, 0, audio_format);

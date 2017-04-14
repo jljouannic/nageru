@@ -67,7 +67,7 @@ void DeckLinkOutput::start_output(uint32_t mode, int64_t base_pts)
 	assert(output);
 	assert(!playback_initiated);
 
-	should_quit = false;
+	should_quit.unquit();
 	playback_initiated = true;
 	playback_started = false;
 	this->base_pts = base_pts;
@@ -160,7 +160,7 @@ void DeckLinkOutput::end_output()
 		return;
 	}
 
-	should_quit = true;
+	should_quit.quit();
 	frame_queues_changed.notify_all();
 	present_thread.join();
 	playback_initiated = false;
@@ -181,7 +181,7 @@ void DeckLinkOutput::end_output()
 
 void DeckLinkOutput::send_frame(GLuint y_tex, GLuint cbcr_tex, YCbCrLumaCoefficients output_ycbcr_coefficients, const vector<RefCountedFrame> &input_frames, int64_t pts, int64_t duration)
 {
-	assert(!should_quit);
+	assert(!should_quit.should_quit());
 
 	if ((current_mode_flags & bmdDisplayModeColorspaceRec601) && output_ycbcr_coefficients == YCBCR_REC_709) {
 		if (!last_frame_had_mode_mismatch) {
@@ -271,7 +271,7 @@ void DeckLinkOutput::send_audio(int64_t pts, const std::vector<float> &samples)
 
 void DeckLinkOutput::wait_for_frame(int64_t pts, int *dropped_frames, int64_t *frame_duration, bool *is_preroll, steady_clock::time_point *frame_timestamp)
 {
-	assert(!should_quit);
+	assert(!should_quit.should_quit());
 
 	*dropped_frames = 0;
 	*frame_duration = this->frame_duration;
@@ -309,7 +309,7 @@ void DeckLinkOutput::wait_for_frame(int64_t pts, int *dropped_frames, int64_t *f
 
 	// If we're ahead of time, wait for the frame to (approximately) start.
 	if (stream_frame_time < target_time) {
-		this_thread::sleep_until(*frame_timestamp);
+		should_quit.sleep_until(*frame_timestamp);
 		return;
 	}
 
@@ -457,9 +457,9 @@ void DeckLinkOutput::present_thread_func()
 		{
                         unique_lock<mutex> lock(frame_queue_mutex);
                         frame_queues_changed.wait(lock, [this]{
-                                return should_quit || !pending_video_frames.empty();
+                                return should_quit.should_quit() || !pending_video_frames.empty();
                         });
-                        if (should_quit) {
+                        if (should_quit.should_quit()) {
 				return;
 			}
 			frame = move(pending_video_frames.front());

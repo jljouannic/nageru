@@ -31,6 +31,7 @@
 #include <thread>
 
 #include "bmusb/bmusb.h"
+#include "quittable_sleeper.h"
 
 class FFmpegCapture : public bmusb::CaptureInterface
 {
@@ -157,7 +158,7 @@ private:
 	std::unique_ptr<bmusb::FrameAllocator> owned_audio_frame_allocator;
 	bmusb::frame_callback_t frame_callback = nullptr;
 
-	std::atomic<bool> producer_thread_should_quit{false};
+	QuittableSleeper producer_thread_should_quit;
 	std::thread producer_thread;
 
 	std::mutex queue_mu;
