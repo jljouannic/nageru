@@ -313,6 +313,11 @@ bool FFmpegCapture::play_video(const string &pathname)
 		video_format.stride = width * 4;
 		video_format.frame_rate_nom = video_timebase.den;
 		video_format.frame_rate_den = av_frame_get_pkt_duration(frame.get()) * video_timebase.num;
+		if (video_format.frame_rate_nom == 0 || video_format.frame_rate_den == 0) {
+			// Invalid frame rate.
+			video_format.frame_rate_nom = 60;
+			video_format.frame_rate_den = 1;
+		}
 		video_format.has_signal = true;
 		video_format.is_connected = true;
 
