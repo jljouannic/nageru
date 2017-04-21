@@ -66,6 +66,8 @@ FFmpegCapture::FFmpegCapture(const string &filename, unsigned width, unsigned he
 {
 	// Not really used for anything.
 	description = "Video: " + filename;
+
+	avformat_network_init();  // In case someone wants this.
 }
 
 FFmpegCapture::~FFmpegCapture()
