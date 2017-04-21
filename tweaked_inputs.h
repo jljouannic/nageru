@@ -47,30 +47,26 @@ public:
 	sRGBSwitchingFlatInput(movit::ImageFormat format, movit::MovitPixelFormat pixel_format, GLenum type, unsigned width, unsigned height)
 	    : movit::FlatInput(format, pixel_format, type, width, height) {}
 
-	void set_gl_state(GLuint glsl_program_num, const std::string &prefix, unsigned *sampler_num) override
-	{
-		movit::FlatInput::set_gl_state(glsl_program_num, prefix, sampler_num);
-
-		// This flag is ignored for non-sRGB-uploaded textures, so we can set it
-		// without checking can_output_linear_gamma().
-		glActiveTexture(GL_TEXTURE0 + *sampler_num - 1);
-		if (output_linear_gamma) {
-			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_SRGB_DECODE_EXT, GL_DECODE_EXT);
-		} else {
-			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_SRGB_DECODE_EXT, GL_SKIP_DECODE_EXT);
-		}
-	}
+	~sRGBSwitchingFlatInput();
+	void set_gl_state(GLuint glsl_program_num, const std::string &prefix, unsigned *sampler_num) override;
+	void clear_gl_state() override;
 
 	bool set_int(const std::string &key, int value) override
 	{
 		if (key == "output_linear_gamma") {
 			output_linear_gamma = value;
 		}
+		if (key == "needs_mipmaps") {
+			needs_mipmaps = value;
+		}
 		return movit::FlatInput::set_int(key, value);
 	}
 
 private:
-	int output_linear_gamma = false;
+	bool output_linear_gamma = false;
+	bool needs_mipmaps = false;
+	GLuint sampler_obj = 0;
+	GLuint texture_unit;
 };
 
 

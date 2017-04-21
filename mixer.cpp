@@ -212,7 +212,9 @@ Mixer::Mixer(const QSurfaceFormat &format, unsigned num_cards)
 	check_error();
 
 	// This nearly always should be true.
-	global_flags.can_disable_srgb_decoder = epoxy_has_gl_extension("GL_EXT_texture_sRGB_decode");
+	global_flags.can_disable_srgb_decoder =
+		epoxy_has_gl_extension("GL_EXT_texture_sRGB_decode") &&
+		epoxy_has_gl_extension("GL_ARB_sampler_objects");
 
 	// Since we allow non-bouncing 4:2:2 YCbCrInputs, effective subpixel precision
 	// will be halved when sampling them, and we need to compensate here.
