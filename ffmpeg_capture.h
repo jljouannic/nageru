@@ -117,13 +117,13 @@ public:
 	uint32_t get_current_video_mode() const override { return 0; }
 
 	std::set<bmusb::PixelFormat> get_available_pixel_formats() const override {
-		return std::set<bmusb::PixelFormat>{ bmusb::PixelFormat_8BitRGBA };
+		return std::set<bmusb::PixelFormat>{ bmusb::PixelFormat_8BitBGRA };
 	}
 	void set_pixel_format(bmusb::PixelFormat pixel_format) override {
-		assert(pixel_format == bmusb::PixelFormat_8BitRGBA);
+		assert(pixel_format == bmusb::PixelFormat_8BitBGRA);
 	}	
 	bmusb::PixelFormat get_current_pixel_format() const override {
-		return bmusb::PixelFormat_8BitRGBA;
+		return bmusb::PixelFormat_8BitBGRA;
 	}
 
 	std::map<uint32_t, std::string> get_available_video_inputs() const override {

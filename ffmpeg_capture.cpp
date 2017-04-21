@@ -297,7 +297,7 @@ bool FFmpegCapture::play_video(const string &pathname)
 		if (sws_ctx == nullptr || sws_last_width != frame->width || sws_last_height != frame->height) {
 			sws_ctx.reset(
 				sws_getContext(frame->width, frame->height, (AVPixelFormat)frame->format,
-					width, height, AV_PIX_FMT_RGBA,
+					width, height, AV_PIX_FMT_BGRA,
 					SWS_BICUBIC, nullptr, nullptr, nullptr));
 			sws_last_width = frame->width;
 			sws_last_height = frame->height;

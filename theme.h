@@ -103,7 +103,7 @@ private:
 // the mixer, and communicates that state over to the actual YCbCrInput.
 class LiveInputWrapper {
 public:
-	// Note: <override_bounce> is irrelevant for PixelFormat_8BitRGBA.
+	// Note: <override_bounce> is irrelevant for PixelFormat_8BitBGRA.
 	LiveInputWrapper(Theme *theme, movit::EffectChain *chain, bmusb::PixelFormat pixel_format, bool override_bounce, bool deinterlace);
 
 	void connect_signal(int signal_num);
@@ -112,7 +112,7 @@ public:
 	{
 		if (deinterlace) {
 			return deinterlace_effect;
-		} else if (pixel_format == bmusb::PixelFormat_8BitRGBA) {
+		} else if (pixel_format == bmusb::PixelFormat_8BitBGRA) {
 			return rgba_inputs[0];
 		} else {
 			return ycbcr_inputs[0];

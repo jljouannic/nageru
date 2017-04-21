@@ -38,7 +38,7 @@ PBOFrameAllocator::PBOFrameAllocator(bmusb::PixelFormat pixel_format, size_t fra
 		// For 8-bit Y'CbCr, we ask the driver to split Y' and Cb/Cr
 		// into separate textures. For 10-bit, the input format (v210)
 		// is complicated enough that we need to interpolate up to 4:4:4,
-		// which we do in a compute shader ourselves. For RGBA, the data
+		// which we do in a compute shader ourselves. For BGRA, the data
 		// is already 4:4:4:4.
 		frame.interleaved = (pixel_format == bmusb::PixelFormat_8BitYCbCr);
 
@@ -58,7 +58,7 @@ PBOFrameAllocator::PBOFrameAllocator(bmusb::PixelFormat pixel_format, size_t fra
 			glGenTextures(2, userdata[i].tex_444);
 			check_error();
 			break;
-		case bmusb::PixelFormat_8BitRGBA:
+		case bmusb::PixelFormat_8BitBGRA:
 			glGenTextures(2, userdata[i].tex_rgba);
 			check_error();
 			break;
@@ -134,7 +134,7 @@ PBOFrameAllocator::PBOFrameAllocator(bmusb::PixelFormat pixel_format, size_t fra
 					check_error();
 				}
 				break;
-			case bmusb::PixelFormat_8BitRGBA:
+			case bmusb::PixelFormat_8BitBGRA:
 				glBindTexture(GL_TEXTURE_2D, userdata[i].tex_rgba[field]);
 				check_error();
 				glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
@@ -145,9 +145,9 @@ PBOFrameAllocator::PBOFrameAllocator(bmusb::PixelFormat pixel_format, size_t fra
 				check_error();
 				if (field == 0) {
 					if (global_flags.can_disable_srgb_decoder) {  // See the comments in tweaked_inputs.h.
-						glTexImage2D(GL_TEXTURE_2D, 0, GL_SRGB8_ALPHA8, width, height, 0, GL_RGBA, GL_UNSIGNED_BYTE, NULL);
+						glTexImage2D(GL_TEXTURE_2D, 0, GL_SRGB8_ALPHA8, width, height, 0, GL_BGRA, GL_UNSIGNED_INT_8_8_8_8_REV, NULL);
 					} else {
-						glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, width, height, 0, GL_RGBA, GL_UNSIGNED_BYTE, NULL);
+						glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, width, height, 0, GL_BGRA, GL_UNSIGNED_INT_8_8_8_8_REV, NULL);
 					}
 					check_error();
 				}
@@ -192,7 +192,7 @@ PBOFrameAllocator::~PBOFrameAllocator()
 			glDeleteTextures(2, ((Userdata *)frame.userdata)->tex_cbcr);
 			check_error();
 			break;
-		case bmusb::PixelFormat_8BitRGBA:
+		case bmusb::PixelFormat_8BitBGRA:
 			glDeleteTextures(2, ((Userdata *)frame.userdata)->tex_rgba);
 			check_error();
 			break;

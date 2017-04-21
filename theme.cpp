@@ -222,7 +222,7 @@ int EffectChain_add_video_input(lua_State* L)
 	// doesn't care about the object anymore. (If we change this, we'd need
 	// to also unregister the signal connection on __gc.)
 	int ret = wrap_lua_object_nonowned<LiveInputWrapper>(
-		L, "LiveInputWrapper", theme, chain, bmusb::PixelFormat_8BitRGBA,
+		L, "LiveInputWrapper", theme, chain, bmusb::PixelFormat_8BitBGRA,
 		/*override_bounce=*/false, deinterlace);
 	if (ret == 1) {
 		Theme *theme = get_theme_updata(L);
@@ -692,8 +692,10 @@ LiveInputWrapper::LiveInputWrapper(Theme *theme, EffectChain *chain, bmusb::Pixe
 		num_inputs = 1;
 	}
 
-	if (pixel_format == bmusb::PixelFormat_8BitRGBA) {
+	if (pixel_format == bmusb::PixelFormat_8BitBGRA) {
 		for (unsigned i = 0; i < num_inputs; ++i) {
+			// We upload our textures ourselves, and Movit swaps
+			// R and B in the shader if we specify BGRA, so lie and say RGBA.
 			if (global_flags.can_disable_srgb_decoder) {
 				rgba_inputs.push_back(new sRGBSwitchingFlatInput(inout_format, FORMAT_RGBA_POSTMULTIPLIED_ALPHA, GL_UNSIGNED_BYTE, global_flags.width, global_flags.height));
 			} else {
@@ -798,7 +800,7 @@ void LiveInputWrapper::connect_signal_raw(int signal_num)
 			ycbcr_inputs[i]->set_width(this_width);
 			ycbcr_inputs[i]->set_height(this_height);
 			break;
-		case bmusb::PixelFormat_8BitRGBA:
+		case bmusb::PixelFormat_8BitBGRA:
 			rgba_inputs[i]->set_texture_num(userdata->tex_rgba[frame.field_number]);
 			rgba_inputs[i]->set_width(this_width);
 			rgba_inputs[i]->set_height(this_height);

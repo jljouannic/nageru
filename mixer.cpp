@@ -89,7 +89,7 @@ void ensure_texture_resolution(PBOFrameAllocator::Userdata *userdata, unsigned f
 	case bmusb::PixelFormat_8BitYCbCr:
 		first = userdata->tex_y[field] == 0 || userdata->tex_cbcr[field] == 0;
 		break;
-	case bmusb::PixelFormat_8BitRGBA:
+	case bmusb::PixelFormat_8BitBGRA:
 		first = userdata->tex_rgba[field] == 0;
 		break;
 	default:
@@ -122,13 +122,13 @@ void ensure_texture_resolution(PBOFrameAllocator::Userdata *userdata, unsigned f
 			check_error();
 			break;
 		}
-		case bmusb::PixelFormat_8BitRGBA:
+		case bmusb::PixelFormat_8BitBGRA:
 			glBindTexture(GL_TEXTURE_2D, userdata->tex_rgba[field]);
 			check_error();
 			if (global_flags.can_disable_srgb_decoder) {  // See the comments in tweaked_inputs.h.
-				glTexImage2D(GL_TEXTURE_2D, 0, GL_SRGB8_ALPHA8, width, height, 0, GL_RGBA, GL_UNSIGNED_BYTE, nullptr);
+				glTexImage2D(GL_TEXTURE_2D, 0, GL_SRGB8_ALPHA8, width, height, 0, GL_BGRA, GL_UNSIGNED_INT_8_8_8_8_REV, nullptr);
 			} else {
-				glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, width, height, 0, GL_RGBA, GL_UNSIGNED_BYTE, nullptr);
+				glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, width, height, 0, GL_BGRA, GL_UNSIGNED_INT_8_8_8_8_REV, nullptr);
 			}
 			check_error();
 			break;
@@ -403,7 +403,7 @@ void Mixer::configure_card(unsigned card_index, CaptureInterface *capture, CardT
 
 	bmusb::PixelFormat pixel_format;
 	if (card_type == CardType::FFMPEG_INPUT) {
-		pixel_format = bmusb::PixelFormat_8BitRGBA;
+		pixel_format = bmusb::PixelFormat_8BitBGRA;
 	} else if (global_flags.ten_bit_input) {
 		pixel_format = PixelFormat_10BitYCbCr;
 	} else {
@@ -660,9 +660,9 @@ void Mixer::bm_frame(unsigned card_index, uint16_t timecode,
 				upload_texture(userdata->tex_cbcr[field], cbcr_width, video_format.height, cbcr_width * sizeof(uint16_t), interlaced_stride, GL_RG, GL_UNSIGNED_BYTE, field_cbcr_start);
 				break;
 			}
-			case bmusb::PixelFormat_8BitRGBA: {
+			case bmusb::PixelFormat_8BitBGRA: {
 				size_t field_start = video_offset + video_format.stride * field_start_line;
-				upload_texture(userdata->tex_rgba[field], video_format.width, video_format.height, video_format.stride, interlaced_stride, GL_RGBA, GL_UNSIGNED_BYTE, field_start);
+				upload_texture(userdata->tex_rgba[field], video_format.width, video_format.height, video_format.stride, interlaced_stride, GL_BGRA, GL_UNSIGNED_INT_8_8_8_8_REV, field_start);
 				break;
 			}
 			default:
