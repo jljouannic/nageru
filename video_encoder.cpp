@@ -40,7 +40,8 @@ string generate_local_dump_filename(int frame)
 	// Use the frame number to disambiguate between two cuts starting
 	// on the same second.
 	char filename[256];
-	snprintf(filename, sizeof(filename), "%s%s-f%02d%s",
+	snprintf(filename, sizeof(filename), "%s/%s%s-f%02d%s",
+		global_flags.recording_dir.c_str(),
 		LOCAL_DUMP_PREFIX, timestamp, frame % 100, LOCAL_DUMP_SUFFIX);
 	return filename;
 }

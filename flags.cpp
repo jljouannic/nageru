@@ -70,6 +70,7 @@ void usage()
 	fprintf(stderr, "  -o, --output-card=CARD          also output signal to the given card (default none)\n");
 	fprintf(stderr, "  -t, --theme=FILE                choose theme (default theme.lua)\n");
 	fprintf(stderr, "  -I, --theme-dir=DIR             search for theme in this directory (can be given multiple times)\n");
+	fprintf(stderr, "  -r, --recording-dir=DIR         where to store disk recording\n");
 	fprintf(stderr, "  -v, --va-display=SPEC           VA-API device for H.264 encoding\n");
 	fprintf(stderr, "                                    ($DISPLAY spec or /dev/dri/render* path)\n");
 	fprintf(stderr, "  -m, --map-signal=SIGNAL,CARD    set a default card mapping (can be given multiple times)\n");
@@ -145,6 +146,7 @@ void parse_flags(int argc, char * const argv[])
 		{ "output-card", required_argument, 0, 'o' },
 		{ "theme", required_argument, 0, 't' },
 		{ "theme-dir", required_argument, 0, 'I' },
+		{ "recording-dir", required_argument, 0, 'r' },
 		{ "map-signal", required_argument, 0, 'm' },
 		{ "input-mapping", required_argument, 0, 'M' },
 		{ "va-display", required_argument, 0, 'v' },
@@ -197,7 +199,7 @@ void parse_flags(int argc, char * const argv[])
 	string output_ycbcr_coefficients = "auto";
 	for ( ;; ) {
 		int option_index = 0;
-		int c = getopt_long(argc, argv, "c:t:I:v:m:M:w:h:", long_options, &option_index);
+		int c = getopt_long(argc, argv, "c:t:I:r:v:m:M:w:h:", long_options, &option_index);
 
 		if (c == -1) {
 			break;
@@ -220,6 +222,9 @@ void parse_flags(int argc, char * const argv[])
 			break;
 		case 'I':
 			theme_dirs.push_back(optarg);
+			break;
+		case 'r':
+			global_flags.recording_dir = optarg;
 			break;
 		case 'm': {
 			char *ptr = strchr(optarg, ',');

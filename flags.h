@@ -18,6 +18,7 @@ struct Flags {
 	bool x264_video_to_http = false;
 	bool x264_video_to_disk = false;  // Disables Quick Sync entirely. Implies x264_video_to_http == true.
 	std::vector<std::string> theme_dirs { ".", "/usr/local/share/nageru" };
+	std::string recording_dir = ".";
 	std::string theme_filename = "theme.lua";
 	bool locut_enabled = true;
 	bool gain_staging_auto = true;
