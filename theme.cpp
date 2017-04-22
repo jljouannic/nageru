@@ -792,18 +792,18 @@ void LiveInputWrapper::connect_signal_raw(int signal_num)
 		case bmusb::PixelFormat_8BitYCbCr:
 			ycbcr_inputs[i]->set_texture_num(0, userdata->tex_y[frame.field_number]);
 			ycbcr_inputs[i]->set_texture_num(1, userdata->tex_cbcr[frame.field_number]);
-			ycbcr_inputs[i]->set_width(this_width);
-			ycbcr_inputs[i]->set_height(this_height);
+			ycbcr_inputs[i]->set_width(width);
+			ycbcr_inputs[i]->set_height(height);
 			break;
 		case bmusb::PixelFormat_10BitYCbCr:
 			ycbcr_inputs[i]->set_texture_num(0, userdata->tex_444[frame.field_number]);
-			ycbcr_inputs[i]->set_width(this_width);
-			ycbcr_inputs[i]->set_height(this_height);
+			ycbcr_inputs[i]->set_width(width);
+			ycbcr_inputs[i]->set_height(height);
 			break;
 		case bmusb::PixelFormat_8BitBGRA:
 			rgba_inputs[i]->set_texture_num(userdata->tex_rgba[frame.field_number]);
-			rgba_inputs[i]->set_width(this_width);
-			rgba_inputs[i]->set_height(this_height);
+			rgba_inputs[i]->set_width(width);
+			rgba_inputs[i]->set_height(height);
 			break;
 		default:
 			assert(false);
