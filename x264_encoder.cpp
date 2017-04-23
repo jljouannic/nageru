@@ -227,6 +227,7 @@ void X264Encoder::encoder_thread_func()
 		perror("nice()");
 		// No exit; it's not fatal.
 	}
+	pthread_setname_np(pthread_self(), "x264_encode");
 	init_x264();
 	x264_init_done = true;
 
