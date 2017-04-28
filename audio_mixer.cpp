@@ -274,6 +274,12 @@ bool AudioMixer::add_audio(DeviceSpec device_spec, const uint8_t *data, unsigned
 		}
 	}
 
+	// If we changed frequency since last frame, we'll need to reset the resampler.
+	if (audio_format.sample_rate != device->capture_frequency) {
+		device->capture_frequency = audio_format.sample_rate;
+		reset_resampler_mutex_held(device_spec);
+	}
+
 	// Now add it.
 	device->resampling_queue->add_input_samples(frame_time, audio.get(), num_samples, ResamplingQueue::ADJUST_RATE);
 	return true;
