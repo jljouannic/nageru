@@ -369,6 +369,14 @@ int VideoInput_change_rate(lua_State* L)
 	return 0;
 }
 
+int VideoInput_get_signal_num(lua_State* L)
+{
+	assert(lua_gettop(L) == 1);
+	FFmpegCapture **video_input = (FFmpegCapture **)luaL_checkudata(L, 1, "VideoInput");
+	lua_pushnumber(L, -1 - (*video_input)->get_card_index());
+	return 1;
+}
+
 int WhiteBalanceEffect_new(lua_State* L)
 {
 	assert(lua_gettop(L) == 0);
@@ -572,6 +580,7 @@ const luaL_Reg VideoInput_funcs[] = {
 	{ "new", VideoInput_new },
 	{ "rewind", VideoInput_rewind },
 	{ "change_rate", VideoInput_change_rate },
+	{ "get_signal_num", VideoInput_get_signal_num },
 	{ NULL, NULL }
 };
 
@@ -1084,6 +1093,11 @@ vector<string> Theme::get_transition_names(float t)
 
 int Theme::map_signal(int signal_num)
 {
+	// Negative numbers map to raw signals.
+	if (signal_num < 0) {
+		return -1 - signal_num;
+	}
+
 	unique_lock<mutex> lock(map_m);
 	if (signal_to_card_mapping.count(signal_num)) {
 		return signal_to_card_mapping[signal_num];
