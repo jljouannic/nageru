@@ -108,9 +108,7 @@ public:
 	void configure_card() override;
 	void start_bm_capture() override;
 	void stop_dequeue_thread() override;
-
-	// TODO: Specify error status through this.
-	bool get_disconnected() const override { return false; }
+	bool get_disconnected() const override { return false; }  // We never unplug.
 
 	std::map<uint32_t, bmusb::VideoMode> get_available_video_modes() const;
 	void set_video_mode(uint32_t video_mode_id) override {}  // Ignore.
@@ -139,6 +137,7 @@ public:
 
 private:
 	void producer_thread_func();
+	void send_disconnected_frame();
 	bool play_video(const std::string &pathname);
 	void internal_rewind();
 

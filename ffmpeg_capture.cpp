@@ -138,12 +138,14 @@ void FFmpegCapture::producer_thread_func()
 		string pathname = search_for_file(filename);
 		if (filename.empty()) {
 			fprintf(stderr, "%s not found, sleeping one second and trying again...\n", filename.c_str());
+			send_disconnected_frame();
 			producer_thread_should_quit.sleep_for(seconds(1));
 			continue;
 		}
 		if (!play_video(pathname)) {
 			// Error.
 			fprintf(stderr, "Error when playing %s, sleeping one second and trying again...\n", pathname.c_str());
+			send_disconnected_frame();
 			producer_thread_should_quit.sleep_for(seconds(1));
 			continue;
 		}
@@ -155,6 +157,28 @@ void FFmpegCapture::producer_thread_func()
                 dequeue_cleanup_callback();
 		has_dequeue_callbacks = false;
         }
+}
+
+void FFmpegCapture::send_disconnected_frame()
+{
+	// Send an empty frame to signal that we have no signal anymore.
+	FrameAllocator::Frame video_frame = video_frame_allocator->alloc_frame();
+	if (video_frame.data) {
+		VideoFormat video_format;
+		video_format.width = width;
+		video_format.height = height;
+		video_format.stride = width * 4;
+		video_format.frame_rate_nom = 60;
+		video_format.frame_rate_den = 1;
+		video_format.is_connected = false;
+
+		video_frame.len = width * height * 4;
+		memset(video_frame.data, 0, video_frame.len);
+
+		frame_callback(timecode++,
+			video_frame, /*video_offset=*/0, video_format,
+			FrameAllocator::Frame(), /*audio_offset=*/0, AudioFormat());
+	}
 }
 
 bool FFmpegCapture::play_video(const string &pathname)
