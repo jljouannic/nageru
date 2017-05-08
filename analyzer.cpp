@@ -107,19 +107,27 @@ void Analyzer::grab_clicked()
 	unsigned char *buf = (unsigned char *)glMapBuffer(GL_PIXEL_PACK_BUFFER, GL_READ_ONLY);
 	check_error();
 
+	QImage img(global_flags.width, global_flags.height, QImage::Format_ARGB32_Premultiplied);
+	size_t pitch = global_flags.width * 4;
+	for (int y = 0; y < global_flags.height; ++y) {
+		memcpy(img.scanLine(global_flags.height - y - 1), buf + y * pitch, pitch);
+	}
+
+	QPixmap pixmap;
+	pixmap.convertFromImage(QImage(img));
+	ui->grabbed_frame_label->setPixmap(pixmap);
+
 	int r_hist[256] = {0}, g_hist[256] = {0}, b_hist[256] = {0};
 	const unsigned char *ptr = buf;
-	for (int y = 0; y < global_flags.width; ++y) {
-		for (int x = 0; x < global_flags.height; ++x) {
-			uint8_t b = *ptr++;
-			uint8_t g = *ptr++;
-			uint8_t r = *ptr++;
-			uint8_t a = *ptr++;
+	for (int i = 0; i < global_flags.height * global_flags.width; ++i) {
+		uint8_t b = *ptr++;
+		uint8_t g = *ptr++;
+		uint8_t r = *ptr++;
+		++ptr;
 
-			++r_hist[r];
-			++g_hist[g];
-			++b_hist[b];
-		}
+		++r_hist[r];
+		++g_hist[g];
+		++b_hist[b];
 	}
 
 	glUnmapBuffer(GL_PIXEL_PACK_BUFFER);
