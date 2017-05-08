@@ -28,6 +28,7 @@ public:
 
 private:
 	void grab_clicked();
+	void signal_changed();
 
 	Ui::Analyzer *ui;
 	QSurface *surface;

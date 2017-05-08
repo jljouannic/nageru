@@ -1327,10 +1327,12 @@ void Mixer::OutputChannel::output_frame(DisplayFrame frame)
 		}
 		ready_frame = frame;
 		has_ready_frame = true;
-	}
 
-	if (new_frame_ready_callback) {
-		new_frame_ready_callback();
+		// Call the callbacks under the mutex (they should be short),
+		// so that we don't race against a callback removal.
+		for (const auto &key_and_callback : new_frame_ready_callbacks) {
+			key_and_callback.second();
+		}
 	}
 
 	// Reduce the number of callbacks by filtering duplicates. The reason
@@ -1397,9 +1399,16 @@ bool Mixer::OutputChannel::get_display_frame(DisplayFrame *frame)
 	return true;
 }
 
-void Mixer::OutputChannel::set_frame_ready_callback(Mixer::new_frame_ready_callback_t callback)
+void Mixer::OutputChannel::add_frame_ready_callback(void *key, Mixer::new_frame_ready_callback_t callback)
 {
-	new_frame_ready_callback = callback;
+	unique_lock<mutex> lock(frame_mutex);
+	new_frame_ready_callbacks[key] = callback;
+}
+
+void Mixer::OutputChannel::remove_frame_ready_callback(void *key)
+{
+	unique_lock<mutex> lock(frame_mutex);
+	new_frame_ready_callbacks.erase(key);
 }
 
 void Mixer::OutputChannel::set_transition_names_updated_callback(Mixer::transition_names_updated_callback_t callback)

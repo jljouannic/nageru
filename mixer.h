@@ -139,10 +139,17 @@ public:
 		return output_channel[output].get_display_frame(frame);
 	}
 
+	// NOTE: Callbacks will be called with a mutex held, so you should probably
+	// not do real work in them.
 	typedef std::function<void()> new_frame_ready_callback_t;
-	void set_frame_ready_callback(Output output, new_frame_ready_callback_t callback)
+	void add_frame_ready_callback(Output output, void *key, new_frame_ready_callback_t callback)
 	{
-		output_channel[output].set_frame_ready_callback(callback);
+		output_channel[output].add_frame_ready_callback(key, callback);
+	}
+
+	void remove_frame_ready_callback(Output output, void *key)
+	{
+		output_channel[output].remove_frame_ready_callback(key);
 	}
 
 	// TODO: Should this really be per-channel? Shouldn't it just be called for e.g. the live output?
@@ -457,7 +464,8 @@ private:
 		~OutputChannel();
 		void output_frame(DisplayFrame frame);
 		bool get_display_frame(DisplayFrame *frame);
-		void set_frame_ready_callback(new_frame_ready_callback_t callback);
+		void add_frame_ready_callback(void *key, new_frame_ready_callback_t callback);
+		void remove_frame_ready_callback(void *key);
 		void set_transition_names_updated_callback(transition_names_updated_callback_t callback);
 		void set_name_updated_callback(name_updated_callback_t callback);
 		void set_color_updated_callback(color_updated_callback_t callback);
@@ -470,7 +478,7 @@ private:
 		std::mutex frame_mutex;
 		DisplayFrame current_frame, ready_frame;  // protected by <frame_mutex>
 		bool has_current_frame = false, has_ready_frame = false;  // protected by <frame_mutex>
-		new_frame_ready_callback_t new_frame_ready_callback;
+		std::map<void *, new_frame_ready_callback_t> new_frame_ready_callbacks;  // protected by <frame_mutex>
 		transition_names_updated_callback_t transition_names_updated_callback;
 		name_updated_callback_t name_updated_callback;
 		color_updated_callback_t color_updated_callback;

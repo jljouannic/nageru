@@ -40,6 +40,11 @@ GLWidget::GLWidget(QWidget *parent)
 {
 }
 
+GLWidget::~GLWidget()
+{
+	global_mixer->remove_frame_ready_callback(output, this);
+}
+
 void GLWidget::clean_context()
 {
 	if (resource_pool != nullptr) {
@@ -57,7 +62,7 @@ void GLWidget::initializeGL()
 		global_mainwindow->mixer_created(global_mixer);
 		global_mixer->start();
 	});
-	global_mixer->set_frame_ready_callback(output, [this]{
+	global_mixer->add_frame_ready_callback(output, this, [this]{
 		QMetaObject::invokeMethod(this, "update", Qt::AutoConnection);
 	});
 	if (output == Mixer::OUTPUT_LIVE) {

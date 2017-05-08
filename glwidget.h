@@ -30,6 +30,7 @@ class GLWidget : public QGLWidget
 
 public:
 	GLWidget(QWidget *parent = 0);
+	~GLWidget();
 
 	void set_output(Mixer::Output output)
 	{

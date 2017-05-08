@@ -13,6 +13,22 @@
   <property name="windowTitle">
    <string>Dialog</string>
   </property>
+  <widget class="GLWidget" name="display" native="true">
+   <property name="geometry">
+    <rect>
+     <x>10</x>
+     <y>10</y>
+     <width>320</width>
+     <height>180</height>
+    </rect>
+   </property>
+   <property name="autoFillBackground">
+    <bool>false</bool>
+   </property>
+   <property name="styleSheet">
+    <string notr="true">background: rgb(233, 185, 110)</string>
+   </property>
+  </widget>
   <widget class="QComboBox" name="input_box">
    <property name="geometry">
     <rect>
@@ -182,6 +198,13 @@
    </property>
   </widget>
  </widget>
+ <customwidgets>
+  <customwidget>
+   <class>GLWidget</class>
+   <extends>QWidget</extends>
+   <header>glwidget.h</header>
+  </customwidget>
+ </customwidgets>
  <resources/>
  <connections/>
 </ui>

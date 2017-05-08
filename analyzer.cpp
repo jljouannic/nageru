@@ -30,7 +30,9 @@ Analyzer::Analyzer()
 	}
 
 	connect(ui->grab_btn, &QPushButton::clicked, bind(&Analyzer::grab_clicked, this));
-	//ui->display->set_output(Mixer::OUTPUT_LIVE);
+	connect(ui->input_box, static_cast<void(QComboBox::*)(int)>(&QComboBox::currentIndexChanged), bind(&Analyzer::signal_changed, this));
+	signal_changed();
+
 	surface = create_surface(QSurfaceFormat::defaultFormat());
 	context = create_context(surface);
 
@@ -143,3 +145,8 @@ void Analyzer::grab_clicked()
 	check_error();
 }
 
+void Analyzer::signal_changed()
+{
+	Mixer::Output channel = static_cast<Mixer::Output>(ui->input_box->currentData().value<int>());
+	ui->display->set_output(channel);
+}
