@@ -9,6 +9,7 @@
 #include <string>
 #include <vector>
 
+#include "analyzer.h"
 #include "audio_mixer.h"
 #include "midi_mapper.h"
 #include "mixer.h"
@@ -47,6 +48,7 @@ public slots:
 	void exit_triggered();
 	void manual_triggered();
 	void about_triggered();
+	void open_analyzer_triggered();
 	void simple_audio_mode_triggered();
 	void multichannel_audio_mode_triggered();
 	void input_mapping_triggered();
@@ -159,6 +161,7 @@ private:
 	std::vector<Ui::AudioExpandedView *> audio_expanded_views;
 	int current_wb_pick_display = -1;
 	MIDIMapper midi_mapper;
+	std::unique_ptr<Analyzer> analyzer;
 };
 
 extern MainWindow *global_mainwindow;

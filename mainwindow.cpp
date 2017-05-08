@@ -46,6 +46,7 @@
 
 #include "aboutdialog.h"
 #include "alsa_pool.h"
+#include "analyzer.h"
 #include "clickable_label.h"
 #include "context_menus.h"
 #include "correlation_meter.h"
@@ -200,6 +201,7 @@ MainWindow::MainWindow()
 	connect(ui->exit_action, &QAction::triggered, this, &MainWindow::exit_triggered);
 	connect(ui->manual_action, &QAction::triggered, this, &MainWindow::manual_triggered);
 	connect(ui->about_action, &QAction::triggered, this, &MainWindow::about_triggered);
+	connect(ui->open_analyzer_action, &QAction::triggered, this, &MainWindow::open_analyzer_triggered);
 	connect(ui->simple_audio_mode, &QAction::triggered, this, &MainWindow::simple_audio_mode_triggered);
 	connect(ui->multichannel_audio_mode, &QAction::triggered, this, &MainWindow::multichannel_audio_mode_triggered);
 	connect(ui->input_mapping_action, &QAction::triggered, this, &MainWindow::input_mapping_triggered);
@@ -588,6 +590,12 @@ void MainWindow::manual_triggered()
 void MainWindow::about_triggered()
 {
 	AboutDialog().exec();
+}
+
+void MainWindow::open_analyzer_triggered()
+{
+	analyzer.reset(new Analyzer);
+	analyzer->show();
 }
 
 void MainWindow::simple_audio_mode_triggered()

@@ -14,7 +14,7 @@ endif
 LDLIBS=$(shell pkg-config --libs $(PKG_MODULES)) -pthread -lva -lva-drm -lva-x11 -lX11 -lavformat -lavcodec -lavutil -lswscale -lavresample -lzita-resampler -lasound -ldl
 
 # Qt objects
-OBJS_WITH_MOC = glwidget.o mainwindow.o vumeter.o lrameter.o compression_reduction_meter.o correlation_meter.o aboutdialog.o input_mapping_dialog.o midi_mapping_dialog.o nonlinear_fader.o
+OBJS_WITH_MOC = glwidget.o mainwindow.o vumeter.o lrameter.o compression_reduction_meter.o correlation_meter.o aboutdialog.o analyzer.o input_mapping_dialog.o midi_mapping_dialog.o nonlinear_fader.o
 OBJS += $(OBJS_WITH_MOC)
 OBJS += $(OBJS_WITH_MOC:.o=.moc.o) ellipsis_label.moc.o clickable_label.moc.o
 OBJS += context_menus.o vu_common.o piecewise_interpolator.o main.o
@@ -63,6 +63,7 @@ benchmark_audio_mixer: $(BM_OBJS)
 
 # Extra dependencies that need to be generated.
 aboutdialog.o: ui_aboutdialog.h
+analyzer.o: ui_analyzer.h
 alsa_pool.o: state.pb.h
 audio_mixer.o: state.pb.h
 input_mapping.o: state.pb.h
@@ -76,7 +77,7 @@ DEPS=$(OBJS:.o=.d) $(BM_OBJS:.o=.d)
 -include $(DEPS)
 
 clean:
-	$(RM) $(OBJS) $(BM_OBJS) $(DEPS) nageru benchmark_audio_mixer ui_aboutdialog.h ui_mainwindow.h ui_display.h ui_about.h ui_audio_miniview.h ui_audio_expanded_view.h ui_input_mapping.h ui_midi_mapping.h chain-*.frag *.dot *.pb.cc *.pb.h $(OBJS_WITH_MOC:.o=.moc.cpp) ellipsis_label.moc.cpp clickable_label.moc.cpp
+	$(RM) $(OBJS) $(BM_OBJS) $(DEPS) nageru benchmark_audio_mixer ui_aboutdialog.h ui_analyzer.h ui_mainwindow.h ui_display.h ui_about.h ui_audio_miniview.h ui_audio_expanded_view.h ui_input_mapping.h ui_midi_mapping.h chain-*.frag *.dot *.pb.cc *.pb.h $(OBJS_WITH_MOC:.o=.moc.cpp) ellipsis_label.moc.cpp clickable_label.moc.cpp
 
 PREFIX=/usr/local
 install:

@@ -641,7 +641,7 @@
                  <x>0</x>
                  <y>0</y>
                  <width>505</width>
-                 <height>236</height>
+                 <height>238</height>
                 </rect>
                </property>
                <layout class="QHBoxLayout" name="horizontalLayout_4">
@@ -1130,8 +1130,8 @@
                 <rect>
                  <x>0</x>
                  <y>0</y>
-                 <width>100</width>
-                 <height>30</height>
+                 <width>46</width>
+                 <height>20</height>
                 </rect>
                </property>
                <layout class="QHBoxLayout" name="horizontalLayout_5">
@@ -1390,7 +1390,7 @@
      <x>0</x>
      <y>0</y>
      <width>1089</width>
-     <height>23</height>
+     <height>20</height>
     </rect>
    </property>
    <widget class="QMenu" name="video_menu">
@@ -1417,6 +1417,7 @@
      <addaction name="separator"/>
     </widget>
     <addaction name="cut_action"/>
+    <addaction name="open_analyzer_action"/>
     <addaction name="x264_bitrate_action"/>
     <addaction name="hdmi_sdi_output_device_menu"/>
     <addaction name="hdmi_sdi_output_resolution_menu"/>
@@ -1512,6 +1513,11 @@
    </property>
    <property name="text">
     <string>On standard &amp;output</string>
+   </property>
+  </action>
+  <action name="open_analyzer_action">
+   <property name="text">
+    <string>Open frame &amp;analyzer…</string>
    </property>
   </action>
  </widget>

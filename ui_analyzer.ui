@@ -1,0 +1,187 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ui version="4.0">
+ <class>Analyzer</class>
+ <widget class="QDialog" name="Analyzer">
+  <property name="geometry">
+   <rect>
+    <x>0</x>
+    <y>0</y>
+    <width>843</width>
+    <height>450</height>
+   </rect>
+  </property>
+  <property name="windowTitle">
+   <string>Dialog</string>
+  </property>
+  <widget class="QComboBox" name="input_box">
+   <property name="geometry">
+    <rect>
+     <x>10</x>
+     <y>200</y>
+     <width>251</width>
+     <height>23</height>
+    </rect>
+   </property>
+  </widget>
+  <widget class="QPushButton" name="grab_btn">
+   <property name="geometry">
+    <rect>
+     <x>270</x>
+     <y>200</y>
+     <width>61</width>
+     <height>23</height>
+    </rect>
+   </property>
+   <property name="text">
+    <string>Grab</string>
+   </property>
+  </widget>
+  <widget class="QWidget" name="widget_3" native="true">
+   <property name="geometry">
+    <rect>
+     <x>10</x>
+     <y>240</y>
+     <width>320</width>
+     <height>180</height>
+    </rect>
+   </property>
+   <property name="autoFillBackground">
+    <bool>false</bool>
+   </property>
+   <property name="styleSheet">
+    <string notr="true">background: rgb(173, 127, 168)</string>
+   </property>
+  </widget>
+  <widget class="QLabel" name="label">
+   <property name="geometry">
+    <rect>
+     <x>370</x>
+     <y>310</y>
+     <width>421</width>
+     <height>21</height>
+    </rect>
+   </property>
+   <property name="text">
+    <string>Selected coordinate (x,y): (123,456)</string>
+   </property>
+  </widget>
+  <widget class="QLabel" name="label_3">
+   <property name="geometry">
+    <rect>
+     <x>10</x>
+     <y>420</y>
+     <width>321</width>
+     <height>21</height>
+    </rect>
+   </property>
+   <property name="text">
+    <string>RGB histogram</string>
+   </property>
+   <property name="alignment">
+    <set>Qt::AlignCenter</set>
+   </property>
+  </widget>
+  <widget class="QLabel" name="label_4">
+   <property name="geometry">
+    <rect>
+     <x>350</x>
+     <y>280</y>
+     <width>481</width>
+     <height>21</height>
+    </rect>
+   </property>
+   <property name="text">
+    <string>Grabbed frame (1280x720)</string>
+   </property>
+   <property name="alignment">
+    <set>Qt::AlignCenter</set>
+   </property>
+  </widget>
+  <widget class="QWidget" name="gridLayoutWidget">
+   <property name="geometry">
+    <rect>
+     <x>600</x>
+     <y>350</y>
+     <width>191</width>
+     <height>80</height>
+    </rect>
+   </property>
+   <layout class="QGridLayout" name="gridLayout">
+    <item row="1" column="0">
+     <widget class="QLabel" name="label_6">
+      <property name="text">
+       <string>Green:</string>
+      </property>
+     </widget>
+    </item>
+    <item row="1" column="1">
+     <widget class="QLabel" name="label_9">
+      <property name="text">
+       <string>127</string>
+      </property>
+     </widget>
+    </item>
+    <item row="2" column="1">
+     <widget class="QLabel" name="label_10">
+      <property name="text">
+       <string>127</string>
+      </property>
+     </widget>
+    </item>
+    <item row="3" column="0">
+     <widget class="QLabel" name="label_2">
+      <property name="text">
+       <string>Hex:</string>
+      </property>
+     </widget>
+    </item>
+    <item row="0" column="1">
+     <widget class="QLabel" name="label_8">
+      <property name="text">
+       <string>127</string>
+      </property>
+     </widget>
+    </item>
+    <item row="2" column="0">
+     <widget class="QLabel" name="label_7">
+      <property name="text">
+       <string>Blue:</string>
+      </property>
+     </widget>
+    </item>
+    <item row="3" column="1">
+     <widget class="QLabel" name="label_11">
+      <property name="text">
+       <string>#7f7f7f</string>
+      </property>
+     </widget>
+    </item>
+    <item row="0" column="0">
+     <widget class="QLabel" name="label_5">
+      <property name="text">
+       <string>Red:</string>
+      </property>
+     </widget>
+    </item>
+   </layout>
+  </widget>
+  <widget class="QLabel" name="label_12">
+   <property name="geometry">
+    <rect>
+     <x>600</x>
+     <y>330</y>
+     <width>191</width>
+     <height>16</height>
+    </rect>
+   </property>
+   <property name="text">
+    <string>Color (8-bit sRGB):</string>
+   </property>
+   <property name="alignment">
+    <set>Qt::AlignCenter</set>
+   </property>
+  </widget>
+ </widget>
+ <resources/>
+ <connections/>
+</ui>
