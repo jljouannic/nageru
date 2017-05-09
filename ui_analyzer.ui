@@ -97,7 +97,7 @@
     <set>Qt::AlignCenter</set>
    </property>
   </widget>
-  <widget class="QLabel" name="label_4">
+  <widget class="QLabel" name="grabbed_frame_sublabel">
    <property name="geometry">
     <rect>
      <x>350</x>
@@ -107,7 +107,7 @@
     </rect>
    </property>
    <property name="text">
-    <string>Grabbed frame (1280x720)</string>
+    <string>Grabbed frame</string>
    </property>
    <property name="alignment">
     <set>Qt::AlignCenter</set>

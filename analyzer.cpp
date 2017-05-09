@@ -61,7 +61,7 @@ Analyzer::~Analyzer()
 		resource_pool->clean_context();
 	}
 	delete_context(context);
-	delete surface;  // TODO?
+	delete surface;
 }
 
 void Analyzer::grab_clicked()
@@ -113,6 +113,12 @@ void Analyzer::grab_clicked()
 	size_t pitch = global_flags.width * 4;
 	for (int y = 0; y < global_flags.height; ++y) {
 		memcpy(grabbed_image.scanLine(global_flags.height - y - 1), buf + y * pitch, pitch);
+	}
+
+	{
+		char buf[256];
+		snprintf(buf, sizeof(buf), "Grabbed frame (%dx%d)", global_flags.width, global_flags.height);
+		ui->grabbed_frame_sublabel->setText(buf);
 	}
 
 	QPixmap pixmap;
