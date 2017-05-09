@@ -2,6 +2,7 @@
 #define _ANALYZER_H 1
 
 #include <QDialog>
+#include <QImage>
 #include <QString>
 
 #include <epoxy/gl.h>
@@ -29,12 +30,14 @@ public:
 private:
 	void grab_clicked();
 	void signal_changed();
+	bool eventFilter(QObject *watched, QEvent *event) override;
 
 	Ui::Analyzer *ui;
 	QSurface *surface;
 	QOpenGLContext *context;
 	GLuint pbo;
 	movit::ResourcePool *resource_pool = nullptr;
+	QImage grabbed_image;
 };
 
 #endif  // !defined(_ANALYZER_H)
