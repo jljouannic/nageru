@@ -37,7 +37,7 @@ public:
 		this->output = output;
 	}
 
-	void clean_context();
+	void shutdown();
 
 protected:
 	void initializeGL() override;

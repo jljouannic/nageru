@@ -551,11 +551,14 @@ void MainWindow::setup_audio_expanded_view()
 
 void MainWindow::mixer_shutting_down()
 {
-	ui->me_live->clean_context();
-	ui->me_preview->clean_context();
+	ui->me_live->shutdown();
+	ui->me_preview->shutdown();
+
 	for (Ui::Display *display : previews) {
-		display->display->clean_context();
+		display->display->shutdown();
 	}
+
+	analyzer.reset();
 }
 
 void MainWindow::cut_triggered()

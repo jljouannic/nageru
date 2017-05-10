@@ -77,6 +77,7 @@ Analyzer::~Analyzer()
 	}
 	glDeleteBuffers(1, &pbo);
 	check_error();
+	ui->display->shutdown();
 	if (resource_pool != nullptr) {
 		resource_pool->clean_context();
 	}

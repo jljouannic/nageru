@@ -42,15 +42,15 @@ GLWidget::GLWidget(QWidget *parent)
 
 GLWidget::~GLWidget()
 {
-	global_mixer->remove_frame_ready_callback(output, this);
 }
 
-void GLWidget::clean_context()
+void GLWidget::shutdown()
 {
 	if (resource_pool != nullptr) {
 		makeCurrent();
 		resource_pool->clean_context();
 	}
+	global_mixer->remove_frame_ready_callback(output, this);
 }
 
 void GLWidget::initializeGL()
