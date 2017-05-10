@@ -26,6 +26,7 @@ class Analyzer : public QMainWindow
 public:
 	Analyzer();
 	~Analyzer();
+	void mixer_shutting_down();
 
 private:
 	void grab_clicked();

@@ -71,18 +71,23 @@ Analyzer::Analyzer()
 
 Analyzer::~Analyzer()
 {
+	delete_context(context);
+	delete surface;
+}
+
+void Analyzer::mixer_shutting_down()
+{
+	ui->display->shutdown();
+
 	if (!make_current(context, surface)) {
 		printf("oops\n");
 		exit(1);
 	}
 	glDeleteBuffers(1, &pbo);
 	check_error();
-	ui->display->shutdown();
 	if (resource_pool != nullptr) {
 		resource_pool->clean_context();
 	}
-	delete_context(context);
-	delete surface;
 }
 
 void Analyzer::grab_clicked()

@@ -382,6 +382,8 @@ void MainWindow::mixer_created(Mixer *mixer)
 	midi_mapper.refresh_lights();
 	midi_mapper.start_thread();
 
+	analyzer.reset(new Analyzer);
+
 	struct sigaction act;
 	memset(&act, 0, sizeof(act));
 	act.sa_handler = schedule_cut_signal;
@@ -558,7 +560,7 @@ void MainWindow::mixer_shutting_down()
 		display->display->shutdown();
 	}
 
-	analyzer.reset();
+	analyzer->mixer_shutting_down();
 }
 
 void MainWindow::cut_triggered()
@@ -597,7 +599,6 @@ void MainWindow::about_triggered()
 
 void MainWindow::open_analyzer_triggered()
 {
-	analyzer.reset(new Analyzer);
 	analyzer->show();
 }
 
@@ -1300,6 +1301,12 @@ bool MainWindow::eventFilter(QObject *watched, QEvent *event)
 		}
 	}
 	return false;
+}
+
+void MainWindow::closeEvent(QCloseEvent *event)
+{
+	analyzer->hide();
+	event->accept();
 }
 
 namespace {
