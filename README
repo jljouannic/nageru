@@ -46,6 +46,8 @@ Nageru is in beta stage. It currently needs:
 
  - Qt 5.5 or newer for the GUI.
 
+ - QCustomPlot for the histogram display in the frame analyzer.
+
  - libmicrohttpd for the embedded web server.
 
  - x264 for encoding high-quality video suitable for streaming to end users.
@@ -70,13 +72,14 @@ Nageru is in beta stage. It currently needs:
 If on Debian stretch or something similar, you can install everything you need
 with:
 
-  apt install qtbase5-dev libqt5opengl5-dev qt5-default pkg-config libmicrohttpd-dev \
-    libusb-1.0-0-dev liblua5.2-dev libzita-resampler-dev libva-dev \
-    libavcodec-dev libavformat-dev libswscale-dev libavresample-dev \
-    libmovit-dev libegl1-mesa-dev libasound2-dev libx264-dev libbmusb-dev \
-    protobuf-compiler libprotobuf-dev libpci-dev
+  apt install qtbase5-dev libqt5opengl5-dev qt5-default libqcustomplot-dev \
+    pkg-config libmicrohttpd-dev libusb-1.0-0-dev liblua5.2-dev \
+    libzita-resampler-dev libva-dev libavcodec-dev libavformat-dev \
+    libswscale-dev libavresample-dev libmovit-dev libegl1-mesa-dev \
+    libasound2-dev libx264-dev libbmusb-dev protobuf-compiler \
+    libprotobuf-dev libpci-dev
 
-Exceptions as of March 2017:
+Exceptions as of May 2017:
 
   - You will need Movit from experimental; stretch only has 1.4.0.
 

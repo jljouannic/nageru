@@ -52,7 +52,7 @@
     <string>Grab</string>
    </property>
   </widget>
-  <widget class="QWidget" name="widget_3" native="true">
+  <widget class="QCustomPlot" name="histogram" native="true">
    <property name="geometry">
     <rect>
      <x>10</x>
@@ -231,6 +231,12 @@
    <class>GLWidget</class>
    <extends>QWidget</extends>
    <header>glwidget.h</header>
+  </customwidget>
+  <customwidget>
+   <class>QCustomPlot</class>
+   <extends>QWidget</extends>
+   <header>qcustomplot.h</header>
+   <container>1</container>
   </customwidget>
  </customwidgets>
  <resources/>

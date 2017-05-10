@@ -2,6 +2,7 @@
 
 #include <QDialogButtonBox>
 #include <QMouseEvent>
+#include <QPen>
 #include <QSurface>
 
 #include <movit/resource_pool.h>
@@ -11,6 +12,21 @@
 #include "flags.h"
 #include "mixer.h"
 #include "ui_analyzer.h"
+
+// QCustomPlot includes qopenglfunctions.h, which #undefs all of the epoxy
+// definitions (ugh) and doesn't put back any others (ugh). Add the ones we
+// need back.
+
+#define glBindBuffer epoxy_glBindBuffer
+#define glBindFramebuffer epoxy_glBindFramebuffer
+#define glBufferData epoxy_glBufferData
+#define glDeleteBuffers epoxy_glDeleteBuffers
+#define glDisable epoxy_glDisable
+#define glGenBuffers epoxy_glGenBuffers
+#define glGetError epoxy_glGetError
+#define glReadPixels epoxy_glReadPixels
+#define glUnmapBuffer epoxy_glUnmapBuffer
+#define glWaitSync epoxy_glWaitSync
 
 using namespace std;
 
@@ -145,15 +161,38 @@ void Analyzer::grab_clicked()
 	glBindFramebuffer(GL_FRAMEBUFFER, 0);
 	check_error();
 
-	printf("R hist:");
-	for (unsigned i = 0; i < 256; ++i) { printf(" %d", r_hist[i]); }
-	printf("\n");
-	printf("G hist:");
-	for (unsigned i = 0; i < 256; ++i) { printf(" %d", g_hist[i]); }
-	printf("\n");
-	printf("B hist:");
-	for (unsigned i = 0; i < 256; ++i) { printf(" %d", b_hist[i]); }
-	printf("\n");
+	QVector<double> r_vec(256), g_vec(256), b_vec(256), x_vec(256);
+	double max = 0.0;
+	for (unsigned i = 0; i < 256; ++i) {
+		x_vec[i] = i;
+		r_vec[i] = log(r_hist[i] + 1.0);
+		g_vec[i] = log(g_hist[i] + 1.0);
+		b_vec[i] = log(b_hist[i] + 1.0);
+
+		max = std::max(max, r_vec[i]);
+		max = std::max(max, g_vec[i]);
+		max = std::max(max, b_vec[i]);
+	}
+
+	ui->histogram->clearGraphs();
+	ui->histogram->addGraph();
+	ui->histogram->graph(0)->setData(x_vec, r_vec);
+	ui->histogram->graph(0)->setPen(QPen(Qt::red));
+	ui->histogram->graph(0)->setBrush(QBrush(QColor(255, 127, 127, 80)));
+	ui->histogram->addGraph();
+	ui->histogram->graph(1)->setData(x_vec, g_vec);
+	ui->histogram->graph(1)->setPen(QPen(Qt::green));
+	ui->histogram->graph(1)->setBrush(QBrush(QColor(127, 255, 127, 80)));
+	ui->histogram->addGraph();
+	ui->histogram->graph(2)->setData(x_vec, b_vec);
+	ui->histogram->graph(2)->setPen(QPen(Qt::blue));
+	ui->histogram->graph(2)->setBrush(QBrush(QColor(127, 127, 255, 80)));
+
+	ui->histogram->xAxis->setVisible(true);
+	ui->histogram->yAxis->setVisible(false);
+	ui->histogram->xAxis->setRange(0, 255);
+	ui->histogram->yAxis->setRange(0, max);
+	ui->histogram->replot();
 
 	resource_pool->release_2d_texture(fbo_tex);
 	check_error();
