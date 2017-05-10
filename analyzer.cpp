@@ -63,6 +63,10 @@ Analyzer::Analyzer()
         glGenBuffers(1, &pbo);
         glBindBuffer(GL_PIXEL_PACK_BUFFER_ARB, pbo);
         glBufferData(GL_PIXEL_PACK_BUFFER_ARB, global_flags.width * global_flags.height * 4, NULL, GL_STREAM_READ);
+
+	ui->histogram->xAxis->setVisible(true);
+	ui->histogram->yAxis->setVisible(false);
+	ui->histogram->xAxis->setRange(0, 255);
 }
 
 Analyzer::~Analyzer()
