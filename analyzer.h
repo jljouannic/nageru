@@ -1,8 +1,8 @@
 #ifndef _ANALYZER_H
 #define _ANALYZER_H 1
 
-#include <QDialog>
 #include <QImage>
+#include <QMainWindow>
 #include <QString>
 
 #include <epoxy/gl.h>
@@ -19,7 +19,7 @@ namespace movit {
 class ResourcePool;
 }  // namespace movit
 
-class Analyzer : public QDialog
+class Analyzer : public QMainWindow
 {
 	Q_OBJECT
 
