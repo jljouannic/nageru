@@ -28,10 +28,14 @@ public:
 	~Analyzer();
 	void mixer_shutting_down();
 
+public slots:
+	void relayout();
+
 private:
 	void grab_clicked();
 	void signal_changed();
 	bool eventFilter(QObject *watched, QEvent *event) override;
+	void resizeEvent(QResizeEvent *event) override;
 
 	Ui::Analyzer *ui;
 	QSurface *surface;

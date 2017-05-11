@@ -239,3 +239,100 @@ bool Analyzer::eventFilter(QObject *watched, QEvent *event)
         }
         return false;
 }
+
+void Analyzer::resizeEvent(QResizeEvent* event)
+{
+	QMainWindow::resizeEvent(event);
+
+	// Ask for a relayout, but only after the event loop is done doing relayout
+	// on everything else.
+	QMetaObject::invokeMethod(this, "relayout", Qt::QueuedConnection);
+}
+
+void Analyzer::relayout()
+{
+	double aspect = double(global_flags.width) / global_flags.height;
+
+	// Left pane (2/5 of the width).
+	{
+		int width = ui->left_pane->geometry().width();
+		int height = ui->left_pane->geometry().height();
+
+		// Figure out how much space everything that's non-responsive needs.
+		int remaining_height = height - ui->left_pane->spacing() * (ui->left_pane->count() - 1);
+
+		remaining_height -= ui->grab_btn->geometry().height();
+		ui->left_pane->setStretch(2, ui->grab_btn->geometry().height());
+
+		remaining_height -= ui->histogram_label->geometry().height();
+		ui->left_pane->setStretch(4, ui->histogram_label->geometry().height());
+
+		// The histogram's minimumHeight returns 0, so let's set a reasonable minimum for it.
+		int min_histogram_height = 50;
+		remaining_height -= min_histogram_height;
+
+		// Allocate so that the display is 16:9, if possible.
+		unsigned wanted_display_height = width / aspect;
+		unsigned display_height;
+		unsigned margin = 0;
+		if (remaining_height >= int(wanted_display_height)) {
+			display_height = wanted_display_height;
+		} else {
+			display_height = remaining_height;
+			int display_width = lrint(display_height * aspect);
+			margin = (width - display_width) / 2;
+		}
+		ui->left_pane->setStretch(1, display_height);
+		ui->display_left_spacer->changeSize(margin, 1);
+		ui->display_right_spacer->changeSize(margin, 1);
+
+		remaining_height -= display_height;
+
+		// Figure out if we can do the histogram at 16:9.
+		remaining_height += min_histogram_height;
+		unsigned histogram_height;
+		if (remaining_height >= int(wanted_display_height)) {
+			histogram_height = wanted_display_height;
+		} else {
+			histogram_height = remaining_height;
+		}
+		remaining_height -= histogram_height;
+		ui->left_pane->setStretch(3, histogram_height);
+
+		ui->left_pane->setStretch(0, remaining_height / 2);
+		ui->left_pane->setStretch(5, remaining_height / 2);
+	}
+
+	// Right pane (remaining 3/5 of the width).
+	{
+		int width = ui->right_pane->geometry().width();
+		int height = ui->right_pane->geometry().height();
+
+		// Figure out how much space everything that's non-responsive needs.
+		int remaining_height = height - ui->right_pane->spacing() * (ui->right_pane->count() - 1);
+		remaining_height -= ui->grabbed_frame_sublabel->geometry().height();
+		remaining_height -= ui->coord_label->geometry().height();
+		remaining_height -= ui->color_hbox->geometry().height();
+
+		// Allocate so that the display is 16:9, if possible.
+		unsigned wanted_display_height = width / aspect;
+		unsigned display_height;
+		unsigned margin = 0;
+		if (remaining_height >= int(wanted_display_height)) {
+			display_height = wanted_display_height;
+		} else {
+			display_height = remaining_height;
+			int display_width = lrint(display_height * aspect);
+			margin = (width - display_width) / 2;
+		}
+		ui->right_pane->setStretch(1, display_height);
+		ui->grabbed_frame_left_spacer->changeSize(margin, 1);
+		ui->grabbed_frame_right_spacer->changeSize(margin, 1);
+		remaining_height -= display_height;
+
+		if (remaining_height < 0) remaining_height = 0;
+
+		ui->right_pane->setStretch(0, remaining_height / 2);
+		ui->right_pane->setStretch(5, remaining_height / 2);
+	}
+}
