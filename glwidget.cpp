@@ -69,9 +69,6 @@ void GLWidget::initializeGL()
 		global_mixer->set_transition_names_updated_callback(output, [this](const vector<string> &names){
 			emit transition_names_updated(names);
 		});
-		setContextMenuPolicy(Qt::CustomContextMenu);
-		connect(this, &QWidget::customContextMenuRequested,
-			bind(&GLWidget::show_live_context_menu, this, _1));
 	}
 	if (output >= Mixer::OUTPUT_INPUT0) {
 		global_mixer->set_name_updated_callback(output, [this](const string &name){
@@ -80,14 +77,9 @@ void GLWidget::initializeGL()
 		global_mixer->set_color_updated_callback(output, [this](const string &color){
 			emit color_updated(output, color);
 		});
-
-		int signal_num = global_mixer->get_channel_signal(output);
-		if (signal_num != -1) {
-			setContextMenuPolicy(Qt::CustomContextMenu);
-			connect(this, &QWidget::customContextMenuRequested,
-			        bind(&GLWidget::show_preview_context_menu, this, signal_num, _1));
-		}
 	}
+	setContextMenuPolicy(Qt::CustomContextMenu);
+	connect(this, &QWidget::customContextMenuRequested, bind(&GLWidget::show_context_menu, this, _1));
 
 	glDisable(GL_BLEND);
 	glDisable(GL_DEPTH_TEST);
@@ -130,6 +122,17 @@ void GLWidget::paintGL()
 void GLWidget::mousePressEvent(QMouseEvent *event)
 {
 	emit clicked();
+}
+
+void GLWidget::show_context_menu(const QPoint &pos)
+{
+	if (output == Mixer::OUTPUT_LIVE) {
+		show_live_context_menu(pos);
+	}
+	if (output >= Mixer::OUTPUT_INPUT0) {
+		int signal_num = global_mixer->get_channel_signal(output);
+		show_preview_context_menu(signal_num, pos);
+	}
 }
 
 void GLWidget::show_live_context_menu(const QPoint &pos)

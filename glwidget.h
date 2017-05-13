@@ -52,10 +52,12 @@ signals:
 	void color_updated(Mixer::Output output, const std::string &color);
 
 private slots:
+	void show_context_menu(const QPoint &pos);
+
+private:
 	void show_live_context_menu(const QPoint &pos);
 	void show_preview_context_menu(unsigned signal_num, const QPoint &pos);
 
-private:
 	Mixer::Output output;
 	GLuint vao, program_num;
 	GLuint position_vbo, texcoord_vbo;
