@@ -75,6 +75,14 @@ Analyzer::~Analyzer()
 	delete surface;
 }
 
+void Analyzer::update_channel_name(Mixer::Output output, const string &name)
+{
+	if (output >= Mixer::OUTPUT_INPUT0) {
+		int index = (output - Mixer::OUTPUT_INPUT0) + 2;
+		ui->input_box->setItemText(index, QString::fromStdString(name));
+	}
+}
+
 void Analyzer::mixer_shutting_down()
 {
 	ui->display->shutdown();

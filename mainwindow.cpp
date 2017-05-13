@@ -1254,6 +1254,8 @@ void MainWindow::update_channel_name(Mixer::Output output, const string &name)
 		unsigned channel = output - Mixer::OUTPUT_INPUT0;
 		previews[channel]->label->setText(name.c_str());
 	}
+
+	analyzer->update_channel_name(output, name);
 }
 
 void MainWindow::update_channel_color(Mixer::Output output, const string &color)

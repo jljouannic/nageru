@@ -5,7 +5,11 @@
 #include <QMainWindow>
 #include <QString>
 
+#include <string>
+
 #include <epoxy/gl.h>
+
+#include "mixer.h"
 
 class QObject;
 class QOpenGLContext;
@@ -26,6 +30,7 @@ class Analyzer : public QMainWindow
 public:
 	Analyzer();
 	~Analyzer();
+	void update_channel_name(Mixer::Output output, const std::string &name);
 	void mixer_shutting_down();
 
 public slots:
