@@ -227,12 +227,16 @@ bool Analyzer::eventFilter(QObject *watched, QEvent *event)
 			int y = lrint(mouse_event->y() * double(pixmap->height()) / ui->grabbed_frame_label->height());
 			x = std::min(x, pixmap->width() - 1);
 			y = std::min(y, pixmap->height() - 1);
+
+			char buf[256];
+			snprintf(buf, sizeof(buf), "Selected coordinate (x,y): (%d,%d)", x, y);
+			ui->coord_label->setText(buf);
+
 			QRgb pixel = grabbed_image.pixel(x, y);
 			ui->red_label->setText(QString::fromStdString(to_string(qRed(pixel))));
 			ui->green_label->setText(QString::fromStdString(to_string(qGreen(pixel))));
 			ui->blue_label->setText(QString::fromStdString(to_string(qBlue(pixel))));
 
-			char buf[256];
 			snprintf(buf, sizeof(buf), "#%02x%02x%02x", qRed(pixel), qGreen(pixel), qBlue(pixel));
 			ui->hex_label->setText(buf);
 		}

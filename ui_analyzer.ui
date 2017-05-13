@@ -220,7 +220,7 @@
       <item>
        <widget class="QLabel" name="coord_label">
         <property name="text">
-         <string>Selected coordinate (x,y): (123,456)</string>
+         <string>Selected coordinate (x,y): (none)</string>
         </property>
         <property name="alignment">
          <set>Qt::AlignCenter</set>
