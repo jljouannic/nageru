@@ -719,12 +719,6 @@ LiveInputWrapper::LiveInputWrapper(Theme *theme, EffectChain *chain, bmusb::Pixe
 		}
 	} else {
 		assert(pixel_format == bmusb::PixelFormat_8BitYCbCr || pixel_format == bmusb::PixelFormat_10BitYCbCr);
-		// The Blackmagic driver docs claim that the device outputs Y'CbCr
-		// according to Rec. 601, but practical testing indicates it definitely
-		// is Rec. 709 (at least up to errors attributable to rounding errors).
-		// Perhaps 601 was only to indicate the subsampling positions, not the
-		// colorspace itself? Tested with a Lenovo X1 gen 3 as input.
-		YCbCrFormat input_ycbcr_format;
 		input_ycbcr_format.chroma_subsampling_x = (pixel_format == bmusb::PixelFormat_10BitYCbCr) ? 1 : 2;
 		input_ycbcr_format.chroma_subsampling_y = 1;
 		input_ycbcr_format.num_levels = (pixel_format == bmusb::PixelFormat_10BitYCbCr) ? 1024 : 256;
@@ -732,8 +726,8 @@ LiveInputWrapper::LiveInputWrapper(Theme *theme, EffectChain *chain, bmusb::Pixe
 		input_ycbcr_format.cr_x_position = 0.0;
 		input_ycbcr_format.cb_y_position = 0.5;
 		input_ycbcr_format.cr_y_position = 0.5;
-		input_ycbcr_format.luma_coefficients = YCBCR_REC_709;
-		input_ycbcr_format.full_range = false;
+		input_ycbcr_format.luma_coefficients = YCBCR_REC_709;  // Will be overridden later.
+		input_ycbcr_format.full_range = false;  // Will be overridden later.
 
 		for (unsigned i = 0; i < num_inputs; ++i) {
 			// When using 10-bit input, we're converting to interleaved through v210Converter.
@@ -778,6 +772,31 @@ void LiveInputWrapper::connect_signal_raw(int signal_num)
 		height = userdata->last_height[first_frame.field_number];
 	}
 
+	movit::YCbCrLumaCoefficients ycbcr_coefficients = theme->input_state->ycbcr_coefficients[signal_num];
+	bool full_range = theme->input_state->full_range[signal_num];
+
+	if (theme->input_state->ycbcr_coefficients_auto[signal_num]) {
+		full_range = false;
+
+		// The Blackmagic driver docs claim that the device outputs Y'CbCr
+		// according to Rec. 601, but this seems to indicate the subsampling
+		// positions only, as they publish Y'CbCr → RGB formulas that are
+		// different for HD and SD (corresponding to Rec. 709 and 601, respectively),
+		// and a Lenovo X1 gen 3 I used to test definitely outputs Rec. 709
+		// (at least up to rounding error). Other devices seem to use Rec. 601
+		// even on HD resolutions. Nevertheless, Rec. 709 _is_ the right choice
+		// for HD, so we default to that if the user hasn't set anything.
+		if (height >= 720) {
+			ycbcr_coefficients = YCBCR_REC_709;
+		} else {
+			ycbcr_coefficients = YCBCR_REC_601;
+		}
+	}
+
+	// This is a global, but it doesn't really matter.
+	input_ycbcr_format.luma_coefficients = ycbcr_coefficients;
+	input_ycbcr_format.full_range = full_range;
+
 	BufferedFrame last_good_frame = first_frame;
 	for (unsigned i = 0; i < max(ycbcr_inputs.size(), rgba_inputs.size()); ++i) {
 		BufferedFrame frame = theme->input_state->buffered_frames[signal_num][i];
@@ -801,11 +820,13 @@ void LiveInputWrapper::connect_signal_raw(int signal_num)
 		case bmusb::PixelFormat_8BitYCbCr:
 			ycbcr_inputs[i]->set_texture_num(0, userdata->tex_y[frame.field_number]);
 			ycbcr_inputs[i]->set_texture_num(1, userdata->tex_cbcr[frame.field_number]);
+			ycbcr_inputs[i]->change_ycbcr_format(input_ycbcr_format);
 			ycbcr_inputs[i]->set_width(width);
 			ycbcr_inputs[i]->set_height(height);
 			break;
 		case bmusb::PixelFormat_10BitYCbCr:
 			ycbcr_inputs[i]->set_texture_num(0, userdata->tex_444[frame.field_number]);
+			ycbcr_inputs[i]->change_ycbcr_format(input_ycbcr_format);
 			ycbcr_inputs[i]->set_width(width);
 			ycbcr_inputs[i]->set_height(height);
 			break;

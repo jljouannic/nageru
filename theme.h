@@ -122,6 +122,7 @@ public:
 private:
 	Theme *theme;  // Not owned by us.
 	bmusb::PixelFormat pixel_format;
+	movit::YCbCrFormat input_ycbcr_format;
 	std::vector<movit::YCbCrInput *> ycbcr_inputs;  // Multiple ones if deinterlacing. Owned by the chain.
 	std::vector<movit::FlatInput *> rgba_inputs;  // Multiple ones if deinterlacing. Owned by the chain.
 	movit::Effect *deinterlace_effect = nullptr;  // Owned by the chain.

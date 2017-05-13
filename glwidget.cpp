@@ -32,6 +32,8 @@ class QMouseEvent;
 #include <movit/util.h>
 #include <string>
 
+
+using namespace movit;
 using namespace std;
 using namespace std::placeholders;
 
@@ -185,6 +187,52 @@ void GLWidget::show_preview_context_menu(unsigned signal_num, const QPoint &pos)
 	card_submenu.setTitle("Input source");
 	menu.addMenu(&card_submenu);
 
+	// Note that this setting depends on which card is active.
+	// TODO: Consider hiding this for BGRA sources.
+
+	QMenu interpretation_submenu;
+	QActionGroup interpretation_group(&interpretation_submenu);
+
+	bool current_ycbcr_coefficients_auto, current_full_range;
+	YCbCrLumaCoefficients current_ycbcr_coefficients;
+	global_mixer->get_input_ycbcr_interpretation(
+		current_card, &current_ycbcr_coefficients_auto,
+		&current_ycbcr_coefficients, &current_full_range);
+	{
+		QAction *action = new QAction("Auto", &interpretation_group);
+		action->setCheckable(true);
+		if (current_ycbcr_coefficients_auto) {
+			action->setChecked(true);
+		}
+		action->setData(QList<QVariant>{"interpretation", true, YCBCR_REC_709, false});
+		interpretation_submenu.addAction(action);
+	}
+	for (YCbCrLumaCoefficients ycbcr_coefficients : { YCBCR_REC_709, YCBCR_REC_601 }) {
+		for (bool full_range : { false, true }) {
+			std::string description;
+			if (ycbcr_coefficients == YCBCR_REC_709) {
+				description = "Rec. 709 (HD)";
+			} else {
+				description = "Rec. 601 (SD)";
+			}
+			if (full_range) {
+				description += ", full range (nonstandard)";
+			}
+			QAction *action = new QAction(QString::fromStdString(description), &interpretation_group);
+			action->setCheckable(true);
+			if (!current_ycbcr_coefficients_auto &&
+			    ycbcr_coefficients == current_ycbcr_coefficients &&
+			    full_range == current_full_range) {
+				action->setChecked(true);
+			}
+			action->setData(QList<QVariant>{"interpretation", false, ycbcr_coefficients, full_range});
+			interpretation_submenu.addAction(action);
+		}
+	}
+
+	interpretation_submenu.setTitle("Input interpretation");
+	menu.addMenu(&interpretation_submenu);
+
 	// --- The choices in the next few options depend a lot on which card is active ---
 
 	// Add a submenu for selecting video input, with an action for each input.
@@ -308,6 +356,11 @@ void GLWidget::show_preview_context_menu(unsigned signal_num, const QPoint &pos)
 		} else if (selected[0].toString() == "card") {
 			unsigned card_index = selected[1].toUInt(nullptr);
 			global_mixer->set_signal_mapping(signal_num, card_index);
+		} else if (selected[0].toString() == "interpretation") {
+			bool ycbcr_coefficients_auto = selected[1].toBool();
+			YCbCrLumaCoefficients ycbcr_coefficients = YCbCrLumaCoefficients(selected[2].toUInt(nullptr));
+			bool full_range = selected[3].toBool();
+			global_mixer->set_input_ycbcr_interpretation(current_card, ycbcr_coefficients_auto, ycbcr_coefficients, full_range);
 		} else {
 			assert(false);
 		}

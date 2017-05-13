@@ -1081,6 +1081,17 @@ void Mixer::render_one_frame(int64_t duration)
 		printf("Timecode: '%s'\n", timecode_text.c_str());
 	}
 
+	// Update Y'CbCr settings for all cards.
+	{
+		unique_lock<mutex> lock(card_mutex);
+		for (unsigned card_index = 0; card_index < num_cards; ++card_index) {
+			CaptureCard *card = &cards[card_index];
+			input_state.ycbcr_coefficients_auto[card_index] = card->ycbcr_coefficients_auto;
+			input_state.ycbcr_coefficients[card_index] = card->ycbcr_coefficients;
+			input_state.full_range[card_index] = card->full_range;
+		}
+	}
+
 	// Get the main chain from the theme, and set its state immediately.
 	Theme::Chain theme_main_chain = theme->get_chain(0, pts(), global_flags.width, global_flags.height, input_state);
 	EffectChain *chain = theme_main_chain.chain;
@@ -1280,6 +1291,26 @@ void Mixer::transition_clicked(int transition_num)
 void Mixer::channel_clicked(int preview_num)
 {
 	theme->channel_clicked(preview_num);
+}
+
+void Mixer::get_input_ycbcr_interpretation(unsigned card_index, bool *ycbcr_coefficients_auto,
+                                           movit::YCbCrLumaCoefficients *ycbcr_coefficients, bool *full_range)
+{
+	unique_lock<mutex> lock(card_mutex);
+	CaptureCard *card = &cards[card_index];
+	*ycbcr_coefficients_auto = card->ycbcr_coefficients_auto;
+	*ycbcr_coefficients = card->ycbcr_coefficients;
+	*full_range = card->full_range;
+}
+
+void Mixer::set_input_ycbcr_interpretation(unsigned card_index, bool ycbcr_coefficients_auto,
+                                           movit::YCbCrLumaCoefficients ycbcr_coefficients, bool full_range)
+{
+	unique_lock<mutex> lock(card_mutex);
+	CaptureCard *card = &cards[card_index];
+	card->ycbcr_coefficients_auto = ycbcr_coefficients_auto;
+	card->ycbcr_coefficients = ycbcr_coefficients;
+	card->full_range = full_range;
 }
 
 void Mixer::start_mode_scanning(unsigned card_index)
