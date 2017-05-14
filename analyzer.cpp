@@ -4,6 +4,7 @@
 #include <QMouseEvent>
 #include <QPen>
 #include <QSurface>
+#include <QTimer>
 
 #include <movit/resource_pool.h>
 #include <movit/util.h>
@@ -36,7 +37,15 @@ Analyzer::Analyzer()
 {
 	ui->setupUi(this);
 
-	//connect(ui->button_box, &QDialogButtonBox::accepted, [this]{ this->close(); });
+	surface = create_surface(QSurfaceFormat::defaultFormat());
+	context = create_context(surface);
+	if (!make_current(context, surface)) {
+		printf("oops\n");
+		exit(1);
+	}
+
+	grab_timer.setSingleShot(true);
+	connect(&grab_timer, &QTimer::timeout, bind(&Analyzer::grab_clicked, this));
 
 	ui->input_box->addItem("Live", Mixer::OUTPUT_LIVE);
 	ui->input_box->addItem("Preview", Mixer::OUTPUT_PREVIEW);
@@ -47,18 +56,16 @@ Analyzer::Analyzer()
 		ui->input_box->addItem(QString::fromStdString(name), channel);
 	}
 
+	ui->grab_frequency_box->addItem("Never", 0);
+	ui->grab_frequency_box->addItem("100 ms", 100);
+	ui->grab_frequency_box->addItem("1 sec", 1000);
+	ui->grab_frequency_box->addItem("10 sec", 10000);
+	ui->grab_frequency_box->setCurrentIndex(2);
+
 	connect(ui->grab_btn, &QPushButton::clicked, bind(&Analyzer::grab_clicked, this));
 	connect(ui->input_box, static_cast<void(QComboBox::*)(int)>(&QComboBox::currentIndexChanged), bind(&Analyzer::signal_changed, this));
 	signal_changed();
 	ui->grabbed_frame_label->installEventFilter(this);
-
-	surface = create_surface(QSurfaceFormat::defaultFormat());
-	context = create_context(surface);
-
-	if (!make_current(context, surface)) {
-		printf("oops\n");
-		exit(1);
-	}
 
         glGenBuffers(1, &pbo);
         glBindBuffer(GL_PIXEL_PACK_BUFFER_ARB, pbo);
@@ -216,40 +223,69 @@ void Analyzer::grab_clicked()
 	check_error();
 	resource_pool->release_fbo(fbo);
 	check_error();
+
+	if (last_x >= 0 && last_y >= 0) {
+		grab_pixel(last_x, last_y);
+	}
+
+	if (isVisible()) {
+		grab_timer.stop();
+
+		// Set up the next autograb if configured.
+		int delay = ui->grab_frequency_box->currentData().toInt(nullptr);
+		if (delay > 0) {
+			grab_timer.start(delay);
+		}
+	}
 }
 
 void Analyzer::signal_changed()
 {
 	Mixer::Output channel = static_cast<Mixer::Output>(ui->input_box->currentData().value<int>());
 	ui->display->set_output(channel);
+	grab_clicked();
 }
 
 bool Analyzer::eventFilter(QObject *watched, QEvent *event)
 {
-	if (event->type() == QEvent::MouseMove &&
-	    watched->isWidgetType()) {
+	if (event->type() == QEvent::MouseMove && watched->isWidgetType()) {
 		const QMouseEvent *mouse_event = (QMouseEvent *)event;
-		const QPixmap *pixmap = ui->grabbed_frame_label->pixmap();
-		if (pixmap != nullptr) {
-			int x = lrint(mouse_event->x() * double(pixmap->width()) / ui->grabbed_frame_label->width());
-			int y = lrint(mouse_event->y() * double(pixmap->height()) / ui->grabbed_frame_label->height());
-			x = std::min(x, pixmap->width() - 1);
-			y = std::min(y, pixmap->height() - 1);
-
-			char buf[256];
-			snprintf(buf, sizeof(buf), "Selected coordinate (x,y): (%d,%d)", x, y);
-			ui->coord_label->setText(buf);
-
-			QRgb pixel = grabbed_image.pixel(x, y);
-			ui->red_label->setText(QString::fromStdString(to_string(qRed(pixel))));
-			ui->green_label->setText(QString::fromStdString(to_string(qGreen(pixel))));
-			ui->blue_label->setText(QString::fromStdString(to_string(qBlue(pixel))));
-
-			snprintf(buf, sizeof(buf), "#%02x%02x%02x", qRed(pixel), qGreen(pixel), qBlue(pixel));
-			ui->hex_label->setText(buf);
-		}
-        }
+		last_x = mouse_event->x();
+		last_y = mouse_event->y();
+		grab_pixel(mouse_event->x(), mouse_event->y());
+	}
+	if (event->type() == QEvent::Leave && watched->isWidgetType()) {
+		last_x = last_y = -1;
+		ui->coord_label->setText("Selected coordinate (x,y): (none)");
+		ui->red_label->setText(u8"—");
+		ui->green_label->setText(u8"—");
+		ui->blue_label->setText(u8"—");
+		ui->hex_label->setText(u8"#—");
+	}
         return false;
+}
+
+void Analyzer::grab_pixel(int x, int y)
+{
+	const QPixmap *pixmap = ui->grabbed_frame_label->pixmap();
+	if (pixmap != nullptr) {
+		x = lrint(x * double(pixmap->width()) / ui->grabbed_frame_label->width());
+		y = lrint(y * double(pixmap->height()) / ui->grabbed_frame_label->height());
+		x = std::min(x, pixmap->width() - 1);
+		y = std::min(y, pixmap->height() - 1);
+
+		char buf[256];
+		snprintf(buf, sizeof(buf), "Selected coordinate (x,y): (%d,%d)", x, y);
+		ui->coord_label->setText(buf);
+
+		QRgb pixel = grabbed_image.pixel(x, y);
+		ui->red_label->setText(QString::fromStdString(to_string(qRed(pixel))));
+		ui->green_label->setText(QString::fromStdString(to_string(qGreen(pixel))));
+		ui->blue_label->setText(QString::fromStdString(to_string(qBlue(pixel))));
+
+		snprintf(buf, sizeof(buf), "#%02x%02x%02x", qRed(pixel), qGreen(pixel), qBlue(pixel));
+		ui->hex_label->setText(buf);
+	}
 }
 
 void Analyzer::resizeEvent(QResizeEvent* event)
@@ -259,6 +295,11 @@ void Analyzer::resizeEvent(QResizeEvent* event)
 	// Ask for a relayout, but only after the event loop is done doing relayout
 	// on everything else.
 	QMetaObject::invokeMethod(this, "relayout", Qt::QueuedConnection);
+}
+
+void Analyzer::showEvent(QShowEvent *event)
+{
+	grab_clicked();
 }
 
 void Analyzer::relayout()
@@ -273,11 +314,14 @@ void Analyzer::relayout()
 		// Figure out how much space everything that's non-responsive needs.
 		int remaining_height = height - ui->left_pane->spacing() * (ui->left_pane->count() - 1);
 
-		remaining_height -= ui->grab_btn->geometry().height();
+		remaining_height -= ui->input_box->geometry().height();
 		ui->left_pane->setStretch(2, ui->grab_btn->geometry().height());
 
+		remaining_height -= ui->grab_btn->geometry().height();
+		ui->left_pane->setStretch(3, ui->grab_btn->geometry().height());
+
 		remaining_height -= ui->histogram_label->geometry().height();
-		ui->left_pane->setStretch(4, ui->histogram_label->geometry().height());
+		ui->left_pane->setStretch(5, ui->histogram_label->geometry().height());
 
 		// The histogram's minimumHeight returns 0, so let's set a reasonable minimum for it.
 		int min_histogram_height = 50;
@@ -309,10 +353,10 @@ void Analyzer::relayout()
 			histogram_height = remaining_height;
 		}
 		remaining_height -= histogram_height;
-		ui->left_pane->setStretch(3, histogram_height);
+		ui->left_pane->setStretch(4, histogram_height);
 
 		ui->left_pane->setStretch(0, remaining_height / 2);
-		ui->left_pane->setStretch(5, remaining_height / 2);
+		ui->left_pane->setStretch(6, remaining_height / 2);
 	}
 
 	// Right pane (remaining 3/5 of the width).

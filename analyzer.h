@@ -4,6 +4,7 @@
 #include <QImage>
 #include <QMainWindow>
 #include <QString>
+#include <QTimer>
 
 #include <string>
 
@@ -39,8 +40,10 @@ public slots:
 private:
 	void grab_clicked();
 	void signal_changed();
+	void grab_pixel(int x, int y);
 	bool eventFilter(QObject *watched, QEvent *event) override;
 	void resizeEvent(QResizeEvent *event) override;
+	void showEvent(QShowEvent *event) override;
 
 	Ui::Analyzer *ui;
 	QSurface *surface;
@@ -48,6 +51,8 @@ private:
 	GLuint pbo;
 	movit::ResourcePool *resource_pool = nullptr;
 	QImage grabbed_image;
+	QTimer grab_timer;
+	int last_x = -1, last_y = -1;
 };
 
 #endif  // !defined(_ANALYZER_H)
