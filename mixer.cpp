@@ -206,6 +206,7 @@ Mixer::Mixer(const QSurfaceFormat &format, unsigned num_cards)
 	  mixer_surface(create_surface(format)),
 	  h264_encoder_surface(create_surface(format)),
 	  decklink_output_surface(create_surface(format)),
+	  ycbcr_interpretation(global_flags.ycbcr_interpretation),
 	  audio_mixer(num_cards)
 {
 	CHECK(init_movit(MOVIT_SHADER_DIR, MOVIT_DEBUG_OFF));
@@ -1085,10 +1086,10 @@ void Mixer::render_one_frame(int64_t duration)
 	{
 		unique_lock<mutex> lock(card_mutex);
 		for (unsigned card_index = 0; card_index < num_cards; ++card_index) {
-			CaptureCard *card = &cards[card_index];
-			input_state.ycbcr_coefficients_auto[card_index] = card->ycbcr_coefficients_auto;
-			input_state.ycbcr_coefficients[card_index] = card->ycbcr_coefficients;
-			input_state.full_range[card_index] = card->full_range;
+			YCbCrInterpretation *interpretation = &ycbcr_interpretation[card_index];
+			input_state.ycbcr_coefficients_auto[card_index] = interpretation->ycbcr_coefficients_auto;
+			input_state.ycbcr_coefficients[card_index] = interpretation->ycbcr_coefficients;
+			input_state.full_range[card_index] = interpretation->full_range;
 		}
 	}
 
@@ -1293,24 +1294,16 @@ void Mixer::channel_clicked(int preview_num)
 	theme->channel_clicked(preview_num);
 }
 
-void Mixer::get_input_ycbcr_interpretation(unsigned card_index, bool *ycbcr_coefficients_auto,
-                                           movit::YCbCrLumaCoefficients *ycbcr_coefficients, bool *full_range)
+YCbCrInterpretation Mixer::get_input_ycbcr_interpretation(unsigned card_index) const
 {
 	unique_lock<mutex> lock(card_mutex);
-	CaptureCard *card = &cards[card_index];
-	*ycbcr_coefficients_auto = card->ycbcr_coefficients_auto;
-	*ycbcr_coefficients = card->ycbcr_coefficients;
-	*full_range = card->full_range;
+	return ycbcr_interpretation[card_index];
 }
 
-void Mixer::set_input_ycbcr_interpretation(unsigned card_index, bool ycbcr_coefficients_auto,
-                                           movit::YCbCrLumaCoefficients ycbcr_coefficients, bool full_range)
+void Mixer::set_input_ycbcr_interpretation(unsigned card_index, const YCbCrInterpretation &interpretation)
 {
 	unique_lock<mutex> lock(card_mutex);
-	CaptureCard *card = &cards[card_index];
-	card->ycbcr_coefficients_auto = ycbcr_coefficients_auto;
-	card->ycbcr_coefficients = ycbcr_coefficients;
-	card->full_range = full_range;
+	ycbcr_interpretation[card_index] = interpretation;
 }
 
 void Mixer::start_mode_scanning(unsigned card_index)

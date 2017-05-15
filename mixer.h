@@ -37,6 +37,7 @@
 #include "theme.h"
 #include "timebase.h"
 #include "video_encoder.h"
+#include "ycbcr_interpretation.h"
 
 class ALSAOutput;
 class ChromaSubsampler;
@@ -218,10 +219,8 @@ public:
 		return theme->set_signal_mapping(signal, card);
 	}
 
-	void get_input_ycbcr_interpretation(unsigned card_index, bool *ycbcr_coefficients_auto,
-	                                    movit::YCbCrLumaCoefficients *ycbcr_coefficients, bool *full_range);
-	void set_input_ycbcr_interpretation(unsigned card_index, bool ycbcr_coefficients_auto,
-	                                    movit::YCbCrLumaCoefficients ycbcr_coefficients, bool full_range);
+	YCbCrInterpretation get_input_ycbcr_interpretation(unsigned card_index) const;
+	void set_input_ycbcr_interpretation(unsigned card_index, const YCbCrInterpretation &interpretation);
 
 	bool get_supports_set_wb(unsigned channel) const
 	{
@@ -446,12 +445,9 @@ private:
 		QueueLengthPolicy queue_length_policy;  // Refers to the "new_frames" queue.
 
 		int last_timecode = -1;  // Unwrapped.
-
-		bool ycbcr_coefficients_auto = true;
-		movit::YCbCrLumaCoefficients ycbcr_coefficients = movit::YCBCR_REC_709;
-		bool full_range = false;
 	};
 	CaptureCard cards[MAX_VIDEO_CARDS];  // Protected by <card_mutex>.
+	YCbCrInterpretation ycbcr_interpretation[MAX_VIDEO_CARDS];  // Protected by <card_mutex>.
 	AudioMixer audio_mixer;  // Same as global_audio_mixer (see audio_mixer.h).
 	bool input_card_is_master_clock(unsigned card_index, unsigned master_card_index) const;
 	struct OutputFrameInfo {

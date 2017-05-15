@@ -193,15 +193,11 @@ void GLWidget::show_preview_context_menu(unsigned signal_num, const QPoint &pos)
 	QMenu interpretation_submenu;
 	QActionGroup interpretation_group(&interpretation_submenu);
 
-	bool current_ycbcr_coefficients_auto, current_full_range;
-	YCbCrLumaCoefficients current_ycbcr_coefficients;
-	global_mixer->get_input_ycbcr_interpretation(
-		current_card, &current_ycbcr_coefficients_auto,
-		&current_ycbcr_coefficients, &current_full_range);
+	YCbCrInterpretation current_interpretation = global_mixer->get_input_ycbcr_interpretation(current_card);
 	{
 		QAction *action = new QAction("Auto", &interpretation_group);
 		action->setCheckable(true);
-		if (current_ycbcr_coefficients_auto) {
+		if (current_interpretation.ycbcr_coefficients_auto) {
 			action->setChecked(true);
 		}
 		action->setData(QList<QVariant>{"interpretation", true, YCBCR_REC_709, false});
@@ -220,9 +216,9 @@ void GLWidget::show_preview_context_menu(unsigned signal_num, const QPoint &pos)
 			}
 			QAction *action = new QAction(QString::fromStdString(description), &interpretation_group);
 			action->setCheckable(true);
-			if (!current_ycbcr_coefficients_auto &&
-			    ycbcr_coefficients == current_ycbcr_coefficients &&
-			    full_range == current_full_range) {
+			if (!current_interpretation.ycbcr_coefficients_auto &&
+			    ycbcr_coefficients == current_interpretation.ycbcr_coefficients &&
+			    full_range == current_interpretation.full_range) {
 				action->setChecked(true);
 			}
 			action->setData(QList<QVariant>{"interpretation", false, ycbcr_coefficients, full_range});
@@ -357,10 +353,11 @@ void GLWidget::show_preview_context_menu(unsigned signal_num, const QPoint &pos)
 			unsigned card_index = selected[1].toUInt(nullptr);
 			global_mixer->set_signal_mapping(signal_num, card_index);
 		} else if (selected[0].toString() == "interpretation") {
-			bool ycbcr_coefficients_auto = selected[1].toBool();
-			YCbCrLumaCoefficients ycbcr_coefficients = YCbCrLumaCoefficients(selected[2].toUInt(nullptr));
-			bool full_range = selected[3].toBool();
-			global_mixer->set_input_ycbcr_interpretation(current_card, ycbcr_coefficients_auto, ycbcr_coefficients, full_range);
+			YCbCrInterpretation interpretation;
+			interpretation.ycbcr_coefficients_auto = selected[1].toBool();
+			interpretation.ycbcr_coefficients = YCbCrLumaCoefficients(selected[2].toUInt(nullptr));
+			interpretation.full_range = selected[3].toBool();
+			global_mixer->set_input_ycbcr_interpretation(current_card, interpretation);
 		} else {
 			assert(false);
 		}

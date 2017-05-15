@@ -57,6 +57,7 @@ enum LongOption {
 	OPTION_TIMECODE_STDOUT,
 	OPTION_10_BIT_INPUT,
 	OPTION_10_BIT_OUTPUT,
+	OPTION_INPUT_YCBCR_INTERPRETATION,
 };
 
 void usage()
@@ -134,6 +135,10 @@ void usage()
 	fprintf(stderr, "      --10-bit-input              use 10-bit video input (requires compute shaders)\n");
 	fprintf(stderr, "      --10-bit-output             use 10-bit video output (requires compute shaders,\n");
 	fprintf(stderr, "                                    implies --record-x264-video)\n");
+	fprintf(stderr, "      --input-ycbcr-interpretation=CARD,{rec601,rec709,auto}[,{limited,full}]\n");
+	fprintf(stderr, "                                  Y'CbCr coefficient standard of card CARD (default auto)\n");
+	fprintf(stderr, "                                    auto is rec601 for SD, rec709 for HD, always limited\n");
+	fprintf(stderr, "                                    limited means standard 0-240/0-235 input range (for 8-bit)\n");
 }
 
 void parse_flags(int argc, char * const argv[])
@@ -193,6 +198,7 @@ void parse_flags(int argc, char * const argv[])
 		{ "timecode-stdout", no_argument, 0, OPTION_TIMECODE_STDOUT },
 		{ "10-bit-input", no_argument, 0, OPTION_10_BIT_INPUT },
 		{ "10-bit-output", no_argument, 0, OPTION_10_BIT_OUTPUT },
+		{ "input-ycbcr-interpretation", required_argument, 0, OPTION_INPUT_YCBCR_INTERPRETATION },
 		{ 0, 0, 0, 0 }
 	};
 	vector<string> theme_dirs;
@@ -389,6 +395,54 @@ void parse_flags(int argc, char * const argv[])
 			global_flags.x264_video_to_http = true;
 			global_flags.x264_bit_depth = 10;
 			break;
+		case OPTION_INPUT_YCBCR_INTERPRETATION: {
+			char *ptr = strchr(optarg, ',');
+			if (ptr == nullptr) {
+				fprintf(stderr, "ERROR: Invalid argument '%s' to --input-ycbcr-interpretation (needs a card and an interpretation, separated by comma)\n", optarg);
+				exit(1);
+			}
+			*ptr = '\0';
+			const int card_num = atoi(optarg);
+			if (card_num < 0 || card_num >= MAX_VIDEO_CARDS) {
+				fprintf(stderr, "ERROR: Invalid card number %d\n", card_num);
+				exit(1);
+			}
+
+			YCbCrInterpretation interpretation;
+			char *interpretation_str = ptr + 1;
+			ptr = strchr(interpretation_str, ',');
+			if (ptr != nullptr) {
+				*ptr = '\0';
+				const char *range = ptr + 1;
+				if (strcmp(range, "full") == 0) {
+					interpretation.full_range = true;
+				} else if (strcmp(range, "limited") == 0) {
+					interpretation.full_range = false;
+				} else {
+					fprintf(stderr, "ERROR: Invalid Y'CbCr range '%s' (must be “full” or “limited”)\n", range);
+					exit(1);
+				}
+			}
+
+			if (strcmp(interpretation_str, "rec601") == 0) {
+				interpretation.ycbcr_coefficients_auto = false;
+				interpretation.ycbcr_coefficients = movit::YCBCR_REC_601;
+			} else if (strcmp(interpretation_str, "rec709") == 0) {
+				interpretation.ycbcr_coefficients_auto = false;
+				interpretation.ycbcr_coefficients = movit::YCBCR_REC_709;
+			} else if (strcmp(interpretation_str, "auto") == 0) {
+				interpretation.ycbcr_coefficients_auto = true;
+				if (interpretation.full_range) {
+					fprintf(stderr, "ERROR: Cannot use “auto” Y'CbCr coefficients with full range\n");
+					exit(1);
+				}
+			} else {
+				fprintf(stderr, "ERROR: Invalid Y'CbCr coefficients '%s' (must be “rec601”, “rec709” or “auto”)\n", interpretation_str);
+				exit(1);
+			}
+			global_flags.ycbcr_interpretation[card_num] = interpretation;
+			break;
+		}
 		case OPTION_HELP:
 			usage();
 			exit(0);
