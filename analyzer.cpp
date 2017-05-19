@@ -116,7 +116,7 @@ void Analyzer::grab_clicked()
 
 	Mixer::DisplayFrame frame;
 	if (!global_mixer->get_display_frame(channel, &frame)) {
-		printf("Not ready yet\n");
+		// Not ready yet.
 		return;
 	}
 
