@@ -20,7 +20,7 @@ public:
 	PBOFrameAllocator(bmusb::PixelFormat pixel_format,
 	                  size_t frame_size,
 	                  GLuint width, GLuint height,
-	                  size_t num_queued_frames = 16,  // FIXME: should be 6
+	                  size_t num_queued_frames = 16,
 	                  GLenum buffer = GL_PIXEL_UNPACK_BUFFER_ARB,
 	                  GLenum permissions = GL_MAP_WRITE_BIT,
 	                  GLenum map_bits = GL_MAP_FLUSH_EXPLICIT_BIT);
