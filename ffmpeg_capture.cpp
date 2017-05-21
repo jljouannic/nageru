@@ -37,6 +37,7 @@ extern "C" {
 using namespace std;
 using namespace std::chrono;
 using namespace bmusb;
+using namespace movit;
 
 namespace {
 
@@ -57,6 +58,143 @@ bool changed_since(const std::string &pathname, const timespec &ts)
 		return false;
 	}
 	return (buf.st_mtim.tv_sec != ts.tv_sec || buf.st_mtim.tv_nsec != ts.tv_nsec);
+}
+
+bool is_full_range(const AVPixFmtDescriptor *desc)
+{
+	// This is horrible, but there's no better way that I know of.
+	return (strchr(desc->name, 'j') != nullptr);
+}
+
+AVPixelFormat decide_dst_format(AVPixelFormat src_format, bmusb::PixelFormat dst_format_type)
+{
+	if (dst_format_type == bmusb::PixelFormat_8BitBGRA) {
+		return AV_PIX_FMT_BGRA;
+	}
+
+	assert(dst_format_type == bmusb::PixelFormat_8BitYCbCrPlanar);
+
+	// If this is a non-Y'CbCr format, just convert to 4:4:4 Y'CbCr
+	// and be done with it. It's too strange to spend a lot of time on.
+	// (Let's hope there's no alpha.)
+	const AVPixFmtDescriptor *src_desc = av_pix_fmt_desc_get(src_format);
+	if (src_desc == nullptr ||
+	    src_desc->nb_components != 3 ||
+	    (src_desc->flags & AV_PIX_FMT_FLAG_RGB)) {
+		return AV_PIX_FMT_YUV444P;
+	}
+
+	// The best for us would be Cb and Cr together if possible,
+	// but FFmpeg doesn't support that except in the special case of
+	// NV12, so we need to go to planar even for the case of NV12.
+	// Thus, look for the closest (but no worse) 8-bit planar Y'CbCr format
+	// that matches in color range. (This will also include the case of
+	// the source format already being acceptable.)
+	bool src_full_range = is_full_range(src_desc);
+	const char *best_format = "yuv444p";
+	unsigned best_score = numeric_limits<unsigned>::max();
+	for (const AVPixFmtDescriptor *desc = av_pix_fmt_desc_next(nullptr);
+	     desc;
+	     desc = av_pix_fmt_desc_next(desc)) {
+		// Find planar Y'CbCr formats only.
+		if (desc->nb_components != 3) continue;
+		if (desc->flags & AV_PIX_FMT_FLAG_RGB) continue;
+		if (!(desc->flags & AV_PIX_FMT_FLAG_PLANAR)) continue;
+		if (desc->comp[0].plane != 0 ||
+		    desc->comp[1].plane != 1 ||
+		    desc->comp[2].plane != 2) continue;
+
+		// 8-bit formats only.
+		if (desc->flags & AV_PIX_FMT_FLAG_BE) continue;
+		if (desc->comp[0].depth != 8) continue;
+
+		// Same or better chroma resolution only.
+		int chroma_w_diff = desc->log2_chroma_w - src_desc->log2_chroma_w;
+		int chroma_h_diff = desc->log2_chroma_h - src_desc->log2_chroma_h;
+		if (chroma_w_diff < 0 || chroma_h_diff < 0)
+			continue;
+
+		// Matching full/limited range only.
+		if (is_full_range(desc) != src_full_range)
+			continue;
+
+		// Pick something with as little excess chroma resolution as possible.
+		unsigned score = (1 << (chroma_w_diff)) << chroma_h_diff;
+		if (score < best_score) {
+			best_score = score;
+			best_format = desc->name;
+		}
+	}
+	return av_get_pix_fmt(best_format);
+}
+
+YCbCrFormat decode_ycbcr_format(const AVPixFmtDescriptor *desc, const AVFrame *frame)
+{
+	YCbCrFormat format;
+	AVColorSpace colorspace = av_frame_get_colorspace(frame);
+	switch (colorspace) {
+	case AVCOL_SPC_BT709:
+		format.luma_coefficients = YCBCR_REC_709;
+		break;
+	case AVCOL_SPC_BT470BG:
+	case AVCOL_SPC_SMPTE170M:
+	case AVCOL_SPC_SMPTE240M:
+		format.luma_coefficients = YCBCR_REC_601;
+		break;
+	case AVCOL_SPC_BT2020_NCL:
+		format.luma_coefficients = YCBCR_REC_2020;
+		break;
+	case AVCOL_SPC_UNSPECIFIED:
+		format.luma_coefficients = (frame->height >= 720 ? YCBCR_REC_709 : YCBCR_REC_601);
+		break;
+	default:
+		fprintf(stderr, "Unknown Y'CbCr coefficient enum %d from FFmpeg; choosing Rec. 709.\n",
+			colorspace);
+		format.luma_coefficients = YCBCR_REC_709;
+		break;
+	}
+
+	format.full_range = is_full_range(desc);
+	format.num_levels = 1 << desc->comp[0].depth;
+	format.chroma_subsampling_x = 1 << desc->log2_chroma_w;
+	format.chroma_subsampling_y = 1 << desc->log2_chroma_h;
+
+	switch (frame->chroma_location) {
+	case AVCHROMA_LOC_LEFT:
+		format.cb_x_position = 0.0;
+		format.cb_y_position = 0.5;
+		break;
+	case AVCHROMA_LOC_CENTER:
+		format.cb_x_position = 0.5;
+		format.cb_y_position = 0.5;
+		break;
+	case AVCHROMA_LOC_TOPLEFT:
+		format.cb_x_position = 0.0;
+		format.cb_y_position = 0.0;
+		break;
+	case AVCHROMA_LOC_TOP:
+		format.cb_x_position = 0.5;
+		format.cb_y_position = 0.0;
+		break;
+	case AVCHROMA_LOC_BOTTOMLEFT:
+		format.cb_x_position = 0.0;
+		format.cb_y_position = 1.0;
+		break;
+	case AVCHROMA_LOC_BOTTOM:
+		format.cb_x_position = 0.5;
+		format.cb_y_position = 1.0;
+		break;
+	default:
+		fprintf(stderr, "Unknown chroma location coefficient enum %d from FFmpeg; choosing Rec. 709.\n",
+			frame->chroma_location);
+		format.cb_x_position = 0.5;
+		format.cb_y_position = 0.5;
+		break;
+	}
+
+	format.cr_x_position = format.cb_x_position;
+	format.cr_y_position = format.cb_y_position;
+	return format;
 }
 
 }  // namespace
@@ -235,7 +373,8 @@ bool FFmpegCapture::play_video(const string &pathname)
 	double rate = 1.0;
 
 	unique_ptr<SwsContext, decltype(sws_freeContext)*> sws_ctx(nullptr, sws_freeContext);
-	int sws_last_width = -1, sws_last_height = -1;
+	int sws_last_width = -1, sws_last_height = -1, sws_last_src_format = -1;
+	AVPixelFormat sws_dst_format = AVPixelFormat(-1);  // In practice, always initialized.
 
 	// Main loop.
 	while (!producer_thread_should_quit.should_quit()) {
@@ -320,13 +459,18 @@ bool FFmpegCapture::play_video(const string &pathname)
 			continue;
 		}
 
-		if (sws_ctx == nullptr || sws_last_width != frame->width || sws_last_height != frame->height) {
+		if (sws_ctx == nullptr ||
+		    sws_last_width != frame->width ||
+		    sws_last_height != frame->height ||
+		    sws_last_src_format != frame->format) {
+			sws_dst_format = decide_dst_format(AVPixelFormat(frame->format), pixel_format);
 			sws_ctx.reset(
-				sws_getContext(frame->width, frame->height, (AVPixelFormat)frame->format,
-					width, height, AV_PIX_FMT_BGRA,
+				sws_getContext(frame->width, frame->height, AVPixelFormat(frame->format),
+					width, height, sws_dst_format,
 					SWS_BICUBIC, nullptr, nullptr, nullptr));
 			sws_last_width = frame->width;
 			sws_last_height = frame->height;
+			sws_last_src_format = frame->format;
 		}
 		if (sws_ctx == nullptr) {
 			fprintf(stderr, "%s: Could not create scaler context\n", pathname.c_str());
@@ -336,7 +480,12 @@ bool FFmpegCapture::play_video(const string &pathname)
 		VideoFormat video_format;
 		video_format.width = width;
 		video_format.height = height;
-		video_format.stride = width * 4;
+		if (pixel_format == bmusb::PixelFormat_8BitBGRA) {
+			video_format.stride = width * 4;
+		} else {
+			assert(pixel_format == bmusb::PixelFormat_8BitYCbCrPlanar);
+			video_format.stride = width;
+		}
 		video_format.frame_rate_nom = video_timebase.den;
 		video_format.frame_rate_den = av_frame_get_pkt_duration(frame.get()) * video_timebase.num;
 		if (video_format.frame_rate_nom == 0 || video_format.frame_rate_den == 0) {
@@ -352,10 +501,33 @@ bool FFmpegCapture::play_video(const string &pathname)
 
 		FrameAllocator::Frame video_frame = video_frame_allocator->alloc_frame();
 		if (video_frame.data != nullptr) {
-			uint8_t *pic_data[4] = { video_frame.data, nullptr, nullptr, nullptr };
-			int linesizes[4] = { int(video_format.stride), 0, 0, 0 };
+			uint8_t *pic_data[4] = { nullptr, nullptr, nullptr, nullptr };
+			int linesizes[4] = { 0, 0, 0, 0 };
+			if (pixel_format == bmusb::PixelFormat_8BitBGRA) {
+				pic_data[0] = video_frame.data;
+				linesizes[0] = video_format.stride;
+				video_frame.len = video_format.stride * height;
+			} else {
+				assert(pixel_format == bmusb::PixelFormat_8BitYCbCrPlanar);
+				const AVPixFmtDescriptor *desc = av_pix_fmt_desc_get(sws_dst_format);
+
+				int chroma_width = AV_CEIL_RSHIFT(int(width), desc->log2_chroma_w);
+				int chroma_height = AV_CEIL_RSHIFT(int(height), desc->log2_chroma_h);
+
+				pic_data[0] = video_frame.data;
+				linesizes[0] = width;
+
+				pic_data[1] = pic_data[0] + width * height;
+				linesizes[1] = chroma_width;
+
+				pic_data[2] = pic_data[1] + chroma_width * chroma_height;
+				linesizes[2] = chroma_width;
+
+				video_frame.len = width * height + 2 * chroma_width * chroma_height;
+
+				current_frame_ycbcr_format = decode_ycbcr_format(desc, frame.get());
+			}
 			sws_scale(sws_ctx.get(), frame->data, frame->linesize, 0, frame->height, pic_data, linesizes);
-			video_frame.len = video_format.stride * height;
 			video_frame.received_timestamp = next_frame_start;
 		}
 

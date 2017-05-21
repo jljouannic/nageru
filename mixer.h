@@ -415,6 +415,7 @@ private:
 	struct CaptureCard {
 		std::unique_ptr<bmusb::CaptureInterface> capture;
 		bool is_fake_capture;
+		CardType type;
 		std::unique_ptr<DeckLinkOutput> output;
 
 		// If this card is used for output (ie., output_card_index points to it),

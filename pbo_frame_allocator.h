@@ -8,6 +8,8 @@
 #include <mutex>
 #include <queue>
 
+#include <movit/ycbcr.h>
+
 #include "bmusb/bmusb.h"
 
 // An allocator that allocates straight into OpenGL pinned memory.
@@ -37,11 +39,16 @@ public:
 		// freely at runtime.
 		bmusb::PixelFormat pixel_format;
 
+		// Used only for PixelFormat_8BitYCbCrPlanar.
+		movit::YCbCrFormat ycbcr_format;
+
 		// The second set is only used for the second field of interlaced inputs.
 		GLuint tex_y[2], tex_cbcr[2];  // For PixelFormat_8BitYCbCr.
+		GLuint tex_cb[2], tex_cr[2];  // For PixelFormat_8BitYCbCrPlanar (which also uses tex_y).
 		GLuint tex_v210[2], tex_444[2];  // For PixelFormat_10BitYCbCr.
 		GLuint tex_rgba[2];  // For PixelFormat_8BitBGRA.
 		GLuint last_width[2], last_height[2];
+		GLuint last_cbcr_width[2], last_cbcr_height[2];
 		GLuint last_v210_width[2];  // PixelFormat_10BitYCbCr.
 		bool last_interlaced, last_has_signal, last_is_connected;
 		unsigned last_frame_rate_nom, last_frame_rate_den;

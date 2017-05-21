@@ -718,7 +718,11 @@ LiveInputWrapper::LiveInputWrapper(Theme *theme, EffectChain *chain, bmusb::Pixe
 			chain->add_effect(deinterlace_effect, reverse_inputs);
 		}
 	} else {
-		assert(pixel_format == bmusb::PixelFormat_8BitYCbCr || pixel_format == bmusb::PixelFormat_10BitYCbCr);
+		assert(pixel_format == bmusb::PixelFormat_8BitYCbCr ||
+		       pixel_format == bmusb::PixelFormat_10BitYCbCr ||
+		       pixel_format == bmusb::PixelFormat_8BitYCbCrPlanar);
+
+		// Most of these settings will be overridden later if using PixelFormat_8BitYCbCrPlanar.
 		input_ycbcr_format.chroma_subsampling_x = (pixel_format == bmusb::PixelFormat_10BitYCbCr) ? 1 : 2;
 		input_ycbcr_format.chroma_subsampling_y = 1;
 		input_ycbcr_format.num_levels = (pixel_format == bmusb::PixelFormat_10BitYCbCr) ? 1024 : 256;
@@ -726,12 +730,19 @@ LiveInputWrapper::LiveInputWrapper(Theme *theme, EffectChain *chain, bmusb::Pixe
 		input_ycbcr_format.cr_x_position = 0.0;
 		input_ycbcr_format.cb_y_position = 0.5;
 		input_ycbcr_format.cr_y_position = 0.5;
-		input_ycbcr_format.luma_coefficients = YCBCR_REC_709;  // Will be overridden later.
-		input_ycbcr_format.full_range = false;  // Will be overridden later.
+		input_ycbcr_format.luma_coefficients = YCBCR_REC_709;  // Will be overridden later even if not planar.
+		input_ycbcr_format.full_range = false;  // Will be overridden later even if not planar.
 
 		for (unsigned i = 0; i < num_inputs; ++i) {
 			// When using 10-bit input, we're converting to interleaved through v210Converter.
-			YCbCrInputSplitting splitting = (pixel_format == bmusb::PixelFormat_10BitYCbCr) ? YCBCR_INPUT_INTERLEAVED : YCBCR_INPUT_SPLIT_Y_AND_CBCR;
+			YCbCrInputSplitting splitting;
+			if (pixel_format == bmusb::PixelFormat_10BitYCbCr) {
+				splitting = YCBCR_INPUT_INTERLEAVED;
+			} else if (pixel_format == bmusb::PixelFormat_8BitYCbCr) {
+				splitting = YCBCR_INPUT_SPLIT_Y_AND_CBCR;
+			} else {
+				splitting = YCBCR_INPUT_PLANAR;
+			}
 			if (override_bounce) {
 				ycbcr_inputs.push_back(new NonBouncingYCbCrInput(inout_format, input_ycbcr_format, global_flags.width, global_flags.height, splitting));
 			} else {
@@ -821,6 +832,14 @@ void LiveInputWrapper::connect_signal_raw(int signal_num)
 			ycbcr_inputs[i]->set_texture_num(0, userdata->tex_y[frame.field_number]);
 			ycbcr_inputs[i]->set_texture_num(1, userdata->tex_cbcr[frame.field_number]);
 			ycbcr_inputs[i]->change_ycbcr_format(input_ycbcr_format);
+			ycbcr_inputs[i]->set_width(width);
+			ycbcr_inputs[i]->set_height(height);
+			break;
+		case bmusb::PixelFormat_8BitYCbCrPlanar:
+			ycbcr_inputs[i]->set_texture_num(0, userdata->tex_y[frame.field_number]);
+			ycbcr_inputs[i]->set_texture_num(1, userdata->tex_cb[frame.field_number]);
+			ycbcr_inputs[i]->set_texture_num(2, userdata->tex_cr[frame.field_number]);
+			ycbcr_inputs[i]->change_ycbcr_format(userdata->ycbcr_format);
 			ycbcr_inputs[i]->set_width(width);
 			ycbcr_inputs[i]->set_height(height);
 			break;

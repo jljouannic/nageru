@@ -29,6 +29,8 @@
 #include <string>
 #include <thread>
 
+#include <movit/ycbcr.h>
+
 #include "bmusb/bmusb.h"
 #include "quittable_sleeper.h"
 
@@ -93,6 +95,14 @@ public:
 		frame_callback = callback;
 	}
 
+	// Used to get precise information about the Y'CbCr format used
+	// for a given frame. Only valid to call during the frame callback,
+	// and only when receiving a frame with pixel format PixelFormat_8BitYCbCrPlanar.
+	movit::YCbCrFormat get_current_frame_ycbcr_format() const
+	{
+		return current_frame_ycbcr_format;
+	}
+
 	void set_dequeue_thread_callbacks(std::function<void()> init, std::function<void()> cleanup) override
 	{
 		dequeue_init_callback = init;
@@ -115,13 +125,13 @@ public:
 	uint32_t get_current_video_mode() const override { return 0; }
 
 	std::set<bmusb::PixelFormat> get_available_pixel_formats() const override {
-		return std::set<bmusb::PixelFormat>{ bmusb::PixelFormat_8BitBGRA };
+		return std::set<bmusb::PixelFormat>{ bmusb::PixelFormat_8BitBGRA, bmusb::PixelFormat_8BitYCbCrPlanar };
 	}
 	void set_pixel_format(bmusb::PixelFormat pixel_format) override {
-		assert(pixel_format == bmusb::PixelFormat_8BitBGRA);
+		this->pixel_format = pixel_format;
 	}	
 	bmusb::PixelFormat get_current_pixel_format() const override {
-		return bmusb::PixelFormat_8BitBGRA;
+		return pixel_format;
 	}
 
 	std::map<uint32_t, std::string> get_available_video_inputs() const override {
@@ -144,6 +154,8 @@ private:
 	std::string description, filename;
 	uint16_t timecode = 0;
 	unsigned width, height;
+	bmusb::PixelFormat pixel_format = bmusb::PixelFormat_8BitBGRA;
+	movit::YCbCrFormat current_frame_ycbcr_format;
 	bool running = false;
 	int card_index = -1;
 

@@ -12,6 +12,20 @@
 
 using namespace std;
 
+namespace {
+
+void set_clamp_to_edge()
+{
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+	check_error();
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+	check_error();
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+	check_error();
+}
+
+}  // namespace
+
 PBOFrameAllocator::PBOFrameAllocator(bmusb::PixelFormat pixel_format, size_t frame_size, GLuint width, GLuint height, size_t num_queued_frames, GLenum buffer, GLenum permissions, GLenum map_bits)
         : pixel_format(pixel_format), buffer(buffer)
 {
@@ -35,7 +49,7 @@ PBOFrameAllocator::PBOFrameAllocator(bmusb::PixelFormat pixel_format, size_t fra
 		userdata[i].pixel_format = pixel_format;
 		frame.owner = this;
 
-		// For 8-bit Y'CbCr, we ask the driver to split Y' and Cb/Cr
+		// For 8-bit non-planar Y'CbCr, we ask the driver to split Y' and Cb/Cr
 		// into separate textures. For 10-bit, the input format (v210)
 		// is complicated enough that we need to interpolate up to 4:4:4,
 		// which we do in a compute shader ourselves. For BGRA, the data
@@ -62,14 +76,28 @@ PBOFrameAllocator::PBOFrameAllocator(bmusb::PixelFormat pixel_format, size_t fra
 			glGenTextures(2, userdata[i].tex_rgba);
 			check_error();
 			break;
+		case bmusb::PixelFormat_8BitYCbCrPlanar:
+			glGenTextures(2, userdata[i].tex_y);
+			check_error();
+			glGenTextures(2, userdata[i].tex_cb);
+			check_error();
+			glGenTextures(2, userdata[i].tex_cr);
+			check_error();
+			break;
+		default:
+			assert(false);
 		}
 
 		userdata[i].last_width[0] = width;
 		userdata[i].last_height[0] = height;
+		userdata[i].last_cbcr_width[0] = width / 2;
+		userdata[i].last_cbcr_height[0] = height;
 		userdata[i].last_v210_width[0] = 0;
 
 		userdata[i].last_width[1] = 0;
 		userdata[i].last_height[1] = 0;
+		userdata[i].last_cbcr_width[1] = 0;
+		userdata[i].last_cbcr_height[1] = 0;
 		userdata[i].last_v210_width[1] = 0;
 
 		userdata[i].last_interlaced = false;
@@ -95,12 +123,7 @@ PBOFrameAllocator::PBOFrameAllocator(bmusb::PixelFormat pixel_format, size_t fra
 
 				glBindTexture(GL_TEXTURE_2D, userdata[i].tex_444[field]);
 				check_error();
-				glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-				check_error();
-				glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-				check_error();
-				glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-				check_error();
+				set_clamp_to_edge();
 				if (field == 0) {
 					glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB10_A2, width, height, 0, GL_RGBA, GL_UNSIGNED_INT_2_10_10_10_REV, NULL);
 					check_error();
@@ -110,12 +133,7 @@ PBOFrameAllocator::PBOFrameAllocator(bmusb::PixelFormat pixel_format, size_t fra
 			case bmusb::PixelFormat_8BitYCbCr:
 				glBindTexture(GL_TEXTURE_2D, userdata[i].tex_y[field]);
 				check_error();
-				glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-				check_error();
-				glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-				check_error();
-				glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-				check_error();
+				set_clamp_to_edge();
 				if (field == 0) {
 					glTexImage2D(GL_TEXTURE_2D, 0, GL_R8, width, height, 0, GL_RED, GL_UNSIGNED_BYTE, NULL);
 					check_error();
@@ -123,12 +141,7 @@ PBOFrameAllocator::PBOFrameAllocator(bmusb::PixelFormat pixel_format, size_t fra
 
 				glBindTexture(GL_TEXTURE_2D, userdata[i].tex_cbcr[field]);
 				check_error();
-				glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-				check_error();
-				glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-				check_error();
-				glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-				check_error();
+				set_clamp_to_edge();
 				if (field == 0) {
 					glTexImage2D(GL_TEXTURE_2D, 0, GL_RG8, width / 2, height, 0, GL_RG, GL_UNSIGNED_BYTE, NULL);
 					check_error();
@@ -137,18 +150,38 @@ PBOFrameAllocator::PBOFrameAllocator(bmusb::PixelFormat pixel_format, size_t fra
 			case bmusb::PixelFormat_8BitBGRA:
 				glBindTexture(GL_TEXTURE_2D, userdata[i].tex_rgba[field]);
 				check_error();
-				glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-				check_error();
-				glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-				check_error();
-				glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-				check_error();
+				set_clamp_to_edge();
 				if (field == 0) {
 					if (global_flags.can_disable_srgb_decoder) {  // See the comments in tweaked_inputs.h.
 						glTexImage2D(GL_TEXTURE_2D, 0, GL_SRGB8_ALPHA8, width, height, 0, GL_BGRA, GL_UNSIGNED_INT_8_8_8_8_REV, NULL);
 					} else {
 						glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, width, height, 0, GL_BGRA, GL_UNSIGNED_INT_8_8_8_8_REV, NULL);
 					}
+					check_error();
+				}
+				break;
+			case bmusb::PixelFormat_8BitYCbCrPlanar:
+				glBindTexture(GL_TEXTURE_2D, userdata[i].tex_y[field]);
+				check_error();
+				set_clamp_to_edge();
+				if (field == 0) {
+					glTexImage2D(GL_TEXTURE_2D, 0, GL_R8, width, height, 0, GL_RED, GL_UNSIGNED_BYTE, NULL);
+					check_error();
+				}
+
+				glBindTexture(GL_TEXTURE_2D, userdata[i].tex_cb[field]);
+				check_error();
+				set_clamp_to_edge();
+				if (field == 0) {
+					glTexImage2D(GL_TEXTURE_2D, 0, GL_R8, width / 2, height, 0, GL_RED, GL_UNSIGNED_BYTE, NULL);
+					check_error();
+				}
+
+				glBindTexture(GL_TEXTURE_2D, userdata[i].tex_cr[field]);
+				check_error();
+				set_clamp_to_edge();
+				if (field == 0) {
+					glTexImage2D(GL_TEXTURE_2D, 0, GL_R8, width / 2, height, 0, GL_RED, GL_UNSIGNED_BYTE, NULL);
 					check_error();
 				}
 				break;
@@ -194,6 +227,14 @@ PBOFrameAllocator::~PBOFrameAllocator()
 			break;
 		case bmusb::PixelFormat_8BitBGRA:
 			glDeleteTextures(2, ((Userdata *)frame.userdata)->tex_rgba);
+			check_error();
+			break;
+		case bmusb::PixelFormat_8BitYCbCrPlanar:
+			glDeleteTextures(2, ((Userdata *)frame.userdata)->tex_y);
+			check_error();
+			glDeleteTextures(2, ((Userdata *)frame.userdata)->tex_cb);
+			check_error();
+			glDeleteTextures(2, ((Userdata *)frame.userdata)->tex_cr);
 			check_error();
 			break;
 		default:

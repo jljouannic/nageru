@@ -79,7 +79,7 @@ void insert_new_frame(RefCountedFrame frame, unsigned field_num, bool interlaced
 	}
 }
 
-void ensure_texture_resolution(PBOFrameAllocator::Userdata *userdata, unsigned field, unsigned width, unsigned height, unsigned v210_width)
+void ensure_texture_resolution(PBOFrameAllocator::Userdata *userdata, unsigned field, unsigned width, unsigned height, unsigned cbcr_width, unsigned cbcr_height, unsigned v210_width)
 {
 	bool first;
 	switch (userdata->pixel_format) {
@@ -92,13 +92,18 @@ void ensure_texture_resolution(PBOFrameAllocator::Userdata *userdata, unsigned f
 	case PixelFormat_8BitBGRA:
 		first = userdata->tex_rgba[field] == 0;
 		break;
+	case PixelFormat_8BitYCbCrPlanar:
+		first = userdata->tex_y[field] == 0 || userdata->tex_cb[field] == 0 || userdata->tex_cr[field] == 0;
+		break;
 	default:
 		assert(false);
 	}
 
 	if (first ||
 	    width != userdata->last_width[field] ||
-	    height != userdata->last_height[field]) {
+	    height != userdata->last_height[field] ||
+	    cbcr_width != userdata->last_cbcr_width[field] ||
+	    cbcr_height != userdata->last_cbcr_height[field]) {
 		// We changed resolution since last use of this texture, so we need to create
 		// a new object. Note that this each card has its own PBOFrameAllocator,
 		// we don't need to worry about these flip-flopping between resolutions.
@@ -110,8 +115,6 @@ void ensure_texture_resolution(PBOFrameAllocator::Userdata *userdata, unsigned f
 			check_error();
 			break;
 		case PixelFormat_8BitYCbCr: {
-			size_t cbcr_width = width / 2;
-
 			glBindTexture(GL_TEXTURE_2D, userdata->tex_cbcr[field]);
 			check_error();
 			glTexImage2D(GL_TEXTURE_2D, 0, GL_RG8, cbcr_width, height, 0, GL_RG, GL_UNSIGNED_BYTE, nullptr);
@@ -119,6 +122,21 @@ void ensure_texture_resolution(PBOFrameAllocator::Userdata *userdata, unsigned f
 			glBindTexture(GL_TEXTURE_2D, userdata->tex_y[field]);
 			check_error();
 			glTexImage2D(GL_TEXTURE_2D, 0, GL_R8, width, height, 0, GL_RED, GL_UNSIGNED_BYTE, nullptr);
+			check_error();
+			break;
+		}
+		case PixelFormat_8BitYCbCrPlanar: {
+			glBindTexture(GL_TEXTURE_2D, userdata->tex_y[field]);
+			check_error();
+			glTexImage2D(GL_TEXTURE_2D, 0, GL_R8, width, height, 0, GL_RED, GL_UNSIGNED_BYTE, nullptr);
+			check_error();
+			glBindTexture(GL_TEXTURE_2D, userdata->tex_cb[field]);
+			check_error();
+			glTexImage2D(GL_TEXTURE_2D, 0, GL_R8, cbcr_width, cbcr_height, 0, GL_RED, GL_UNSIGNED_BYTE, nullptr);
+			check_error();
+			glBindTexture(GL_TEXTURE_2D, userdata->tex_cr[field]);
+			check_error();
+			glTexImage2D(GL_TEXTURE_2D, 0, GL_R8, cbcr_width, cbcr_height, 0, GL_RED, GL_UNSIGNED_BYTE, nullptr);
 			check_error();
 			break;
 		}
@@ -135,6 +153,8 @@ void ensure_texture_resolution(PBOFrameAllocator::Userdata *userdata, unsigned f
 		}
 		userdata->last_width[field] = width;
 		userdata->last_height[field] = height;
+		userdata->last_cbcr_width[field] = cbcr_width;
+		userdata->last_cbcr_height[field] = cbcr_height;
 	}
 	if (global_flags.ten_bit_input &&
 	    (first || v210_width != userdata->last_v210_width[field])) {
@@ -400,6 +420,7 @@ void Mixer::configure_card(unsigned card_index, CaptureInterface *capture, CardT
 	}
 	card->capture.reset(capture);
 	card->is_fake_capture = (card_type == CardType::FAKE_CAPTURE);
+	card->type = card_type;
 	if (card->output.get() != output) {
 		card->output.reset(output);
 	}
@@ -566,7 +587,28 @@ void Mixer::bm_frame(unsigned card_index, uint16_t timecode,
 
 	card->last_timecode = timecode;
 
+	PBOFrameAllocator::Userdata *userdata = (PBOFrameAllocator::Userdata *)video_frame.userdata;
+
+	size_t cbcr_width, cbcr_height, cbcr_offset, y_offset;
 	size_t expected_length = video_format.stride * (video_format.height + video_format.extra_lines_top + video_format.extra_lines_bottom);
+	if (userdata != nullptr && userdata->pixel_format == PixelFormat_8BitYCbCrPlanar) {
+		// The calculation above is wrong for planar Y'CbCr, so just override it.
+		assert(card->type == CardType::FFMPEG_INPUT);
+		assert(video_offset == 0);
+		expected_length = video_frame.len;
+
+		userdata->ycbcr_format = (static_cast<FFmpegCapture *>(card->capture.get()))->get_current_frame_ycbcr_format();
+		cbcr_width = video_format.width / userdata->ycbcr_format.chroma_subsampling_x;
+		cbcr_height = video_format.height / userdata->ycbcr_format.chroma_subsampling_y;
+		cbcr_offset = video_format.width * video_format.height;
+		y_offset = 0;
+	} else {
+		// All the other Y'CbCr formats are 4:2:2.
+		cbcr_width = video_format.width / 2;
+		cbcr_height = video_format.height;
+		cbcr_offset = video_offset / 2;
+		y_offset = video_frame.size / 2 + video_offset / 2;
+	}
 	if (video_frame.len - video_offset == 0 ||
 	    video_frame.len - video_offset != expected_length) {
 		if (video_frame.len != 0) {
@@ -593,8 +635,6 @@ void Mixer::bm_frame(unsigned card_index, uint16_t timecode,
 		return;
 	}
 
-	PBOFrameAllocator::Userdata *userdata = (PBOFrameAllocator::Userdata *)video_frame.userdata;
-
 	unsigned num_fields = video_format.interlaced ? 2 : 1;
 	steady_clock::time_point frame_upload_start;
 	bool interlaced_stride = false;
@@ -619,10 +659,6 @@ void Mixer::bm_frame(unsigned card_index, uint16_t timecode,
 	RefCountedFrame frame(video_frame);
 
 	// Upload the textures.
-	const size_t cbcr_width = video_format.width / 2;
-	const size_t cbcr_offset = video_offset / 2;
-	const size_t y_offset = video_frame.size / 2 + video_offset / 2;
-
 	for (unsigned field = 0; field < num_fields; ++field) {
 		// Put the actual texture upload in a lambda that is executed in the main thread.
 		// It is entirely possible to do this in the same thread (and it might even be
@@ -632,7 +668,7 @@ void Mixer::bm_frame(unsigned card_index, uint16_t timecode,
 		// Note that this means we must hold on to the actual frame data in <userdata>
 		// until the upload command is run, but we hold on to <frame> much longer than that
 		// (in fact, all the way until we no longer use the texture in rendering).
-		auto upload_func = [this, field, video_format, y_offset, video_offset, cbcr_offset, cbcr_width, interlaced_stride, userdata]() {
+		auto upload_func = [this, field, video_format, y_offset, video_offset, cbcr_offset, cbcr_width, cbcr_height, interlaced_stride, userdata]() {
 			unsigned field_start_line;
 			if (field == 1) {
 				field_start_line = video_format.second_field_start;
@@ -642,7 +678,7 @@ void Mixer::bm_frame(unsigned card_index, uint16_t timecode,
 
 			// For anything not FRAME_FORMAT_YCBCR_10BIT, v210_width will be nonsensical but not used.
 			size_t v210_width = video_format.stride / sizeof(uint32_t);
-			ensure_texture_resolution(userdata, field, video_format.width, video_format.height, v210_width);
+			ensure_texture_resolution(userdata, field, video_format.width, video_format.height, cbcr_width, cbcr_height, v210_width);
 
 			glBindBuffer(GL_PIXEL_UNPACK_BUFFER, userdata->pbo);
 			check_error();
@@ -660,7 +696,19 @@ void Mixer::bm_frame(unsigned card_index, uint16_t timecode,
 
 				// Make up our own strides, since we are interleaving.
 				upload_texture(userdata->tex_y[field], video_format.width, video_format.height, video_format.width, interlaced_stride, GL_RED, GL_UNSIGNED_BYTE, field_y_start);
-				upload_texture(userdata->tex_cbcr[field], cbcr_width, video_format.height, cbcr_width * sizeof(uint16_t), interlaced_stride, GL_RG, GL_UNSIGNED_BYTE, field_cbcr_start);
+				upload_texture(userdata->tex_cbcr[field], cbcr_width, cbcr_height, cbcr_width * sizeof(uint16_t), interlaced_stride, GL_RG, GL_UNSIGNED_BYTE, field_cbcr_start);
+				break;
+			}
+			case PixelFormat_8BitYCbCrPlanar: {
+				assert(field_start_line == 0);  // We don't really support interlaced here.
+				size_t field_y_start = y_offset;
+				size_t field_cb_start = cbcr_offset;
+				size_t field_cr_start = cbcr_offset + cbcr_width * cbcr_height;
+
+				// Make up our own strides, since we are interleaving.
+				upload_texture(userdata->tex_y[field], video_format.width, video_format.height, video_format.width, interlaced_stride, GL_RED, GL_UNSIGNED_BYTE, field_y_start);
+				upload_texture(userdata->tex_cb[field], cbcr_width, cbcr_height, cbcr_width, interlaced_stride, GL_RED, GL_UNSIGNED_BYTE, field_cb_start);
+				upload_texture(userdata->tex_cr[field], cbcr_width, cbcr_height, cbcr_width, interlaced_stride, GL_RED, GL_UNSIGNED_BYTE, field_cr_start);
 				break;
 			}
 			case PixelFormat_8BitBGRA: {
