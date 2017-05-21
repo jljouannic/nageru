@@ -427,7 +427,7 @@ void Mixer::configure_card(unsigned card_index, CaptureInterface *capture, CardT
 
 	PixelFormat pixel_format;
 	if (card_type == CardType::FFMPEG_INPUT) {
-		pixel_format = PixelFormat_8BitBGRA;
+		pixel_format = capture->get_current_pixel_format();
 	} else if (global_flags.ten_bit_input) {
 		pixel_format = PixelFormat_10BitYCbCr;
 	} else {

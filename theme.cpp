@@ -222,7 +222,7 @@ int EffectChain_add_video_input(lua_State* L)
 	// doesn't care about the object anymore. (If we change this, we'd need
 	// to also unregister the signal connection on __gc.)
 	int ret = wrap_lua_object_nonowned<LiveInputWrapper>(
-		L, "LiveInputWrapper", theme, chain, bmusb::PixelFormat_8BitBGRA,
+		L, "LiveInputWrapper", theme, chain, (*capture)->get_current_pixel_format(),
 		/*override_bounce=*/false, deinterlace);
 	if (ret == 1) {
 		Theme *theme = get_theme_updata(L);
@@ -341,12 +341,21 @@ int ImageInput_new(lua_State* L)
 
 int VideoInput_new(lua_State* L)
 {
-	assert(lua_gettop(L) == 1);
+	assert(lua_gettop(L) == 2);
 	string filename = checkstdstring(L, 1);
+	int pixel_format = luaL_checknumber(L, 2);
+	if (pixel_format != bmusb::PixelFormat_8BitYCbCrPlanar &&
+	    pixel_format != bmusb::PixelFormat_8BitBGRA) {
+		fprintf(stderr, "WARNING: Invalid enum %d used for video format, choosing Y'CbCr.\n",
+			pixel_format);
+		pixel_format = bmusb::PixelFormat_8BitYCbCrPlanar;
+	}
 	int ret = wrap_lua_object_nonowned<FFmpegCapture>(L, "VideoInput", filename, global_flags.width, global_flags.height);
 	if (ret == 1) {
-		Theme *theme = get_theme_updata(L);
 		FFmpegCapture **capture = (FFmpegCapture **)lua_touserdata(L, -1);
+		(*capture)->set_pixel_format(bmusb::PixelFormat(pixel_format));
+
+		Theme *theme = get_theme_updata(L);
 		theme->register_video_input(*capture);
 	}
 	return ret;
@@ -892,6 +901,7 @@ Theme::Theme(const string &filename, const vector<string> &search_dirs, Resource
 	L = luaL_newstate();
         luaL_openlibs(L);
 
+	register_constants();
 	register_class("EffectChain", EffectChain_funcs); 
 	register_class("LiveInputWrapper", LiveInputWrapper_funcs); 
 	register_class("ImageInput", ImageInput_funcs);
@@ -947,6 +957,26 @@ Theme::Theme(const string &filename, const vector<string> &search_dirs, Resource
 Theme::~Theme()
 {
 	lua_close(L);
+}
+
+void Theme::register_constants()
+{
+	// Set Nageru.VIDEO_FORMAT_BGRA = bmusb::PixelFormat_8BitBGRA, etc.
+	const vector<pair<string, int>> constants = {
+		{ "VIDEO_FORMAT_BGRA", bmusb::PixelFormat_8BitBGRA },
+		{ "VIDEO_FORMAT_YCBCR", bmusb::PixelFormat_8BitYCbCrPlanar },
+	};
+
+	lua_newtable(L);  // t = {}
+
+	for (const pair<string, int> &constant : constants) {
+		lua_pushstring(L, constant.first.c_str());
+		lua_pushinteger(L, constant.second);
+		lua_settable(L, 1);  // t[key] = value
+	}
+
+	lua_setglobal(L, "Nageru");  // Nageru = t
+	assert(lua_gettop(L) == 0);
 }
 
 void Theme::register_class(const char *class_name, const luaL_Reg *funcs)

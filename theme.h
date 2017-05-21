@@ -78,6 +78,7 @@ public:
 	}
 
 private:
+	void register_constants();
 	void register_class(const char *class_name, const luaL_Reg *funcs);
 
 	std::mutex m;
