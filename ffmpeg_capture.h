@@ -6,7 +6,7 @@
 // FFmpeg (thus the name), this means it can handle a very wide array of video
 // formats, and also things like network streaming and V4L capture, but it is
 // also significantly less integrated and optimized than the regular capture
-// cards.  In particular, the frames are always scaled and converted to 8-bit
+// cards. In particular, the frames are always scaled and converted to 8-bit
 // RGBA on the CPU before being sent on to the GPU.
 //
 // Since we don't really know much about the video when building the chains,
