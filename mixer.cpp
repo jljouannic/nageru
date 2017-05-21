@@ -83,13 +83,13 @@ void ensure_texture_resolution(PBOFrameAllocator::Userdata *userdata, unsigned f
 {
 	bool first;
 	switch (userdata->pixel_format) {
-	case bmusb::PixelFormat_10BitYCbCr:
+	case PixelFormat_10BitYCbCr:
 		first = userdata->tex_v210[field] == 0 || userdata->tex_444[field] == 0;
 		break;
-	case bmusb::PixelFormat_8BitYCbCr:
+	case PixelFormat_8BitYCbCr:
 		first = userdata->tex_y[field] == 0 || userdata->tex_cbcr[field] == 0;
 		break;
-	case bmusb::PixelFormat_8BitBGRA:
+	case PixelFormat_8BitBGRA:
 		first = userdata->tex_rgba[field] == 0;
 		break;
 	default:
@@ -103,13 +103,13 @@ void ensure_texture_resolution(PBOFrameAllocator::Userdata *userdata, unsigned f
 		// a new object. Note that this each card has its own PBOFrameAllocator,
 		// we don't need to worry about these flip-flopping between resolutions.
 		switch (userdata->pixel_format) {
-		case bmusb::PixelFormat_10BitYCbCr:
+		case PixelFormat_10BitYCbCr:
 			glBindTexture(GL_TEXTURE_2D, userdata->tex_444[field]);
 			check_error();
 			glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB10_A2, width, height, 0, GL_RGBA, GL_UNSIGNED_INT_2_10_10_10_REV, nullptr);
 			check_error();
 			break;
-		case bmusb::PixelFormat_8BitYCbCr: {
+		case PixelFormat_8BitYCbCr: {
 			size_t cbcr_width = width / 2;
 
 			glBindTexture(GL_TEXTURE_2D, userdata->tex_cbcr[field]);
@@ -122,7 +122,7 @@ void ensure_texture_resolution(PBOFrameAllocator::Userdata *userdata, unsigned f
 			check_error();
 			break;
 		}
-		case bmusb::PixelFormat_8BitBGRA:
+		case PixelFormat_8BitBGRA:
 			glBindTexture(GL_TEXTURE_2D, userdata->tex_rgba[field]);
 			check_error();
 			if (global_flags.can_disable_srgb_decoder) {  // See the comments in tweaked_inputs.h.
@@ -404,9 +404,9 @@ void Mixer::configure_card(unsigned card_index, CaptureInterface *capture, CardT
 		card->output.reset(output);
 	}
 
-	bmusb::PixelFormat pixel_format;
+	PixelFormat pixel_format;
 	if (card_type == CardType::FFMPEG_INPUT) {
-		pixel_format = bmusb::PixelFormat_8BitBGRA;
+		pixel_format = PixelFormat_8BitBGRA;
 	} else if (global_flags.ten_bit_input) {
 		pixel_format = PixelFormat_10BitYCbCr;
 	} else {
@@ -448,7 +448,7 @@ void Mixer::set_output_card_internal(int card_index)
 		// Stop the fake card that we put into place.
 		// This needs to _not_ happen under the mutex, to avoid deadlock
 		// (delivering the last frame needs to take the mutex).
-		bmusb::CaptureInterface *fake_capture = old_card->capture.get();
+		CaptureInterface *fake_capture = old_card->capture.get();
 		lock.unlock();
 		fake_capture->stop_dequeue_thread();
 		lock.lock();
@@ -458,7 +458,7 @@ void Mixer::set_output_card_internal(int card_index)
 	}
 	if (card_index != -1) {
 		CaptureCard *card = &cards[card_index];
-		bmusb::CaptureInterface *capture = card->capture.get();
+		CaptureInterface *capture = card->capture.get();
 		// TODO: DeckLinkCapture::stop_dequeue_thread can actually take
 		// several seconds to complete (blocking on DisableVideoInput);
 		// see if we can maybe do it asynchronously.
@@ -466,7 +466,7 @@ void Mixer::set_output_card_internal(int card_index)
 		capture->stop_dequeue_thread();
 		lock.lock();
 		card->parked_capture = move(card->capture);
-		bmusb::CaptureInterface *fake_capture = new FakeCapture(global_flags.width, global_flags.height, FAKE_FPS, OUTPUT_FREQUENCY, card_index, global_flags.fake_cards_audio);
+		CaptureInterface *fake_capture = new FakeCapture(global_flags.width, global_flags.height, FAKE_FPS, OUTPUT_FREQUENCY, card_index, global_flags.fake_cards_audio);
 		configure_card(card_index, fake_capture, CardType::FAKE_CAPTURE, card->output.release());
 		card->queue_length_policy.reset(card_index);
 		card->capture->start_bm_capture();
@@ -648,13 +648,13 @@ void Mixer::bm_frame(unsigned card_index, uint16_t timecode,
 			check_error();
 
 			switch (userdata->pixel_format) {
-			case bmusb::PixelFormat_10BitYCbCr: {
+			case PixelFormat_10BitYCbCr: {
 				size_t field_start = video_offset + video_format.stride * field_start_line;
 				upload_texture(userdata->tex_v210[field], v210_width, video_format.height, video_format.stride, interlaced_stride, GL_RGBA, GL_UNSIGNED_INT_2_10_10_10_REV, field_start);
 				v210_converter->convert(userdata->tex_v210[field], userdata->tex_444[field], video_format.width, video_format.height);
 				break;
 			}
-			case bmusb::PixelFormat_8BitYCbCr: {
+			case PixelFormat_8BitYCbCr: {
 				size_t field_y_start = y_offset + video_format.width * field_start_line;
 				size_t field_cbcr_start = cbcr_offset + cbcr_width * field_start_line * sizeof(uint16_t);
 
@@ -663,7 +663,7 @@ void Mixer::bm_frame(unsigned card_index, uint16_t timecode,
 				upload_texture(userdata->tex_cbcr[field], cbcr_width, video_format.height, cbcr_width * sizeof(uint16_t), interlaced_stride, GL_RG, GL_UNSIGNED_BYTE, field_cbcr_start);
 				break;
 			}
-			case bmusb::PixelFormat_8BitBGRA: {
+			case PixelFormat_8BitBGRA: {
 				size_t field_start = video_offset + video_format.stride * field_start_line;
 				upload_texture(userdata->tex_rgba[field], video_format.width, video_format.height, video_format.stride, interlaced_stride, GL_BGRA, GL_UNSIGNED_INT_8_8_8_8_REV, field_start);
 				break;
@@ -1323,7 +1323,7 @@ void Mixer::start_mode_scanning(unsigned card_index)
 	last_mode_scan_change[card_index] = steady_clock::now();
 }
 
-map<uint32_t, bmusb::VideoMode> Mixer::get_available_output_video_modes() const
+map<uint32_t, VideoMode> Mixer::get_available_output_video_modes() const
 {
 	assert(desired_output_card_index != -1);
 	unique_lock<mutex> lock(card_mutex);
