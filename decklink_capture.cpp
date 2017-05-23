@@ -340,8 +340,8 @@ HRESULT STDMETHODCALLTYPE DeckLinkCapture::VideoInputFrameArrived(
 	if (video_frame) {
 		video_format.has_signal = !(video_frame->GetFlags() & bmdFrameHasNoInputSource);
 
-		int width = video_frame->GetWidth();
-		int height = video_frame->GetHeight();
+		const int width = video_frame->GetWidth();
+		const int height = video_frame->GetHeight();
 		const int stride = video_frame->GetRowBytes();
 		const BMDPixelFormat format = video_frame->GetPixelFormat();
 		assert(format == pixel_format_to_bmd(current_pixel_format));
