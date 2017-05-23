@@ -67,6 +67,11 @@ void DeckLinkOutput::start_output(uint32_t mode, int64_t base_pts)
 	assert(output);
 	assert(!playback_initiated);
 
+	if (video_modes.empty()) {
+		fprintf(stderr, "ERROR: No matching output modes for %dx%d found\n", width, height);
+		exit(1);
+	}
+
 	should_quit.unquit();
 	playback_initiated = true;
 	playback_started = false;
