@@ -643,6 +643,7 @@ void Mixer::bm_frame(unsigned card_index, uint16_t timecode,
 		// a deinterlacer to actually get this right.
 		assert(video_format.height % 2 == 0);
 		video_format.height /= 2;
+		cbcr_height /= 2;
 		assert(frame_length % 2 == 0);
 		frame_length /= 2;
 		num_fields = 2;
