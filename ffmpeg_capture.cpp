@@ -200,7 +200,7 @@ YCbCrFormat decode_ycbcr_format(const AVPixFmtDescriptor *desc, const AVFrame *f
 }  // namespace
 
 FFmpegCapture::FFmpegCapture(const string &filename, unsigned width, unsigned height)
-	: filename(filename), width(width), height(height)
+	: filename(filename), width(width), height(height), video_timebase{1, 1}
 {
 	// Not really used for anything.
 	description = "Video: " + filename;
@@ -351,7 +351,7 @@ bool FFmpegCapture::play_video(const string &pathname)
 	}
 
 	const AVCodecParameters *codecpar = format_ctx->streams[video_stream_index]->codecpar;
-	AVRational video_timebase = format_ctx->streams[video_stream_index]->time_base;
+	video_timebase = format_ctx->streams[video_stream_index]->time_base;
 	AVCodecContextWithDeleter codec_ctx = avcodec_alloc_context3_unique(nullptr);
 	if (avcodec_parameters_to_context(codec_ctx.get(), codecpar) < 0) {
 		fprintf(stderr, "%s: Cannot fill codec parameters\n", pathname.c_str());
@@ -373,7 +373,7 @@ bool FFmpegCapture::play_video(const string &pathname)
 
 	// Main loop.
 	while (!producer_thread_should_quit.should_quit()) {
-		if (process_queued_commands(format_ctx.get(), pathname, last_modified)) {
+		if (process_queued_commands(format_ctx.get(), pathname, last_modified, /*rewound=*/nullptr)) {
 			return true;
 		}
 
@@ -398,7 +398,6 @@ bool FFmpegCapture::play_video(const string &pathname)
 			internal_rewind();
 			continue;
 		}
-		last_pts = frame->pts;
 
 		VideoFormat video_format = construct_video_format(frame.get(), video_timebase);
 		FrameAllocator::Frame video_frame = make_video_frame(frame.get(), pathname, &error);
@@ -411,12 +410,30 @@ bool FFmpegCapture::play_video(const string &pathname)
                 audio_format.bits_per_sample = 32;
                 audio_format.num_channels = 8;
 
-		next_frame_start = compute_frame_start(frame->pts, pts_origin, video_timebase, start, rate);
-		video_frame.received_timestamp = next_frame_start;
-		producer_thread_should_quit.sleep_until(next_frame_start);
-		frame_callback(timecode++,
-			video_frame, 0, video_format,
-			audio_frame, 0, audio_format);
+		for ( ;; ) {
+			next_frame_start = compute_frame_start(frame->pts, pts_origin, video_timebase, start, rate);
+			video_frame.received_timestamp = next_frame_start;
+			bool finished_wakeup = producer_thread_should_quit.sleep_until(next_frame_start);
+			if (finished_wakeup) {
+				frame_callback(timecode++,
+					video_frame, 0, video_format,
+					audio_frame, 0, audio_format);
+				break;
+			} else {
+				bool rewound = false;
+				if (process_queued_commands(format_ctx.get(), pathname, last_modified, &rewound)) {
+					return true;
+				}
+				// If we just rewound, drop this frame on the floor and be done.
+				if (rewound) {
+					video_frame_allocator->release_frame(video_frame);
+					break;
+				}
+				// OK, we didn't, so probably a rate change. We'll recalculate next_frame_start
+				// in the next run.
+			}
+		}
+		last_pts = frame->pts;
 	}
 	return true;
 }
@@ -427,7 +444,7 @@ void FFmpegCapture::internal_rewind()
 	start = next_frame_start = steady_clock::now();
 }
 
-bool FFmpegCapture::process_queued_commands(AVFormatContext *format_ctx, const std::string &pathname, timespec last_modified)
+bool FFmpegCapture::process_queued_commands(AVFormatContext *format_ctx, const std::string &pathname, timespec last_modified, bool *rewound)
 {
 	// Process any queued commands from other threads.
 	vector<QueuedCommand> commands;
@@ -449,10 +466,14 @@ bool FFmpegCapture::process_queued_commands(AVFormatContext *format_ctx, const s
 				return true;
 			}
 			internal_rewind();
+			if (rewound != nullptr) {
+				*rewound = true;
+			}
 			break;
 
 		case QueuedCommand::CHANGE_RATE:
-			start = next_frame_start;
+			// Change the origin to the last played frame.
+			start = compute_frame_start(last_pts, pts_origin, video_timebase, start, rate);
 			pts_origin = last_pts;
 			rate = cmd.new_rate;
 			break;

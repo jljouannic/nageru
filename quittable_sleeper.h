@@ -26,33 +26,47 @@ public:
 		should_quit_var = false;
 	}
 
+	void wakeup()
+	{
+		std::lock_guard<std::mutex> l(mu);
+		should_wakeup_var = true;
+		quit_cond.notify_all();
+	}
+
 	bool should_quit() const
 	{
 		std::lock_guard<std::mutex> l(mu);
 		return should_quit_var;
 	}
 
+	// Returns false if woken up early.
 	template<class Rep, class Period>
-	void sleep_for(const std::chrono::duration<Rep, Period> &duration)
+	bool sleep_for(const std::chrono::duration<Rep, Period> &duration)
 	{
 		std::chrono::steady_clock::time_point t =
 			std::chrono::steady_clock::now() +
 			std::chrono::duration_cast<std::chrono::steady_clock::duration>(duration);
-		sleep_until(t);
+		return sleep_until(t);
 	}
 
+	// Returns false if woken up early.
 	template<class Clock, class Duration>
-	void sleep_until(const std::chrono::time_point<Clock, Duration> &t)
+	bool sleep_until(const std::chrono::time_point<Clock, Duration> &t)
 	{
 		std::unique_lock<std::mutex> lock(mu);
 		quit_cond.wait_until(lock, t, [this]{
-			return should_quit_var;
+			return should_quit_var || should_wakeup_var;
 		});
+		if (should_wakeup_var) {
+			should_wakeup_var = false;
+			return false;
+		}
+		return !should_quit_var;
 	}
 
 private:
 	mutable std::mutex mu;
-	bool should_quit_var = false;
+	bool should_quit_var = false, should_wakeup_var = false;
 	std::condition_variable quit_cond;
 };
 

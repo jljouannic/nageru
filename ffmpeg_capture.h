@@ -32,6 +32,7 @@
 
 extern "C" {
 #include <libavutil/pixfmt.h>
+#include <libavutil/rational.h>
 }
 
 #include "bmusb/bmusb.h"
@@ -62,12 +63,14 @@ public:
 	{
 		std::lock_guard<std::mutex> lock(queue_mu);
 		command_queue.push_back(QueuedCommand { QueuedCommand::REWIND });
+		producer_thread_should_quit.wakeup();
 	}
 
 	void change_rate(double new_rate)
 	{
 		std::lock_guard<std::mutex> lock(queue_mu);
 		command_queue.push_back(QueuedCommand { QueuedCommand::CHANGE_RATE, new_rate });
+		producer_thread_should_quit.wakeup();
 	}
 
 	// CaptureInterface.
@@ -160,7 +163,7 @@ private:
 	void internal_rewind();
 
 	// Returns true if there was an error.
-	bool process_queued_commands(AVFormatContext *format_ctx, const std::string &pathname, timespec last_modified);
+	bool process_queued_commands(AVFormatContext *format_ctx, const std::string &pathname, timespec last_modified, bool *rewound);
 
 	// Returns nullptr if no frame was decoded (e.g. EOF).
 	AVFrameWithDeleter decode_frame(AVFormatContext *format_ctx, AVCodecContext *codec_ctx, const std::string &pathname, int video_stream_index, bool *error);
@@ -190,6 +193,7 @@ private:
 	SwsContextWithDeleter sws_ctx;
 	int sws_last_width = -1, sws_last_height = -1, sws_last_src_format = -1;
 	AVPixelFormat sws_dst_format = AVPixelFormat(-1);  // In practice, always initialized.
+	AVRational video_timebase;
 
 	QuittableSleeper producer_thread_should_quit;
 	std::thread producer_thread;
