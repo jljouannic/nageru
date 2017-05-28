@@ -33,6 +33,8 @@
 #include "bmusb/bmusb.h"
 #include "quittable_sleeper.h"
 
+struct AVFormatContext;
+
 class FFmpegCapture : public bmusb::CaptureInterface
 {
 public:
@@ -150,6 +152,9 @@ private:
 	bool play_video(const std::string &pathname);
 	void internal_rewind();
 
+	// Returns true if there was an error.
+	bool process_queued_commands(AVFormatContext *format_ctx, const std::string &pathname, timespec last_modified);
+
 	std::string description, filename;
 	uint16_t timecode = 0;
 	unsigned width, height;
@@ -157,6 +162,7 @@ private:
 	movit::YCbCrFormat current_frame_ycbcr_format;
 	bool running = false;
 	int card_index = -1;
+	double rate = 1.0;
 
 	bool has_dequeue_callbacks = false;
 	std::function<void()> dequeue_init_callback = nullptr;

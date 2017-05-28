@@ -370,7 +370,6 @@ bool FFmpegCapture::play_video(const string &pathname)
 		codec_ctx.get(), avcodec_close);
 
 	internal_rewind();
-	double rate = 1.0;
 
 	unique_ptr<SwsContext, decltype(sws_freeContext)*> sws_ctx(nullptr, sws_freeContext);
 	int sws_last_width = -1, sws_last_height = -1, sws_last_src_format = -1;
@@ -378,34 +377,8 @@ bool FFmpegCapture::play_video(const string &pathname)
 
 	// Main loop.
 	while (!producer_thread_should_quit.should_quit()) {
-		// Process any queued commands from other threads.
-		vector<QueuedCommand> commands;
-		{
-			lock_guard<mutex> lock(queue_mu);
-			swap(commands, command_queue);
-		}
-		for (const QueuedCommand &cmd : commands) {
-			switch (cmd.command) {
-			case QueuedCommand::REWIND:
-				if (av_seek_frame(format_ctx.get(), /*stream_index=*/-1, /*timestamp=*/0, /*flags=*/0) < 0) {
-					fprintf(stderr, "%s: Rewind failed, stopping play.\n", pathname.c_str());
-				}
-				// If the file has changed since last time, return to get it reloaded.
-				// Note that depending on how you move the file into place, you might
-				// end up corrupting the one you're already playing, so this path
-				// might not trigger.
-				if (changed_since(pathname, last_modified)) {
-					return true;
-				}
-				internal_rewind();
-				break;
-
-			case QueuedCommand::CHANGE_RATE:
-				start = next_frame_start;
-				pts_origin = last_pts;
-				rate = cmd.new_rate;
-				break;
-			}
+		if (process_queued_commands(format_ctx.get(), pathname, last_modified)) {
+			return true;
 		}
 
 		// Read packets until we have a frame or there are none left.
@@ -548,4 +521,38 @@ void FFmpegCapture::internal_rewind()
 {				
 	pts_origin = last_pts = 0;
 	start = next_frame_start = steady_clock::now();
+}
+
+bool FFmpegCapture::process_queued_commands(AVFormatContext *format_ctx, const std::string &pathname, timespec last_modified)
+{
+	// Process any queued commands from other threads.
+	vector<QueuedCommand> commands;
+	{
+		lock_guard<mutex> lock(queue_mu);
+		swap(commands, command_queue);
+	}
+	for (const QueuedCommand &cmd : commands) {
+		switch (cmd.command) {
+		case QueuedCommand::REWIND:
+			if (av_seek_frame(format_ctx, /*stream_index=*/-1, /*timestamp=*/0, /*flags=*/0) < 0) {
+				fprintf(stderr, "%s: Rewind failed, stopping play.\n", pathname.c_str());
+			}
+			// If the file has changed since last time, return to get it reloaded.
+			// Note that depending on how you move the file into place, you might
+			// end up corrupting the one you're already playing, so this path
+			// might not trigger.
+			if (changed_since(pathname, last_modified)) {
+				return true;
+			}
+			internal_rewind();
+			break;
+
+		case QueuedCommand::CHANGE_RATE:
+			start = next_frame_start;
+			pts_origin = last_pts;
+			rate = cmd.new_rate;
+			break;
+		}
+	}
+	return false;
 }
