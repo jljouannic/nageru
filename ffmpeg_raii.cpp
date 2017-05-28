@@ -5,6 +5,7 @@ extern "C" {
 #include <libavformat/avformat.h>
 #include <libavutil/dict.h>
 #include <libavutil/frame.h>
+#include <libswscale/swscale.h>
 }
 
 using namespace std;
@@ -59,3 +60,9 @@ AVFrameWithDeleter av_frame_alloc_unique()
 	return AVFrameWithDeleter(av_frame_alloc());
 }
 
+// SwsContext
+
+void sws_free_context_unique::operator() (SwsContext *context) const
+{
+	sws_freeContext(context);
+}

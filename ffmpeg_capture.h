@@ -30,11 +30,17 @@
 
 #include <movit/ycbcr.h>
 
+extern "C" {
+#include <libavutil/pixfmt.h>
+}
+
 #include "bmusb/bmusb.h"
 #include "ffmpeg_raii.h"
 #include "quittable_sleeper.h"
 
 struct AVFormatContext;
+struct AVFrame;
+struct AVRational;
 
 class FFmpegCapture : public bmusb::CaptureInterface
 {
@@ -159,6 +165,9 @@ private:
 	// Returns nullptr if no frame was decoded (e.g. EOF).
 	AVFrameWithDeleter decode_frame(AVFormatContext *format_ctx, AVCodecContext *codec_ctx, const std::string &pathname, int video_stream_index, bool *error);
 
+	bmusb::VideoFormat construct_video_format(const AVFrame *frame, AVRational video_timebase);
+	bmusb::FrameAllocator::Frame make_video_frame(const AVFrame *frame, const std::string &pathname, bool *error);
+
 	std::string description, filename;
 	uint16_t timecode = 0;
 	unsigned width, height;
@@ -177,6 +186,10 @@ private:
 	std::unique_ptr<bmusb::FrameAllocator> owned_video_frame_allocator;
 	std::unique_ptr<bmusb::FrameAllocator> owned_audio_frame_allocator;
 	bmusb::frame_callback_t frame_callback = nullptr;
+
+	SwsContextWithDeleter sws_ctx;
+	int sws_last_width = -1, sws_last_height = -1, sws_last_src_format = -1;
+	AVPixelFormat sws_dst_format = AVPixelFormat(-1);  // In practice, always initialized.
 
 	QuittableSleeper producer_thread_should_quit;
 	std::thread producer_thread;

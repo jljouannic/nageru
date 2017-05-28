@@ -18,7 +18,7 @@ struct AVDictionary;
 struct AVFormatContext;
 struct AVFrame;
 struct AVInputFormat;
-
+struct SwsContext;
 
 // AVFormatContext
 struct avformat_close_input_unique {
@@ -61,5 +61,13 @@ typedef std::unique_ptr<AVFrame, av_frame_free_unique>
 	AVFrameWithDeleter;
 
 AVFrameWithDeleter av_frame_alloc_unique();
+
+// SwsContext
+struct sws_free_context_unique {
+	void operator() (SwsContext *context) const;
+};
+
+typedef std::unique_ptr<SwsContext, sws_free_context_unique>
+	SwsContextWithDeleter;
 
 #endif  // !defined(_FFMPEG_RAII_H)

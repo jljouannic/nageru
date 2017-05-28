@@ -371,10 +371,6 @@ bool FFmpegCapture::play_video(const string &pathname)
 
 	internal_rewind();
 
-	unique_ptr<SwsContext, decltype(sws_freeContext)*> sws_ctx(nullptr, sws_freeContext);
-	int sws_last_width = -1, sws_last_height = -1, sws_last_src_format = -1;
-	AVPixelFormat sws_dst_format = AVPixelFormat(-1);  // In practice, always initialized.
-
 	// Main loop.
 	while (!producer_thread_should_quit.should_quit()) {
 		if (process_queued_commands(format_ctx.get(), pathname, last_modified)) {
@@ -402,77 +398,12 @@ bool FFmpegCapture::play_video(const string &pathname)
 			internal_rewind();
 			continue;
 		}
-
-		if (sws_ctx == nullptr ||
-		    sws_last_width != frame->width ||
-		    sws_last_height != frame->height ||
-		    sws_last_src_format != frame->format) {
-			sws_dst_format = decide_dst_format(AVPixelFormat(frame->format), pixel_format);
-			sws_ctx.reset(
-				sws_getContext(frame->width, frame->height, AVPixelFormat(frame->format),
-					width, height, sws_dst_format,
-					SWS_BICUBIC, nullptr, nullptr, nullptr));
-			sws_last_width = frame->width;
-			sws_last_height = frame->height;
-			sws_last_src_format = frame->format;
-		}
-		if (sws_ctx == nullptr) {
-			fprintf(stderr, "%s: Could not create scaler context\n", pathname.c_str());
-			return false;
-		}
-
-		VideoFormat video_format;
-		video_format.width = width;
-		video_format.height = height;
-		if (pixel_format == bmusb::PixelFormat_8BitBGRA) {
-			video_format.stride = width * 4;
-		} else {
-			assert(pixel_format == bmusb::PixelFormat_8BitYCbCrPlanar);
-			video_format.stride = width;
-		}
-		video_format.frame_rate_nom = video_timebase.den;
-		video_format.frame_rate_den = av_frame_get_pkt_duration(frame.get()) * video_timebase.num;
-		if (video_format.frame_rate_nom == 0 || video_format.frame_rate_den == 0) {
-			// Invalid frame rate.
-			video_format.frame_rate_nom = 60;
-			video_format.frame_rate_den = 1;
-		}
-		video_format.has_signal = true;
-		video_format.is_connected = true;
-
-		next_frame_start = compute_frame_start(frame->pts, pts_origin, video_timebase, start, rate);
 		last_pts = frame->pts;
 
-		FrameAllocator::Frame video_frame = video_frame_allocator->alloc_frame();
-		if (video_frame.data != nullptr) {
-			uint8_t *pic_data[4] = { nullptr, nullptr, nullptr, nullptr };
-			int linesizes[4] = { 0, 0, 0, 0 };
-			if (pixel_format == bmusb::PixelFormat_8BitBGRA) {
-				pic_data[0] = video_frame.data;
-				linesizes[0] = video_format.stride;
-				video_frame.len = video_format.stride * height;
-			} else {
-				assert(pixel_format == bmusb::PixelFormat_8BitYCbCrPlanar);
-				const AVPixFmtDescriptor *desc = av_pix_fmt_desc_get(sws_dst_format);
-
-				int chroma_width = AV_CEIL_RSHIFT(int(width), desc->log2_chroma_w);
-				int chroma_height = AV_CEIL_RSHIFT(int(height), desc->log2_chroma_h);
-
-				pic_data[0] = video_frame.data;
-				linesizes[0] = width;
-
-				pic_data[1] = pic_data[0] + width * height;
-				linesizes[1] = chroma_width;
-
-				pic_data[2] = pic_data[1] + chroma_width * chroma_height;
-				linesizes[2] = chroma_width;
-
-				video_frame.len = width * height + 2 * chroma_width * chroma_height;
-
-				current_frame_ycbcr_format = decode_ycbcr_format(desc, frame.get());
-			}
-			sws_scale(sws_ctx.get(), frame->data, frame->linesize, 0, frame->height, pic_data, linesizes);
-			video_frame.received_timestamp = next_frame_start;
+		VideoFormat video_format = construct_video_format(frame.get(), video_timebase);
+		FrameAllocator::Frame video_frame = make_video_frame(frame.get(), pathname, &error);
+		if (error) {
+			return false;
 		}
 
 		FrameAllocator::Frame audio_frame;
@@ -480,6 +411,8 @@ bool FFmpegCapture::play_video(const string &pathname)
                 audio_format.bits_per_sample = 32;
                 audio_format.num_channels = 8;
 
+		next_frame_start = compute_frame_start(frame->pts, pts_origin, video_timebase, start, rate);
+		video_frame.received_timestamp = next_frame_start;
 		producer_thread_should_quit.sleep_until(next_frame_start);
 		frame_callback(timecode++,
 			video_frame, 0, video_format,
@@ -572,4 +505,86 @@ AVFrameWithDeleter FFmpegCapture::decode_frame(AVFormatContext *format_ctx, AVCo
 		return frame;
 	else
 		return AVFrameWithDeleter(nullptr);
+}
+
+VideoFormat FFmpegCapture::construct_video_format(const AVFrame *frame, AVRational video_timebase)
+{
+	VideoFormat video_format;
+	video_format.width = width;
+	video_format.height = height;
+	if (pixel_format == bmusb::PixelFormat_8BitBGRA) {
+		video_format.stride = width * 4;
+	} else {
+		assert(pixel_format == bmusb::PixelFormat_8BitYCbCrPlanar);
+		video_format.stride = width;
+	}
+	video_format.frame_rate_nom = video_timebase.den;
+	video_format.frame_rate_den = av_frame_get_pkt_duration(frame) * video_timebase.num;
+	if (video_format.frame_rate_nom == 0 || video_format.frame_rate_den == 0) {
+		// Invalid frame rate.
+		video_format.frame_rate_nom = 60;
+		video_format.frame_rate_den = 1;
+	}
+	video_format.has_signal = true;
+	video_format.is_connected = true;
+	return video_format;
+}
+
+FrameAllocator::Frame FFmpegCapture::make_video_frame(const AVFrame *frame, const string &pathname, bool *error)
+{
+	*error = false;
+
+	FrameAllocator::Frame video_frame = video_frame_allocator->alloc_frame();
+	if (video_frame.data == nullptr) {
+		return video_frame;
+	}
+
+	if (sws_ctx == nullptr ||
+	    sws_last_width != frame->width ||
+	    sws_last_height != frame->height ||
+	    sws_last_src_format != frame->format) {
+		sws_dst_format = decide_dst_format(AVPixelFormat(frame->format), pixel_format);
+		sws_ctx.reset(
+			sws_getContext(frame->width, frame->height, AVPixelFormat(frame->format),
+				width, height, sws_dst_format,
+				SWS_BICUBIC, nullptr, nullptr, nullptr));
+		sws_last_width = frame->width;
+		sws_last_height = frame->height;
+		sws_last_src_format = frame->format;
+	}
+	if (sws_ctx == nullptr) {
+		fprintf(stderr, "%s: Could not create scaler context\n", pathname.c_str());
+		*error = true;
+		return video_frame;
+	}
+
+	uint8_t *pic_data[4] = { nullptr, nullptr, nullptr, nullptr };
+	int linesizes[4] = { 0, 0, 0, 0 };
+	if (pixel_format == bmusb::PixelFormat_8BitBGRA) {
+		pic_data[0] = video_frame.data;
+		linesizes[0] = width * 4;
+		video_frame.len = (width * 4) * height;
+	} else {
+		assert(pixel_format == bmusb::PixelFormat_8BitYCbCrPlanar);
+		const AVPixFmtDescriptor *desc = av_pix_fmt_desc_get(sws_dst_format);
+
+		int chroma_width = AV_CEIL_RSHIFT(int(width), desc->log2_chroma_w);
+		int chroma_height = AV_CEIL_RSHIFT(int(height), desc->log2_chroma_h);
+
+		pic_data[0] = video_frame.data;
+		linesizes[0] = width;
+
+		pic_data[1] = pic_data[0] + width * height;
+		linesizes[1] = chroma_width;
+
+		pic_data[2] = pic_data[1] + chroma_width * chroma_height;
+		linesizes[2] = chroma_width;
+
+		video_frame.len = width * height + 2 * chroma_width * chroma_height;
+
+		current_frame_ycbcr_format = decode_ycbcr_format(desc, frame);
+	}
+	sws_scale(sws_ctx.get(), frame->data, frame->linesize, 0, frame->height, pic_data, linesizes);
+
+	return video_frame;
 }
