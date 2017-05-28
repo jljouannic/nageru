@@ -420,6 +420,8 @@ bool FFmpegCapture::play_video(const string &pathname)
 					audio_frame, 0, audio_format);
 				break;
 			} else {
+				if (producer_thread_should_quit.should_quit()) break;
+
 				bool rewound = false;
 				if (process_queued_commands(format_ctx.get(), pathname, last_modified, &rewound)) {
 					return true;
@@ -429,8 +431,15 @@ bool FFmpegCapture::play_video(const string &pathname)
 					video_frame_allocator->release_frame(video_frame);
 					break;
 				}
-				// OK, we didn't, so probably a rate change. We'll recalculate next_frame_start
-				// in the next run.
+				// OK, we didn't, so probably a rate change. Recalculate next_frame_start,
+				// but if it's now in the past, we'll reset the origin, so that we don't
+				// generate a huge backlog of frames that we need to run through quickly.
+				next_frame_start = compute_frame_start(frame->pts, pts_origin, video_timebase, start, rate);
+				steady_clock::time_point now = steady_clock::now();
+				if (next_frame_start < now) {
+					pts_origin = frame->pts;
+					start = next_frame_start = now;
+				}
 			}
 		}
 		last_pts = frame->pts;
