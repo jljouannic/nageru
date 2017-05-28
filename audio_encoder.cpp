@@ -193,5 +193,5 @@ AVCodecParametersWithDeleter AudioEncoder::get_codec_parameters()
 {
 	AVCodecParameters *codecpar = avcodec_parameters_alloc();
 	avcodec_parameters_from_context(codecpar, ctx);
-	return AVCodecParametersWithDeleter(codecpar, avcodec_parameters_free_unique);
+	return AVCodecParametersWithDeleter(codecpar);
 }

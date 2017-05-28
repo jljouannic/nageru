@@ -21,9 +21,11 @@ struct AVInputFormat;
 
 
 // AVFormatContext
-void avformat_close_input_unique(AVFormatContext *format_ctx);
+struct avformat_close_input_unique {
+	void operator() (AVFormatContext *format_ctx) const;
+};
 
-typedef std::unique_ptr<AVFormatContext, decltype(avformat_close_input_unique)*>
+typedef std::unique_ptr<AVFormatContext, avformat_close_input_unique>
 	AVFormatContextWithCloser;
 
 AVFormatContextWithCloser avformat_open_input_unique(
@@ -31,25 +33,31 @@ AVFormatContextWithCloser avformat_open_input_unique(
 
 
 // AVCodecContext
-void avcodec_free_context_unique(AVCodecContext *codec_ctx);
+struct avcodec_free_context_unique {
+	void operator() (AVCodecContext *ctx) const;
+};
 
-typedef std::unique_ptr<AVCodecContext, decltype(avcodec_free_context_unique)*>
+typedef std::unique_ptr<AVCodecContext, avcodec_free_context_unique>
 	AVCodecContextWithDeleter;
 
 AVCodecContextWithDeleter avcodec_alloc_context3_unique(const AVCodec *codec);
 
 
 // AVCodecParameters
-void avcodec_parameters_free_unique(AVCodecParameters *codec_par);
+struct avcodec_parameters_free_unique {
+	void operator() (AVCodecParameters *codec_par) const;
+};
 
-typedef std::unique_ptr<AVCodecParameters, decltype(avcodec_parameters_free_unique)*>
+typedef std::unique_ptr<AVCodecParameters, avcodec_parameters_free_unique>
 	AVCodecParametersWithDeleter;
 
 
 // AVFrame
-void av_frame_free_unique(AVFrame *frame);
+struct av_frame_free_unique {
+	void operator() (AVFrame *frame) const;
+};
 
-typedef std::unique_ptr<AVFrame, decltype(av_frame_free_unique)*>
+typedef std::unique_ptr<AVFrame, av_frame_free_unique>
 	AVFrameWithDeleter;
 
 AVFrameWithDeleter av_frame_alloc_unique();

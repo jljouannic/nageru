@@ -11,7 +11,7 @@ using namespace std;
 
 // AVFormatContext
 
-void avformat_close_input_unique(AVFormatContext *format_ctx)
+void avformat_close_input_unique::operator() (AVFormatContext *format_ctx) const
 {
 	avformat_close_input(&format_ctx);
 }
@@ -23,40 +23,39 @@ AVFormatContextWithCloser avformat_open_input_unique(
 	if (avformat_open_input(&format_ctx, pathname, fmt, options) != 0) {
 		format_ctx = nullptr;
 	}
-	return AVFormatContextWithCloser(format_ctx, avformat_close_input_unique);
+	return AVFormatContextWithCloser(format_ctx);
 }
 
 
 // AVCodecContext
 
-void avcodec_free_context_unique(AVCodecContext *codec_ctx)
+void avcodec_free_context_unique::operator() (AVCodecContext *codec_ctx) const
 {
 	avcodec_free_context(&codec_ctx);
 }
 
 AVCodecContextWithDeleter avcodec_alloc_context3_unique(const AVCodec *codec)
 {
-	return AVCodecContextWithDeleter(avcodec_alloc_context3(codec), avcodec_free_context_unique);
+	return AVCodecContextWithDeleter(avcodec_alloc_context3(codec));
 }
 
 
 // AVCodecParameters
 
-void avcodec_parameters_free_unique(AVCodecParameters *codec_par)
+void avcodec_parameters_free_unique::operator() (AVCodecParameters *codec_par) const
 {
 	avcodec_parameters_free(&codec_par);
 }
 
-
 // AVFrame
 
-void av_frame_free_unique(AVFrame *frame)
+void av_frame_free_unique::operator() (AVFrame *frame) const
 {
 	av_frame_free(&frame);
 }
 
 AVFrameWithDeleter av_frame_alloc_unique()
 {
-	return AVFrameWithDeleter(av_frame_alloc(), av_frame_free_unique);
+	return AVFrameWithDeleter(av_frame_alloc());
 }
 
