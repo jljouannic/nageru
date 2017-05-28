@@ -12,10 +12,9 @@
 // Since we don't really know much about the video when building the chains,
 // there are some limitations. In particular, frames are always assumed to be
 // sRGB even if the video container says something else. We could probably
-// try to load the video on startup and pick out the parameters at that point
-// (which would probably also allow us to send Y'CbCr video through without
-// CPU conversion), but it would require some more plumbing, and it would also
-// fail if the file changes parameters midway, which is allowed in some formats.
+// try to load the video on startup and pick out the parameters at that point,
+// but it would require some more plumbing, and it would also fail if the file
+// changes parameters midway, which is allowed in some formats.
 //
 // There is currently no audio support.
 
