@@ -381,41 +381,12 @@ bool FFmpegCapture::play_video(const string &pathname)
 			return true;
 		}
 
-		// Read packets until we have a frame or there are none left.
-		int frame_finished = 0;
-		AVFrameWithDeleter frame = av_frame_alloc_unique();
-		bool eof = false;
-		do {
-			AVPacket pkt;
-			unique_ptr<AVPacket, decltype(av_packet_unref)*> pkt_cleanup(
-				&pkt, av_packet_unref);
-			av_init_packet(&pkt);
-			pkt.data = nullptr;
-			pkt.size = 0;
-			if (av_read_frame(format_ctx.get(), &pkt) == 0) {
-				if (pkt.stream_index != video_stream_index) {
-					// Ignore audio for now.
-					continue;
-				}
-				if (avcodec_send_packet(codec_ctx.get(), &pkt) < 0) {
-					fprintf(stderr, "%s: Cannot send packet to codec.\n", pathname.c_str());
-					return false;
-				}
-			} else {
-				eof = true;  // Or error, but ignore that for the time being.
-			}
-
-			int err = avcodec_receive_frame(codec_ctx.get(), frame.get());
-			if (err == 0) {
-				frame_finished = true;
-				break;
-			} else if (err != AVERROR(EAGAIN)) {
-				fprintf(stderr, "%s: Cannot receive frame from codec.\n", pathname.c_str());
-				return false;
-			}
-		} while (!eof);
-
-		if (!frame_finished) {
+		bool error;
+		AVFrameWithDeleter frame = decode_frame(format_ctx.get(), codec_ctx.get(), pathname, video_stream_index, &error);
+		if (error) {
+			return false;
+		}
+		if (frame == nullptr) {
 			// EOF. Loop back to the start if we can.
 			if (av_seek_frame(format_ctx.get(), /*stream_index=*/-1, /*timestamp=*/0, /*flags=*/0) < 0) {
 				fprintf(stderr, "%s: Rewind failed, not looping.\n", pathname.c_str());
@@ -555,4 +526,50 @@ bool FFmpegCapture::process_queued_commands(AVFormatContext *format_ctx, const s
 		}
 	}
 	return false;
+}
+
+AVFrameWithDeleter FFmpegCapture::decode_frame(AVFormatContext *format_ctx, AVCodecContext *codec_ctx, const std::string &pathname, int video_stream_index, bool *error)
+{
+	*error = false;
+
+	// Read packets until we have a frame or there are none left.
+	bool frame_finished = false;
+	AVFrameWithDeleter frame = av_frame_alloc_unique();
+	bool eof = false;
+	do {
+		AVPacket pkt;
+		unique_ptr<AVPacket, decltype(av_packet_unref)*> pkt_cleanup(
+			&pkt, av_packet_unref);
+		av_init_packet(&pkt);
+		pkt.data = nullptr;
+		pkt.size = 0;
+		if (av_read_frame(format_ctx, &pkt) == 0) {
+			if (pkt.stream_index != video_stream_index) {
+				// Ignore audio for now.
+				continue;
+			}
+			if (avcodec_send_packet(codec_ctx, &pkt) < 0) {
+				fprintf(stderr, "%s: Cannot send packet to codec.\n", pathname.c_str());
+				*error = true;
+				return AVFrameWithDeleter(nullptr);
+			}
+		} else {
+			eof = true;  // Or error, but ignore that for the time being.
+		}
+
+		int err = avcodec_receive_frame(codec_ctx, frame.get());
+		if (err == 0) {
+			frame_finished = true;
+			break;
+		} else if (err != AVERROR(EAGAIN)) {
+			fprintf(stderr, "%s: Cannot receive frame from codec.\n", pathname.c_str());
+			*error = true;
+			return AVFrameWithDeleter(nullptr);
+		}
+	} while (!eof);
+
+	if (frame_finished)
+		return frame;
+	else
+		return AVFrameWithDeleter(nullptr);
 }

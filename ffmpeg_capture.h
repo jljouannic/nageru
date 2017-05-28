@@ -31,6 +31,7 @@
 #include <movit/ycbcr.h>
 
 #include "bmusb/bmusb.h"
+#include "ffmpeg_raii.h"
 #include "quittable_sleeper.h"
 
 struct AVFormatContext;
@@ -154,6 +155,9 @@ private:
 
 	// Returns true if there was an error.
 	bool process_queued_commands(AVFormatContext *format_ctx, const std::string &pathname, timespec last_modified);
+
+	// Returns nullptr if no frame was decoded (e.g. EOF).
+	AVFrameWithDeleter decode_frame(AVFormatContext *format_ctx, AVCodecContext *codec_ctx, const std::string &pathname, int video_stream_index, bool *error);
 
 	std::string description, filename;
 	uint16_t timecode = 0;
