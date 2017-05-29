@@ -1,3 +1,22 @@
+Nageru 1.6.0, May 29th, 2017
+
+  - Add support for having videos (from file or from URL) as a separate
+    input channels, albeit with some limitations. Apart from the obvious use of
+    looping pause clips or similar, this can be used to integrate with CasparCG;
+    see the manual for more details.
+
+  - Add a frame analyzer (accessible from the Video menu) containing an
+    RGB histogram and a color dropped tool. This is useful in calibrating
+    video chains by playing back a known signal. Note that this adds a
+    dependency on QCustomPlot.
+
+  - Allow overriding Y'CbCr input interpretation, for inputs that don't
+    use the correct settings. Also, Rec. 601 is now used by default instead
+    of Rec. 709 for SD resolutions.
+
+  - Support other sample rates than 48000 Hz from bmusb.
+
+
 Nageru 1.5.0, April 5th, 2017
 
   - Support for low-latency HDMI/SDI output in addition to (or instead of) the
