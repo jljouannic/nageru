@@ -715,6 +715,13 @@ void Mixer::bm_frame(unsigned card_index, uint16_t timecode,
 			case PixelFormat_8BitBGRA: {
 				size_t field_start = video_offset + video_format.stride * field_start_line;
 				upload_texture(userdata->tex_rgba[field], video_format.width, video_format.height, video_format.stride, interlaced_stride, GL_BGRA, GL_UNSIGNED_INT_8_8_8_8_REV, field_start);
+				// These could be asked to deliver mipmaps at any time.
+				glBindTexture(GL_TEXTURE_2D, userdata->tex_rgba[field]);
+				check_error();
+				glGenerateMipmap(GL_TEXTURE_2D);
+				check_error();
+				glBindTexture(GL_TEXTURE_2D, 0);
+				check_error();
 				break;
 			}
 			default:
