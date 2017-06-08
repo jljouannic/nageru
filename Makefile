@@ -39,7 +39,7 @@ endif
 OBJS += ffmpeg_capture.o
 
 # Benchmark program.
-BM_OBJS = benchmark_audio_mixer.o $(AUDIO_MIXER_OBJS) flags.o
+BM_OBJS = benchmark_audio_mixer.o $(AUDIO_MIXER_OBJS) flags.o metrics.o
 
 %.o: %.cpp
 	$(CXX) -MMD -MP $(CPPFLAGS) $(CXXFLAGS) -o $@ -c $<

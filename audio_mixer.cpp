@@ -20,6 +20,7 @@
 
 #include "db.h"
 #include "flags.h"
+#include "metrics.h"
 #include "state.pb.h"
 #include "timebase.h"
 
@@ -212,6 +213,14 @@ AudioMixer::AudioMixer(unsigned num_cards)
 			current_mapping_mode = MappingMode::MULTICHANNEL;
 		}
 	}
+
+	global_metrics.register_double_metric("audio_loudness_short_lufs", &metric_audio_loudness_short_lufs);
+	global_metrics.register_double_metric("audio_loudness_integrated_lufs", &metric_audio_loudness_integrated_lufs);
+	global_metrics.register_double_metric("audio_loudness_range_low_lufs", &metric_audio_loudness_range_low_lufs);
+	global_metrics.register_double_metric("audio_loudness_range_high_lufs", &metric_audio_loudness_range_high_lufs);
+	global_metrics.register_double_metric("audio_peak_dbfs", &metric_audio_peak_dbfs);
+	global_metrics.register_double_metric("audio_final_makeup_gain_db", &metric_audio_final_makeup_gain_db);
+	global_metrics.register_double_metric("audio_correlation", &metric_audio_correlation);
 }
 
 void AudioMixer::reset_resampler(DeviceSpec device_spec)
@@ -826,6 +835,14 @@ void AudioMixer::send_audio_level_callback()
 	double loudness_i = r128.integrated();
 	double loudness_range_low = r128.range_min();
 	double loudness_range_high = r128.range_max();
+
+	metric_audio_loudness_short_lufs = loudness_s;
+	metric_audio_loudness_integrated_lufs = loudness_i;
+	metric_audio_loudness_range_low_lufs = loudness_range_low;
+	metric_audio_loudness_range_high_lufs = loudness_range_high;
+	metric_audio_peak_dbfs = to_db(peak);
+	metric_audio_final_makeup_gain_db = to_db(final_makeup_gain);
+	metric_audio_correlation = correlation.get_correlation();
 
 	vector<BusLevel> bus_levels;
 	bus_levels.resize(input_mapping.buses.size());

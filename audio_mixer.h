@@ -385,6 +385,15 @@ private:
 	CorrelationMeasurer correlation;  // Under audio_measure_mutex.
 	Resampler peak_resampler;  // Under audio_measure_mutex.
 	std::atomic<float> peak{0.0f};
+
+	// Metrics.
+	std::atomic<double> metric_audio_loudness_short_lufs{0.0 / 0.0};
+	std::atomic<double> metric_audio_loudness_integrated_lufs{0.0 / 0.0};
+	std::atomic<double> metric_audio_loudness_range_low_lufs{0.0 / 0.0};
+	std::atomic<double> metric_audio_loudness_range_high_lufs{0.0 / 0.0};
+	std::atomic<double> metric_audio_peak_dbfs{0.0 / 0.0};
+	std::atomic<double> metric_audio_final_makeup_gain_db{0.0};
+	std::atomic<double> metric_audio_correlation{0.0};
 };
 
 extern AudioMixer *global_audio_mixer;
