@@ -6,6 +6,7 @@
 #include <stddef.h>
 #include <stdint.h>
 #include <sys/types.h>
+#include <atomic>
 #include <condition_variable>
 #include <deque>
 #include <mutex>
@@ -78,6 +79,9 @@ private:
 	std::mutex streams_mutex;
 	std::set<Stream *> streams;  // Not owned.
 	std::string header;
+
+	// Metrics.
+	std::atomic<int64_t> metric_num_connected_clients{0};
 };
 
 #endif  // !defined(_HTTPD_H)

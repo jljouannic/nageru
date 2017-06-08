@@ -22,6 +22,7 @@ using namespace std;
 
 HTTPD::HTTPD()
 {
+	global_metrics.register_int_metric("num_connected_clients", &metric_num_connected_clients);
 }
 
 HTTPD::~HTTPD()
@@ -94,6 +95,7 @@ int HTTPD::answer_to_connection(MHD_Connection *connection,
 		unique_lock<mutex> lock(streams_mutex);
 		streams.insert(stream);
 	}
+	++metric_num_connected_clients;
 	*con_cls = stream;
 
 	// Does not strictly have to be equal to MUX_BUFFER_SIZE.
@@ -119,6 +121,7 @@ void HTTPD::free_stream(void *cls)
 		delete stream;
 		httpd->streams.erase(stream);
 	}
+	--httpd->metric_num_connected_clients;
 }
 
 ssize_t HTTPD::Stream::reader_callback_thunk(void *cls, uint64_t pos, char *buf, size_t max)
