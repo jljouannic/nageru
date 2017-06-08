@@ -78,6 +78,16 @@ int HTTPD::answer_to_connection(MHD_Connection *connection,
 		framing = HTTPD::Stream::FRAMING_RAW;
 	}
 
+	if (strcmp(url, "/metrics") == 0) {
+		string contents = global_metrics.serialize();
+		MHD_Response *response = MHD_create_response_from_buffer(
+			contents.size(), &contents[0], MHD_RESPMEM_MUST_COPY);
+		MHD_add_response_header(response, "Content-type", "text/plain");
+		int ret = MHD_queue_response(connection, MHD_HTTP_OK, response);
+		MHD_destroy_response(response);  // Only decreases the refcount; actual free is after the request is done.
+		return ret;
+	}
+
 	HTTPD::Stream *stream = new HTTPD::Stream(this, framing);
 	stream->add_data(header.data(), header.size(), Stream::DATA_TYPE_HEADER);
 	{
@@ -86,21 +96,12 @@ int HTTPD::answer_to_connection(MHD_Connection *connection,
 	}
 	*con_cls = stream;
 
-	MHD_Response *response;
-
-	if (strcmp(url, "/metrics") == 0) {
-		string contents = global_metrics.serialize();
-		response = MHD_create_response_from_buffer(
-			contents.size(), &contents[0], MHD_RESPMEM_MUST_COPY);
-		MHD_add_response_header(response, "Content-type", "text/plain");
-	} else {
-		// Does not strictly have to be equal to MUX_BUFFER_SIZE.
-		response = MHD_create_response_from_callback(
-			(size_t)-1, MUX_BUFFER_SIZE, &HTTPD::Stream::reader_callback_thunk, stream, &HTTPD::free_stream);
-		// TODO: Content-type?
-		if (framing == HTTPD::Stream::FRAMING_METACUBE) {
-			MHD_add_response_header(response, "Content-encoding", "metacube");
-		}
+	// Does not strictly have to be equal to MUX_BUFFER_SIZE.
+	MHD_Response *response = MHD_create_response_from_callback(
+		(size_t)-1, MUX_BUFFER_SIZE, &HTTPD::Stream::reader_callback_thunk, stream, &HTTPD::free_stream);
+	// TODO: Content-type?
+	if (framing == HTTPD::Stream::FRAMING_METACUBE) {
+		MHD_add_response_header(response, "Content-encoding", "metacube");
 	}
 
 	int ret = MHD_queue_response(connection, MHD_HTTP_OK, response);
