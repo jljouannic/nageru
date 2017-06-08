@@ -390,9 +390,9 @@ Mixer::Mixer(const QSurfaceFormat &format, unsigned num_cards)
 		set_output_card_internal(global_flags.output_card);
 	}
 
-	global_metrics.register_int_metric("nageru_num_frames", &metrics_num_frames);
-	global_metrics.register_int_metric("nageru_dropped_frames", &metrics_dropped_frames);
-	global_metrics.register_double_metric("nageru_uptime", &metrics_uptime);
+	global_metrics.register_int_metric("num_frames", &metrics_num_frames);
+	global_metrics.register_int_metric("dropped_frames", &metrics_dropped_frames);
+	global_metrics.register_double_metric("uptime", &metrics_uptime);
 }
 
 Mixer::~Mixer()

@@ -28,10 +28,10 @@ string Metrics::serialize() const
 
 	lock_guard<mutex> lock(mu);
 	for (const auto &key_and_value : int_metrics) {
-		ss << key_and_value.first.c_str() << " " << key_and_value.second->load() << "\n";
+		ss << "nageru_" << key_and_value.first.c_str() << " " << key_and_value.second->load() << "\n";
 	}
 	for (const auto &key_and_value : double_metrics) {
-		ss << key_and_value.first.c_str() << " " << key_and_value.second->load() << "\n";
+		ss << "nageru_" << key_and_value.first.c_str() << " " << key_and_value.second->load() << "\n";
 	}
 
 	return ss.str();
