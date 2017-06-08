@@ -13,6 +13,7 @@
 
 #include "defs.h"
 #include "metacube2.h"
+#include "metrics.h"
 
 struct MHD_Connection;
 struct MHD_Response;
@@ -85,14 +86,23 @@ int HTTPD::answer_to_connection(MHD_Connection *connection,
 	}
 	*con_cls = stream;
 
-	// Does not strictly have to be equal to MUX_BUFFER_SIZE.
-	MHD_Response *response = MHD_create_response_from_callback(
-		(size_t)-1, MUX_BUFFER_SIZE, &HTTPD::Stream::reader_callback_thunk, stream, &HTTPD::free_stream);
+	MHD_Response *response;
 
-	// TODO: Content-type?
-	if (framing == HTTPD::Stream::FRAMING_METACUBE) {
-		MHD_add_response_header(response, "Content-encoding", "metacube");
+	if (strcmp(url, "/metrics") == 0) {
+		string contents = global_metrics.serialize();
+		response = MHD_create_response_from_buffer(
+			contents.size(), &contents[0], MHD_RESPMEM_MUST_COPY);
+		MHD_add_response_header(response, "Content-type", "text/plain");
+	} else {
+		// Does not strictly have to be equal to MUX_BUFFER_SIZE.
+		response = MHD_create_response_from_callback(
+			(size_t)-1, MUX_BUFFER_SIZE, &HTTPD::Stream::reader_callback_thunk, stream, &HTTPD::free_stream);
+		// TODO: Content-type?
+		if (framing == HTTPD::Stream::FRAMING_METACUBE) {
+			MHD_add_response_header(response, "Content-encoding", "metacube");
+		}
 	}
+
 	int ret = MHD_queue_response(connection, MHD_HTTP_OK, response);
 	MHD_destroy_response(response);  // Only decreases the refcount; actual free is after the request is done.
 

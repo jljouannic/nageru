@@ -42,6 +42,7 @@
 #include "ffmpeg_capture.h"
 #include "flags.h"
 #include "input_mapping.h"
+#include "metrics.h"
 #include "pbo_frame_allocator.h"
 #include "ref_counted_gl_sync.h"
 #include "resampling_queue.h"
@@ -388,6 +389,10 @@ Mixer::Mixer(const QSurfaceFormat &format, unsigned num_cards)
 		desired_output_card_index = global_flags.output_card;
 		set_output_card_internal(global_flags.output_card);
 	}
+
+	global_metrics.register_int_metric("nageru_num_frames", &metrics_num_frames);
+	global_metrics.register_int_metric("nageru_dropped_frames", &metrics_dropped_frames);
+	global_metrics.register_double_metric("nageru_uptime", &metrics_uptime);
 }
 
 Mixer::~Mixer()
@@ -871,6 +876,11 @@ void Mixer::thread_func()
 
 		now = steady_clock::now();
 		double elapsed = duration<double>(now - start).count();
+
+		metrics_num_frames = frame_num;
+		metrics_dropped_frames = stats_dropped_frames;
+		metrics_uptime = elapsed;
+
 		if (frame_num % 100 == 0) {
 			printf("%d frames (%d dropped) in %.3f seconds = %.1f fps (%.1f ms/frame)",
 				frame_num, stats_dropped_frames, elapsed, frame_num / elapsed,
