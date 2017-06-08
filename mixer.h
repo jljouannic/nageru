@@ -520,9 +520,9 @@ private:
 	std::chrono::steady_clock::time_point last_mode_scan_change[MAX_VIDEO_CARDS];
 
 	// Metrics.
-	std::atomic<int64_t> metrics_num_frames;
-	std::atomic<int64_t> metrics_dropped_frames;
-	std::atomic<double> metrics_uptime;
+	std::atomic<int64_t> metrics_num_frames{0};
+	std::atomic<int64_t> metrics_dropped_frames{0};
+	std::atomic<double> metrics_uptime{0.0};
 };
 
 extern Mixer *global_mixer;
