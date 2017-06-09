@@ -18,8 +18,8 @@ public:
 		TYPE_GAUGE,
 	};
 
-	void register_int_metric(const std::string &name, std::atomic<int64_t> *location, Type type = TYPE_COUNTER);
-	void register_double_metric(const std::string &name, std::atomic<double> *location, Type type = TYPE_COUNTER);
+	void add(const std::string &name, std::atomic<int64_t> *location, Type type = TYPE_COUNTER);
+	void add(const std::string &name, std::atomic<double> *location, Type type = TYPE_COUNTER);
 	std::string serialize() const;
 
 private:

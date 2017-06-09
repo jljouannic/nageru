@@ -200,9 +200,9 @@ void upload_texture(GLuint tex, GLuint width, GLuint height, GLuint stride, bool
 
 void QueueLengthPolicy::register_metrics(const string &card_name)
 {
-	global_metrics.register_int_metric("input_queue_length_frames{" + card_name + "}", &metric_input_queue_length_frames, Metrics::TYPE_GAUGE);
-	global_metrics.register_int_metric("input_queue_safe_length_frames{" + card_name + "}", &metric_input_queue_safe_length_frames, Metrics::TYPE_GAUGE);
-	global_metrics.register_int_metric("input_queue_duped_frames{" + card_name + "}", &metric_input_duped_frames);
+	global_metrics.add("input_queue_length_frames{" + card_name + "}", &metric_input_queue_length_frames, Metrics::TYPE_GAUGE);
+	global_metrics.add("input_queue_safe_length_frames{" + card_name + "}", &metric_input_queue_safe_length_frames, Metrics::TYPE_GAUGE);
+	global_metrics.add("input_queue_duped_frames{" + card_name + "}", &metric_input_duped_frames);
 }
 
 void QueueLengthPolicy::update_policy(unsigned queue_length)
@@ -402,9 +402,9 @@ Mixer::Mixer(const QSurfaceFormat &format, unsigned num_cards)
 		set_output_card_internal(global_flags.output_card);
 	}
 
-	global_metrics.register_int_metric("frames_output_total", &metric_frames_output_total);
-	global_metrics.register_int_metric("frames_output_dropped", &metric_frames_output_dropped);
-	global_metrics.register_double_metric("uptime_seconds", &metric_uptime_seconds);
+	global_metrics.add("frames_output_total", &metric_frames_output_total);
+	global_metrics.add("frames_output_dropped", &metric_frames_output_dropped);
+	global_metrics.add("uptime_seconds", &metric_uptime_seconds);
 }
 
 Mixer::~Mixer()
@@ -487,18 +487,18 @@ void Mixer::configure_card(unsigned card_index, CaptureInterface *capture, CardT
 		assert(false);
 	}
 	card->queue_length_policy.register_metrics(card_name);
-	global_metrics.register_int_metric(string("input_dropped_frames_jitter{") + card_name + "}", &card->metric_input_dropped_frames_jitter);
-	global_metrics.register_int_metric(string("input_dropped_frames_error{") + card_name + "}", &card->metric_input_dropped_frames_error);
-	global_metrics.register_int_metric(string("input_dropped_frames_resets{") + card_name + "}", &card->metric_input_resets);
+	global_metrics.add(string("input_dropped_frames_jitter{") + card_name + "}", &card->metric_input_dropped_frames_jitter);
+	global_metrics.add(string("input_dropped_frames_error{") + card_name + "}", &card->metric_input_dropped_frames_error);
+	global_metrics.add(string("input_dropped_frames_resets{") + card_name + "}", &card->metric_input_resets);
 
-	global_metrics.register_int_metric(string("input_has_signal_bool{") + card_name + "}", &card->metric_input_has_signal_bool, Metrics::TYPE_GAUGE);
-	global_metrics.register_int_metric(string("input_is_connected_bool{") + card_name + "}", &card->metric_input_is_connected_bool, Metrics::TYPE_GAUGE);
-	global_metrics.register_int_metric(string("input_interlaced_bool{") + card_name + "}", &card->metric_input_interlaced_bool, Metrics::TYPE_GAUGE);
-	global_metrics.register_int_metric(string("input_width_pixels{") + card_name + "}", &card->metric_input_width_pixels, Metrics::TYPE_GAUGE);
-	global_metrics.register_int_metric(string("input_height_pixels{") + card_name + "}", &card->metric_input_height_pixels, Metrics::TYPE_GAUGE);
-	global_metrics.register_int_metric(string("input_frame_rate_nom{") + card_name + "}", &card->metric_input_frame_rate_nom, Metrics::TYPE_GAUGE);
-	global_metrics.register_int_metric(string("input_frame_rate_den{") + card_name + "}", &card->metric_input_frame_rate_den, Metrics::TYPE_GAUGE);
-	global_metrics.register_int_metric(string("input_sample_rate_hz{") + card_name + "}", &card->metric_input_sample_rate_hz, Metrics::TYPE_GAUGE);
+	global_metrics.add(string("input_has_signal_bool{") + card_name + "}", &card->metric_input_has_signal_bool, Metrics::TYPE_GAUGE);
+	global_metrics.add(string("input_is_connected_bool{") + card_name + "}", &card->metric_input_is_connected_bool, Metrics::TYPE_GAUGE);
+	global_metrics.add(string("input_interlaced_bool{") + card_name + "}", &card->metric_input_interlaced_bool, Metrics::TYPE_GAUGE);
+	global_metrics.add(string("input_width_pixels{") + card_name + "}", &card->metric_input_width_pixels, Metrics::TYPE_GAUGE);
+	global_metrics.add(string("input_height_pixels{") + card_name + "}", &card->metric_input_height_pixels, Metrics::TYPE_GAUGE);
+	global_metrics.add(string("input_frame_rate_nom{") + card_name + "}", &card->metric_input_frame_rate_nom, Metrics::TYPE_GAUGE);
+	global_metrics.add(string("input_frame_rate_den{") + card_name + "}", &card->metric_input_frame_rate_den, Metrics::TYPE_GAUGE);
+	global_metrics.add(string("input_sample_rate_hz{") + card_name + "}", &card->metric_input_sample_rate_hz, Metrics::TYPE_GAUGE);
 }
 
 void Mixer::set_output_card_internal(int card_index)

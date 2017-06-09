@@ -22,7 +22,7 @@ using namespace std;
 
 HTTPD::HTTPD()
 {
-	global_metrics.register_int_metric("num_connected_clients", &metric_num_connected_clients, Metrics::TYPE_GAUGE);
+	global_metrics.add("num_connected_clients", &metric_num_connected_clients, Metrics::TYPE_GAUGE);
 }
 
 HTTPD::~HTTPD()
