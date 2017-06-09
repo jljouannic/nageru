@@ -198,8 +198,17 @@ void upload_texture(GLuint tex, GLuint width, GLuint height, GLuint stride, bool
 
 }  // namespace
 
+void QueueLengthPolicy::register_metrics(const string &card_name)
+{
+	global_metrics.register_int_metric("input_queue_length_frames{" + card_name + "}", &metric_input_queue_length_frames, Metrics::TYPE_GAUGE);
+	global_metrics.register_int_metric("input_queue_safe_length_frames{" + card_name + "}", &metric_input_queue_safe_length_frames, Metrics::TYPE_GAUGE);
+	global_metrics.register_int_metric("input_queue_duped_frames{" + card_name + "}", &metric_input_duped_frames);
+}
+
 void QueueLengthPolicy::update_policy(unsigned queue_length)
 {
+	metric_input_queue_length_frames = queue_length;
+
 	if (queue_length == 0) {  // Starvation.
 		if (been_at_safe_point_since_last_starvation && safe_queue_length < unsigned(global_flags.max_input_queue_frames)) {
 			++safe_queue_length;
@@ -208,6 +217,8 @@ void QueueLengthPolicy::update_policy(unsigned queue_length)
 		}
 		frames_with_at_least_one = 0;
 		been_at_safe_point_since_last_starvation = false;
+		++metric_input_duped_frames;
+		metric_input_queue_safe_length_frames = safe_queue_length;
 		return;
 	}
 	if (queue_length >= safe_queue_length) {
@@ -215,6 +226,7 @@ void QueueLengthPolicy::update_policy(unsigned queue_length)
 	}
 	if (++frames_with_at_least_one >= 1000 && safe_queue_length > 1) {
 		--safe_queue_length;
+		metric_input_queue_safe_length_frames = safe_queue_length;
 		fprintf(stderr, "Card %u: Spare frames for more than 1000 frames, reducing safe limit to %u frame(s)\n",
 			card_index, safe_queue_length);
 		frames_with_at_least_one = 0;
@@ -458,6 +470,35 @@ void Mixer::configure_card(unsigned card_index, CaptureInterface *capture, CardT
 	audio_mixer.reset_resampler(device);
 	audio_mixer.set_display_name(device, card->capture->get_description());
 	audio_mixer.trigger_state_changed_callback();
+
+	// Register metrics.
+	char card_name[64];
+	switch (card_type) {
+	case CardType::LIVE_CARD:
+		snprintf(card_name, sizeof(card_name), "card=\"%d\",cardtype=\"live\"", card_index);
+		break;
+	case CardType::FAKE_CAPTURE:
+		snprintf(card_name, sizeof(card_name), "card=\"%d\",cardtype=\"fake\"", card_index);
+		break;
+	case CardType::FFMPEG_INPUT:
+		snprintf(card_name, sizeof(card_name), "card=\"%d\",cardtype=\"ffmpeg\"", card_index);
+		break;
+	default:
+		assert(false);
+	}
+	card->queue_length_policy.register_metrics(card_name);
+	global_metrics.register_int_metric(string("input_dropped_frames_jitter{") + card_name + "}", &card->metric_input_dropped_frames_jitter);
+	global_metrics.register_int_metric(string("input_dropped_frames_error{") + card_name + "}", &card->metric_input_dropped_frames_error);
+	global_metrics.register_int_metric(string("input_dropped_frames_resets{") + card_name + "}", &card->metric_input_resets);
+
+	global_metrics.register_int_metric(string("input_has_signal_bool{") + card_name + "}", &card->metric_input_has_signal_bool, Metrics::TYPE_GAUGE);
+	global_metrics.register_int_metric(string("input_is_connected_bool{") + card_name + "}", &card->metric_input_is_connected_bool, Metrics::TYPE_GAUGE);
+	global_metrics.register_int_metric(string("input_interlaced_bool{") + card_name + "}", &card->metric_input_interlaced_bool, Metrics::TYPE_GAUGE);
+	global_metrics.register_int_metric(string("input_width_pixels{") + card_name + "}", &card->metric_input_width_pixels, Metrics::TYPE_GAUGE);
+	global_metrics.register_int_metric(string("input_height_pixels{") + card_name + "}", &card->metric_input_height_pixels, Metrics::TYPE_GAUGE);
+	global_metrics.register_int_metric(string("input_frame_rate_nom{") + card_name + "}", &card->metric_input_frame_rate_nom, Metrics::TYPE_GAUGE);
+	global_metrics.register_int_metric(string("input_frame_rate_den{") + card_name + "}", &card->metric_input_frame_rate_den, Metrics::TYPE_GAUGE);
+	global_metrics.register_int_metric(string("input_sample_rate_hz{") + card_name + "}", &card->metric_input_sample_rate_hz, Metrics::TYPE_GAUGE);
 }
 
 void Mixer::set_output_card_internal(int card_index)
@@ -523,6 +564,15 @@ void Mixer::bm_frame(unsigned card_index, uint16_t timecode,
 	DeviceSpec device{InputSourceType::CAPTURE_CARD, card_index};
 	CaptureCard *card = &cards[card_index];
 
+	card->metric_input_has_signal_bool = video_format.has_signal;
+	card->metric_input_is_connected_bool = video_format.is_connected;
+	card->metric_input_interlaced_bool = video_format.interlaced;
+	card->metric_input_width_pixels = video_format.width;
+	card->metric_input_height_pixels = video_format.height;
+	card->metric_input_frame_rate_nom = video_format.frame_rate_nom;
+	card->metric_input_frame_rate_den = video_format.frame_rate_den;
+	card->metric_input_sample_rate_hz = audio_format.sample_rate;
+
 	if (is_mode_scanning[card_index]) {
 		if (video_format.has_signal) {
 			// Found a stable signal, so stop scanning.
@@ -572,10 +622,12 @@ void Mixer::bm_frame(unsigned card_index, uint16_t timecode,
 			card_index, card->last_timecode, timecode);
 		audio_mixer.reset_resampler(device);
 		dropped_frames = 0;
+		++card->metric_input_resets;
 	} else if (dropped_frames > 0) {
 		// Insert silence as needed.
 		fprintf(stderr, "Card %d dropped %d frame(s) (before timecode 0x%04x), inserting silence.\n",
 			card_index, dropped_frames, timecode);
+		card->metric_input_dropped_frames_error += dropped_frames;
 
 		bool success;
 		do {
@@ -983,6 +1035,8 @@ void Mixer::trim_queue(CaptureCard *card, unsigned card_index)
 		--queue_length;
 		++dropped_frames;
 	}
+
+	card->metric_input_dropped_frames_jitter += dropped_frames;
 
 #if 0
 	if (dropped_frames > 0) {

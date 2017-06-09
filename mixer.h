@@ -88,6 +88,8 @@ public:
 		been_at_safe_point_since_last_starvation = false;
 	}
 
+	void register_metrics(const std::string &card_name);
+
 	void update_policy(unsigned queue_length);  // Call before picking out a frame, so 0 means starvation.
 	unsigned get_safe_queue_length() const { return safe_queue_length; }
 
@@ -96,6 +98,11 @@ private:
 	unsigned safe_queue_length = 1;  // Called N in the comments. Can never go below 1.
 	unsigned frames_with_at_least_one = 0;
 	bool been_at_safe_point_since_last_starvation = false;
+
+	// Metrics.
+	std::atomic<int64_t> metric_input_queue_length_frames{0};
+	std::atomic<int64_t> metric_input_queue_safe_length_frames{1};
+	std::atomic<int64_t> metric_input_duped_frames{0};
 };
 
 class Mixer {
@@ -446,6 +453,20 @@ private:
 		QueueLengthPolicy queue_length_policy;  // Refers to the "new_frames" queue.
 
 		int last_timecode = -1;  // Unwrapped.
+
+		// Metrics.
+		std::atomic<int64_t> metric_input_dropped_frames_jitter{0};
+		std::atomic<int64_t> metric_input_dropped_frames_error{0};
+		std::atomic<int64_t> metric_input_resets{0};
+
+		std::atomic<int64_t> metric_input_has_signal_bool{-1};
+		std::atomic<int64_t> metric_input_is_connected_bool{-1};
+		std::atomic<int64_t> metric_input_interlaced_bool{-1};
+		std::atomic<int64_t> metric_input_width_pixels{-1};
+		std::atomic<int64_t> metric_input_height_pixels{-1};
+		std::atomic<int64_t> metric_input_frame_rate_nom{-1};
+		std::atomic<int64_t> metric_input_frame_rate_den{-1};
+		std::atomic<int64_t> metric_input_sample_rate_hz{-1};
 	};
 	CaptureCard cards[MAX_VIDEO_CARDS];  // Protected by <card_mutex>.
 	YCbCrInterpretation ycbcr_interpretation[MAX_VIDEO_CARDS];  // Protected by <card_mutex>.
