@@ -88,7 +88,7 @@ public:
 		been_at_safe_point_since_last_starvation = false;
 	}
 
-	void register_metrics(const std::string &card_name);
+	void register_metrics(const std::vector<std::pair<std::string, std::string>> &labels);
 
 	void update_policy(unsigned queue_length);  // Call before picking out a frame, so 0 means starvation.
 	unsigned get_safe_queue_length() const { return safe_queue_length; }

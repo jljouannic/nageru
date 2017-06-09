@@ -9,7 +9,8 @@
 #include <atomic>
 #include <mutex>
 #include <string>
-#include <unordered_map>
+#include <map>
+#include <vector>
 
 class Metrics {
 public:
@@ -18,20 +19,40 @@ public:
 		TYPE_GAUGE,
 	};
 
-	void add(const std::string &name, std::atomic<int64_t> *location, Type type = TYPE_COUNTER);
-	void add(const std::string &name, std::atomic<double> *location, Type type = TYPE_COUNTER);
+	void add(const std::string &name, std::atomic<int64_t> *location, Type type = TYPE_COUNTER)
+	{
+		add(name, {}, location, type);
+	}
+
+	void add(const std::string &name, std::atomic<double> *location, Type type = TYPE_COUNTER)
+	{
+		add(name, {}, location, type);
+	}
+
+	void add(const std::string &name, const std::vector<std::pair<std::string, std::string>> &labels, std::atomic<int64_t> *location, Type type = TYPE_COUNTER);
+	void add(const std::string &name, const std::vector<std::pair<std::string, std::string>> &labels, std::atomic<double> *location, Type type = TYPE_COUNTER);
+
 	std::string serialize() const;
 
 private:
-	template<class T>
+	enum DataType {
+		DATA_TYPE_INT64,
+		DATA_TYPE_DOUBLE,
+	};
+
 	struct Metric {
-		Type type;
-		std::atomic<T> *location;
+		DataType data_type;
+		std::string name;
+		std::vector<std::pair<std::string, std::string>> labels;
+		union {
+			std::atomic<int64_t> *location_int64;
+			std::atomic<double> *location_double;
+		};
 	};
 
 	mutable std::mutex mu;
-	std::unordered_map<std::string, Metric<int64_t>> int_metrics;
-	std::unordered_map<std::string, Metric<double>> double_metrics;
+	std::map<std::string, Type> types;
+	std::vector<Metric> metrics;
 };
 
 extern Metrics global_metrics;
