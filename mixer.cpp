@@ -390,9 +390,9 @@ Mixer::Mixer(const QSurfaceFormat &format, unsigned num_cards)
 		set_output_card_internal(global_flags.output_card);
 	}
 
-	global_metrics.register_int_metric("num_frames", &metrics_num_frames);
-	global_metrics.register_int_metric("dropped_frames", &metrics_dropped_frames);
-	global_metrics.register_double_metric("uptime", &metrics_uptime);
+	global_metrics.register_int_metric("frames_output_total", &metric_frames_output_total);
+	global_metrics.register_int_metric("frames_output_dropped", &metric_frames_output_dropped);
+	global_metrics.register_double_metric("uptime_seconds", &metric_uptime_seconds);
 }
 
 Mixer::~Mixer()
@@ -877,9 +877,9 @@ void Mixer::thread_func()
 		now = steady_clock::now();
 		double elapsed = duration<double>(now - start).count();
 
-		metrics_num_frames = frame_num;
-		metrics_dropped_frames = stats_dropped_frames;
-		metrics_uptime = elapsed;
+		metric_frames_output_total = frame_num;
+		metric_frames_output_dropped = stats_dropped_frames;
+		metric_uptime_seconds = elapsed;
 
 		if (frame_num % 100 == 0) {
 			printf("%d frames (%d dropped) in %.3f seconds = %.1f fps (%.1f ms/frame)",
