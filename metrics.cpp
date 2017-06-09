@@ -23,8 +23,6 @@ string Metrics::serialize() const
 {
 	stringstream ss;
 	ss.imbue(locale("C"));
-	ss.precision(20);
-	ss << scientific;
 
 	lock_guard<mutex> lock(mu);
 	for (const auto &key_and_value : int_metrics) {
@@ -33,6 +31,9 @@ string Metrics::serialize() const
 		}
 		ss << "nageru_" << key_and_value.first << " " << key_and_value.second.location->load() << "\n";
 	}
+
+	ss.precision(20);
+	ss << scientific;
 	for (const auto &key_and_value : double_metrics) {
 		if (key_and_value.second.type == TYPE_GAUGE) {
 			ss << "# TYPE nageru_" << key_and_value.first << " gauge\n";
