@@ -67,9 +67,9 @@ string Metrics::serialize() const
 		}
 
 		if (metric.data_type == DATA_TYPE_INT64) {
-			ss << "nageru_" << name << " " << metric.location_int64->load() << "\n";
+			ss << name << " " << metric.location_int64->load() << "\n";
 		} else {
-			ss << "nageru_" << name << " " << metric.location_double->load() << "\n";
+			ss << name << " " << metric.location_double->load() << "\n";
 		}
 	}
 
