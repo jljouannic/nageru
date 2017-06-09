@@ -405,6 +405,8 @@ Mixer::Mixer(const QSurfaceFormat &format, unsigned num_cards)
 	global_metrics.add("frames_output_total", &metric_frames_output_total);
 	global_metrics.add("frames_output_dropped", &metric_frames_output_dropped);
 	global_metrics.add("uptime_seconds", &metric_uptime_seconds);
+	global_metrics.add("memory_used_bytes", &metrics_memory_used_bytes);
+	global_metrics.add("metrics_memory_locked_limit_bytes", &metrics_memory_locked_limit_bytes);
 }
 
 Mixer::~Mixer()
@@ -967,12 +969,16 @@ void Mixer::thread_func()
 						long(limit.rlim_cur / 1048576),
 						float(100.0 * (used.ru_maxrss * 1024.0) / limit.rlim_cur));
 				}
+				metrics_memory_locked_limit_bytes = limit.rlim_cur;
 			} else {
 				printf(", using %ld MB memory (not locked)",
 					long(used.ru_maxrss / 1024));
+				metrics_memory_locked_limit_bytes = 0.0 / 0.0;
 			}
 
 			printf("\n");
+
+			metrics_memory_used_bytes = used.ru_maxrss;
 		}
 
 

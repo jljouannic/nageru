@@ -544,6 +544,8 @@ private:
 	std::atomic<int64_t> metric_frames_output_total{0};
 	std::atomic<int64_t> metric_frames_output_dropped{0};
 	std::atomic<double> metric_uptime_seconds{0.0};
+	std::atomic<int64_t> metrics_memory_used_bytes{0};
+	std::atomic<double> metrics_memory_locked_limit_bytes{0.0 / 0.0};
 };
 
 extern Mixer *global_mixer;
