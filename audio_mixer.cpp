@@ -214,13 +214,13 @@ AudioMixer::AudioMixer(unsigned num_cards)
 		}
 	}
 
-	global_metrics.register_double_metric("audio_loudness_short_lufs", &metric_audio_loudness_short_lufs);
-	global_metrics.register_double_metric("audio_loudness_integrated_lufs", &metric_audio_loudness_integrated_lufs);
-	global_metrics.register_double_metric("audio_loudness_range_low_lufs", &metric_audio_loudness_range_low_lufs);
-	global_metrics.register_double_metric("audio_loudness_range_high_lufs", &metric_audio_loudness_range_high_lufs);
-	global_metrics.register_double_metric("audio_peak_dbfs", &metric_audio_peak_dbfs);
-	global_metrics.register_double_metric("audio_final_makeup_gain_db", &metric_audio_final_makeup_gain_db);
-	global_metrics.register_double_metric("audio_correlation", &metric_audio_correlation);
+	global_metrics.register_double_metric("audio_loudness_short_lufs", &metric_audio_loudness_short_lufs, Metrics::TYPE_GAUGE);
+	global_metrics.register_double_metric("audio_loudness_integrated_lufs", &metric_audio_loudness_integrated_lufs, Metrics::TYPE_GAUGE);
+	global_metrics.register_double_metric("audio_loudness_range_low_lufs", &metric_audio_loudness_range_low_lufs, Metrics::TYPE_GAUGE);
+	global_metrics.register_double_metric("audio_loudness_range_high_lufs", &metric_audio_loudness_range_high_lufs, Metrics::TYPE_GAUGE);
+	global_metrics.register_double_metric("audio_peak_dbfs", &metric_audio_peak_dbfs, Metrics::TYPE_GAUGE);
+	global_metrics.register_double_metric("audio_final_makeup_gain_db", &metric_audio_final_makeup_gain_db, Metrics::TYPE_GAUGE);
+	global_metrics.register_double_metric("audio_correlation", &metric_audio_correlation, Metrics::TYPE_GAUGE);
 }
 
 void AudioMixer::reset_resampler(DeviceSpec device_spec)

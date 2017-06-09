@@ -13,14 +13,25 @@
 
 class Metrics {
 public:
-	void register_int_metric(const std::string &name, std::atomic<int64_t> *location);
-	void register_double_metric(const std::string &name, std::atomic<double> *location);
+	enum Type {
+		TYPE_COUNTER,
+		TYPE_GAUGE,
+	};
+
+	void register_int_metric(const std::string &name, std::atomic<int64_t> *location, Type type = TYPE_COUNTER);
+	void register_double_metric(const std::string &name, std::atomic<double> *location, Type type = TYPE_COUNTER);
 	std::string serialize() const;
 
 private:
+	template<class T>
+	struct Metric {
+		Type type;
+		std::atomic<T> *location;
+	};
+
 	mutable std::mutex mu;
-	std::unordered_map<std::string, std::atomic<int64_t> *> int_metrics;
-	std::unordered_map<std::string, std::atomic<double> *> double_metrics;
+	std::unordered_map<std::string, Metric<int64_t>> int_metrics;
+	std::unordered_map<std::string, Metric<double>> double_metrics;
 };
 
 extern Metrics global_metrics;
