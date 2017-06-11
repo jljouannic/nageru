@@ -18,11 +18,62 @@ using namespace movit;
 using namespace std;
 using namespace std::chrono;
 
+namespace {
+
+// This class can be deleted during regular use, so make all the metrics static.
+bool metrics_inited = false;
+LatencyHistogram latency_histogram;
+atomic<int64_t> metric_decklink_output_width_pixels{-1};
+atomic<int64_t> metric_decklink_output_height_pixels{-1};
+atomic<int64_t> metric_decklink_output_frame_rate_den{-1};
+atomic<int64_t> metric_decklink_output_frame_rate_nom{-1};
+atomic<int64_t> metric_decklink_output_inflight_frames{0};
+atomic<int64_t> metric_decklink_output_color_mismatch_frames{0};
+
+atomic<int64_t> metric_decklink_output_scheduled_frames_dropped{0};
+atomic<int64_t> metric_decklink_output_scheduled_frames_late{0};
+atomic<int64_t> metric_decklink_output_scheduled_frames_normal{0};
+atomic<int64_t> metric_decklink_output_scheduled_frames_preroll{0};
+
+atomic<int64_t> metric_decklink_output_completed_frames_completed{0};
+atomic<int64_t> metric_decklink_output_completed_frames_dropped{0};
+atomic<int64_t> metric_decklink_output_completed_frames_flushed{0};
+atomic<int64_t> metric_decklink_output_completed_frames_late{0};
+atomic<int64_t> metric_decklink_output_completed_frames_unknown{0};
+
+atomic<int64_t> metric_decklink_output_scheduled_samples{0};
+
+}  // namespace
+
 DeckLinkOutput::DeckLinkOutput(ResourcePool *resource_pool, QSurface *surface, unsigned width, unsigned height, unsigned card_index)
 	: resource_pool(resource_pool), surface(surface), width(width), height(height), card_index(card_index)
 {
 	chroma_subsampler.reset(new ChromaSubsampler(resource_pool));
-	latency_histogram.init("decklink_output");
+
+	if (!metrics_inited) {
+		latency_histogram.init("decklink_output");
+		global_metrics.add("decklink_output_width_pixels", &metric_decklink_output_width_pixels, Metrics::TYPE_GAUGE);
+		global_metrics.add("decklink_output_height_pixels", &metric_decklink_output_height_pixels, Metrics::TYPE_GAUGE);
+		global_metrics.add("decklink_output_frame_rate_den", &metric_decklink_output_frame_rate_den, Metrics::TYPE_GAUGE);
+		global_metrics.add("decklink_output_frame_rate_nom", &metric_decklink_output_frame_rate_nom, Metrics::TYPE_GAUGE);
+		global_metrics.add("decklink_output_inflight_frames", &metric_decklink_output_inflight_frames, Metrics::TYPE_GAUGE);
+		global_metrics.add("decklink_output_color_mismatch_frames", &metric_decklink_output_color_mismatch_frames);
+
+		global_metrics.add("decklink_output_scheduled_frames", {{ "status", "dropped" }}, &metric_decklink_output_scheduled_frames_dropped);
+		global_metrics.add("decklink_output_scheduled_frames", {{ "status", "late" }}, &metric_decklink_output_scheduled_frames_late);
+		global_metrics.add("decklink_output_scheduled_frames", {{ "status", "normal" }}, &metric_decklink_output_scheduled_frames_normal);
+		global_metrics.add("decklink_output_scheduled_frames", {{ "status", "preroll" }}, &metric_decklink_output_scheduled_frames_preroll);
+
+		global_metrics.add("decklink_output_completed_frames", {{ "status", "completed" }}, &metric_decklink_output_completed_frames_completed);
+		global_metrics.add("decklink_output_completed_frames", {{ "status", "dropped" }}, &metric_decklink_output_completed_frames_dropped);
+		global_metrics.add("decklink_output_completed_frames", {{ "status", "flushed" }}, &metric_decklink_output_completed_frames_flushed);
+		global_metrics.add("decklink_output_completed_frames", {{ "status", "late" }}, &metric_decklink_output_completed_frames_late);
+		global_metrics.add("decklink_output_completed_frames", {{ "status", "unknown" }}, &metric_decklink_output_completed_frames_unknown);
+
+		global_metrics.add("decklink_output_scheduled_samples", &metric_decklink_output_scheduled_samples);
+
+		metrics_inited = true;
+	}
 }
 
 void DeckLinkOutput::set_device(IDeckLink *decklink)
@@ -124,6 +175,11 @@ void DeckLinkOutput::start_output(uint32_t mode, int64_t base_pts)
 		exit(1);
 	}
 
+	metric_decklink_output_width_pixels = width;
+	metric_decklink_output_height_pixels = height;
+	metric_decklink_output_frame_rate_nom = time_value;
+	metric_decklink_output_frame_rate_den = time_scale;
+
 	frame_duration = time_value * TIMEBASE / time_scale;
 
 	display_mode->Release();
@@ -195,12 +251,14 @@ void DeckLinkOutput::send_frame(GLuint y_tex, GLuint cbcr_tex, YCbCrLumaCoeffici
 			fprintf(stderr, "         Consider --output-ycbcr-coefficients=rec601 (or =auto).\n");
 		}
 		last_frame_had_mode_mismatch = true;
+		++metric_decklink_output_color_mismatch_frames;
 	} else if ((current_mode_flags & bmdDisplayModeColorspaceRec709) && output_ycbcr_coefficients == YCBCR_REC_601) {
 		if (!last_frame_had_mode_mismatch) {
 			fprintf(stderr, "WARNING: Chosen output mode expects Rec. 709 Y'CbCr coefficients.\n");
 			fprintf(stderr, "         Consider --output-ycbcr-coefficients=rec709 (or =auto).\n");
 		}
 		last_frame_had_mode_mismatch = true;
+		++metric_decklink_output_color_mismatch_frames;
 	} else {
 		last_frame_had_mode_mismatch = false;
 	}
@@ -273,6 +331,7 @@ void DeckLinkOutput::send_audio(int64_t pts, const std::vector<float> &samples)
 			fprintf(stderr, "ScheduleAudioSamples() returned short write (%u/%ld)\n", frames_written, samples.size() / 2);
 		}
 	}
+	metric_decklink_output_scheduled_samples += samples.size() / 2;
 }
 
 void DeckLinkOutput::wait_for_frame(int64_t pts, int *dropped_frames, int64_t *frame_duration, bool *is_preroll, steady_clock::time_point *frame_timestamp)
@@ -289,6 +348,7 @@ void DeckLinkOutput::wait_for_frame(int64_t pts, int *dropped_frames, int64_t *f
 	// While prerolling, we send out frames as quickly as we can.
 	if (target_time < base_pts) {
 		*is_preroll = true;
+		++metric_decklink_output_scheduled_frames_preroll;
 		return;
 	}
 
@@ -316,6 +376,7 @@ void DeckLinkOutput::wait_for_frame(int64_t pts, int *dropped_frames, int64_t *f
 	// If we're ahead of time, wait for the frame to (approximately) start.
 	if (stream_frame_time < target_time) {
 		should_quit.sleep_until(*frame_timestamp);
+		++metric_decklink_output_scheduled_frames_normal;
 		return;
 	}
 
@@ -324,6 +385,7 @@ void DeckLinkOutput::wait_for_frame(int64_t pts, int *dropped_frames, int64_t *f
 	if (stream_frame_time < target_time + max_overshoot) {
 		fprintf(stderr, "Warning: Frame was %ld ms late (but not skipping it due to --output-slop-frames).\n",
 			lrint((stream_frame_time - target_time) * 1000.0 / TIMEBASE));
+		++metric_decklink_output_scheduled_frames_late;
 		return;
 	}
 
@@ -333,6 +395,8 @@ void DeckLinkOutput::wait_for_frame(int64_t pts, int *dropped_frames, int64_t *f
 	const int64_t ns_per_frame = this->frame_duration * 1000000000 / TIMEBASE;
 	*frame_timestamp += nanoseconds(*dropped_frames * ns_per_frame);
 	fprintf(stderr, "Dropped %d output frames; skipping.\n", *dropped_frames);
+	metric_decklink_output_scheduled_frames_dropped += *dropped_frames;
+	++metric_decklink_output_scheduled_frames_normal;
 }
 
 uint32_t DeckLinkOutput::pick_video_mode(uint32_t mode) const
@@ -378,20 +442,25 @@ HRESULT DeckLinkOutput::ScheduledFrameCompleted(/* in */ IDeckLinkVideoFrame *co
 	Frame *frame = static_cast<Frame *>(completedFrame);
 	switch (result) {
 	case bmdOutputFrameCompleted:
+		++metric_decklink_output_completed_frames_completed;
 		break;
 	case bmdOutputFrameDisplayedLate:
 		fprintf(stderr, "Output frame displayed late (pts=%ld)\n", frame->pts);
 		fprintf(stderr, "Consider increasing --output-buffer-frames if this persists.\n");
+		++metric_decklink_output_completed_frames_late;
 		break;
 	case bmdOutputFrameDropped:
 		fprintf(stderr, "Output frame was dropped (pts=%ld)\n", frame->pts);
 		fprintf(stderr, "Consider increasing --output-buffer-frames if this persists.\n");
+		++metric_decklink_output_completed_frames_dropped;
 		break;
 	case bmdOutputFrameFlushed:
 		fprintf(stderr, "Output frame was flushed (pts=%ld)\n", frame->pts);
+		++metric_decklink_output_completed_frames_flushed;
 		break;
 	default:
 		fprintf(stderr, "Output frame completed with unknown status %d\n", result);
+		++metric_decklink_output_completed_frames_unknown;
 		break;
 	}
 
@@ -402,6 +471,7 @@ HRESULT DeckLinkOutput::ScheduledFrameCompleted(/* in */ IDeckLinkVideoFrame *co
 		lock_guard<mutex> lock(frame_queue_mutex);
 		frame_freelist.push(unique_ptr<Frame>(frame));
 		--num_frames_in_flight;
+		--metric_decklink_output_inflight_frames;
 	}
 
 	return S_OK;
@@ -471,6 +541,7 @@ void DeckLinkOutput::present_thread_func()
 			frame = move(pending_video_frames.front());
 			pending_video_frames.pop();
 			++num_frames_in_flight;
+			++metric_decklink_output_inflight_frames;
 		}
 
 		glClientWaitSync(frame->fence.get(), /*flags=*/0, GL_TIMEOUT_IGNORED);
@@ -497,6 +568,7 @@ void DeckLinkOutput::present_thread_func()
 			lock_guard<mutex> lock(frame_queue_mutex);
 			frame_freelist.push(move(frame));
 			--num_frames_in_flight;
+			--metric_decklink_output_inflight_frames;
 		}
 	}
 }

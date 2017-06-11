@@ -150,8 +150,6 @@ private:
 	GLuint uyvy_vbo;  // Holds position and texcoord data.
 	GLuint uyvy_program_num;  // Owned by <resource_pool>.
 	GLuint uyvy_position_attribute_index, uyvy_texcoord_attribute_index;
-
-	LatencyHistogram latency_histogram;
 };
 
 #endif  // !defined(_DECKLINK_OUTPUT_H)
