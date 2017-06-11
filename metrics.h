@@ -7,16 +7,20 @@
 // which makes it quite unwieldy. Thus, we'll package our own for the time being.
 
 #include <atomic>
+#include <map>
+#include <memory>
 #include <mutex>
 #include <string>
-#include <map>
 #include <vector>
+
+class Histogram;
 
 class Metrics {
 public:
 	enum Type {
 		TYPE_COUNTER,
 		TYPE_GAUGE,
+		TYPE_HISTOGRAM,  // Internal use only.
 	};
 
 	void add(const std::string &name, std::atomic<int64_t> *location, Type type = TYPE_COUNTER)
@@ -29,11 +33,14 @@ public:
 		add(name, {}, location, type);
 	}
 
+	void add(const std::string &name, Histogram *location)
+	{
+		add(name, {}, location);
+	}
+
 	void add(const std::string &name, const std::vector<std::pair<std::string, std::string>> &labels, std::atomic<int64_t> *location, Type type = TYPE_COUNTER);
 	void add(const std::string &name, const std::vector<std::pair<std::string, std::string>> &labels, std::atomic<double> *location, Type type = TYPE_COUNTER);
-
-	// Only integer histogram, ie. keys are 0..(N-1).
-	void add_histogram(const std::string &name, const std::vector<std::pair<std::string, std::string>> &labels, std::atomic<int64_t> *first_bucket_location, std::atomic<double> *sum_location, size_t num_elements);
+	void add(const std::string &name, const std::vector<std::pair<std::string, std::string>> &labels, Histogram *location);
 
 	std::string serialize() const;
 
@@ -41,6 +48,7 @@ private:
 	enum DataType {
 		DATA_TYPE_INT64,
 		DATA_TYPE_DOUBLE,
+		DATA_TYPE_HISTOGRAM,
 	};
 
 	struct Metric {
@@ -50,22 +58,35 @@ private:
 		union {
 			std::atomic<int64_t> *location_int64;
 			std::atomic<double> *location_double;
+			Histogram *location_histogram;
 		};
-	};
-
-	// TODO: This needs to be more general.
-	struct Histogram {
-		std::string name;
-		std::vector<std::pair<std::string, std::string>> labels;
-		std::atomic<int64_t> *first_bucket_location;
-		std::atomic<double> *sum_location;
-		size_t num_elements;
 	};
 
 	mutable std::mutex mu;
 	std::map<std::string, Type> types;
 	std::vector<Metric> metrics;
 	std::vector<Histogram> histograms;
+};
+
+class Histogram {
+public:
+	void init(const std::vector<double> &bucket_vals);
+	void init_uniform(size_t num_buckets);  // Sets up buckets 0..(N-1).
+	void count_event(double val);
+	std::string serialize(const std::string &name, const std::vector<std::pair<std::string, std::string>> &labels) const;
+
+private:
+	// Bucket <i> counts number of events where val[i - 1] < x <= val[i].
+	// The end histogram ends up being made into a cumulative one,
+	// but that's not how we store it here.
+	struct Bucket {
+		double val;
+		std::atomic<int64_t> count{0};
+	};
+	std::unique_ptr<Bucket[]> buckets;
+	size_t num_buckets;
+	std::atomic<double> sum{0.0};
+	std::atomic<int64_t> count_after_last_bucket{0};
 };
 
 extern Metrics global_metrics;

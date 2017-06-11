@@ -2,6 +2,7 @@
 
 #include <assert.h>
 
+#include <algorithm>
 #include <locale>
 #include <sstream>
 
@@ -57,17 +58,18 @@ void Metrics::add(const string &name, const vector<pair<string, string>> &labels
 	types[name] = type;
 }
 
-void Metrics::add_histogram(const string &name, const vector<pair<string, string>> &labels, atomic<int64_t> *first_bucket_location, atomic<double> *sum_location, size_t num_elements)
+void Metrics::add(const string &name, const vector<pair<string, string>> &labels, Histogram *location)
 {
-	Histogram histogram;
-	histogram.name = name;
-	histogram.labels = labels;
-	histogram.first_bucket_location = first_bucket_location;
-	histogram.sum_location = sum_location;
-	histogram.num_elements = num_elements;
+	Metric metric;
+	metric.data_type = DATA_TYPE_HISTOGRAM;
+	metric.name = name;
+	metric.labels = labels;
+	metric.location_histogram = location;
 
 	lock_guard<mutex> lock(mu);
-	histograms.push_back(histogram);
+	metrics.push_back(metric);
+	assert(types.count(name) == 0 || types[name] == TYPE_HISTOGRAM);
+	types[name] = TYPE_HISTOGRAM;
 }
 
 string Metrics::serialize() const
@@ -80,6 +82,8 @@ string Metrics::serialize() const
 	for (const auto &name_and_type : types) {
 		if (name_and_type.second == TYPE_GAUGE) {
 			ss << "# TYPE nageru_" << name_and_type.first << " gauge\n";
+		} else if (name_and_type.second == TYPE_HISTOGRAM) {
+			ss << "# TYPE nageru_" << name_and_type.first << " histogram\n";
 		}
 	}
 	for (const Metric &metric : metrics) {
@@ -87,28 +91,72 @@ string Metrics::serialize() const
 
 		if (metric.data_type == DATA_TYPE_INT64) {
 			ss << name << " " << metric.location_int64->load() << "\n";
-		} else {
+		} else if (metric.data_type == DATA_TYPE_DOUBLE) {
 			ss << name << " " << metric.location_double->load() << "\n";
+		} else {
+			ss << metric.location_histogram->serialize(metric.name, metric.labels);
 		}
 	}
-	for (const Histogram &histogram : histograms) {
-		ss << "# TYPE nageru_" << histogram.name << " histogram\n";
 
-		int64_t count = 0;
-		for (size_t i = 0; i < histogram.num_elements; ++i) {
-			char buf[16];
-			snprintf(buf, sizeof(buf), "%lu", i);
-			vector<pair<string, string>> labels = histogram.labels;
-			labels.emplace_back("le", buf);
+	return ss.str();
+}
 
-			int64_t val = histogram.first_bucket_location[i].load();
-			count += val;
-			ss << serialize_name(histogram.name + "_bucket", labels) << " " << count << "\n";
-		}
-
-		ss << serialize_name(histogram.name + "_sum", histogram.labels) << " " << histogram.sum_location->load() << "\n";
-		ss << serialize_name(histogram.name + "_count", histogram.labels) << " " << count << "\n";
+void Histogram::init(const vector<double> &bucket_vals)
+{
+	this->num_buckets = bucket_vals.size();
+	buckets.reset(new Bucket[num_buckets]);
+	for (size_t i = 0; i < num_buckets; ++i) {
+		buckets[i].val = bucket_vals[i];
 	}
+}
+
+void Histogram::init_uniform(size_t num_buckets)
+{
+	this->num_buckets = num_buckets;
+	buckets.reset(new Bucket[num_buckets]);
+	for (size_t i = 0; i < num_buckets; ++i) {
+		buckets[i].val = i;
+	}
+}
+
+void Histogram::count_event(double val)
+{
+	Bucket ref_bucket;
+	ref_bucket.val = val;
+	auto it = lower_bound(buckets.get(), buckets.get() + num_buckets, ref_bucket,
+		[](const Bucket &a, const Bucket &b) { return a.val < b.val; });
+	if (it == buckets.get() + num_buckets) {
+		++count_after_last_bucket;
+	} else {
+		++it->count;
+	}
+	// Non-atomic add, but that's fine, since there are no concurrent writers.
+	sum = sum + val;
+}
+
+string Histogram::serialize(const string &name, const vector<pair<string, string>> &labels) const
+{
+	stringstream ss;
+	ss.imbue(locale("C"));
+	ss.precision(20);
+
+	int64_t count = 0;
+	for (size_t bucket_idx = 0; bucket_idx < num_buckets; ++bucket_idx) {
+		stringstream le_ss;
+		le_ss.imbue(locale("C"));
+		le_ss.precision(20);
+		le_ss << buckets[bucket_idx].val;
+		vector<pair<string, string>> bucket_labels = labels;
+		bucket_labels.emplace_back("le", le_ss.str());
+
+		count += buckets[bucket_idx].count.load();
+		ss << serialize_name(name + "_bucket", bucket_labels) << " " << count << "\n";
+	}
+
+	count += count_after_last_bucket.load();
+
+	ss << serialize_name(name + "_sum", labels) << " " << sum.load() << "\n";
+	ss << serialize_name(name + "_count", labels) << " " << count << "\n";
 
 	return ss.str();
 }

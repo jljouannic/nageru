@@ -52,9 +52,8 @@ extern "C" {
 #include <x264.h>
 }
 
+#include "metrics.h"
 #include "x264_dynamic.h"
-
-#define SC_PRESETS 26
 
 class X264SpeedControl {
 public:
@@ -132,8 +131,7 @@ private:
 	std::function<void(x264_param_t *)> override_func = nullptr;
 
 	// Metrics.
-	std::atomic<int64_t> metric_x264_speedcontrol_preset_used_frames[SC_PRESETS]{{0}};
-	std::atomic<double> metric_x264_speedcontrol_preset_used_frames_sum{0.0};
+	Histogram metric_x264_speedcontrol_preset_used_frames;
 	std::atomic<double> metric_x264_speedcontrol_buffer_available_seconds{0.0};
 	std::atomic<double> metric_x264_speedcontrol_buffer_size_seconds{0.0};
 	std::atomic<int64_t> metric_x264_speedcontrol_idle_frames{0};
