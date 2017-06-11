@@ -44,6 +44,7 @@
 // some cleanup, but it's much, much better than just using a static preset.
 
 #include <stdint.h>
+#include <atomic>
 #include <chrono>
 #include <functional>
 
@@ -52,6 +53,8 @@ extern "C" {
 }
 
 #include "x264_dynamic.h"
+
+#define SC_PRESETS 26
 
 class X264SpeedControl {
 public:
@@ -127,4 +130,11 @@ private:
 	} stat;
 
 	std::function<void(x264_param_t *)> override_func = nullptr;
+
+	// Metrics.
+	std::atomic<int64_t> metric_x264_speedcontrol_preset_used_frames[SC_PRESETS]{{0}};
+	std::atomic<double> metric_x264_speedcontrol_buffer_available_seconds{0.0};
+	std::atomic<double> metric_x264_speedcontrol_buffer_size_seconds{0.0};
+	std::atomic<int64_t> metric_x264_speedcontrol_idle_frames{0};
+	std::atomic<int64_t> metric_x264_speedcontrol_late_frames{0};
 };

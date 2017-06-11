@@ -32,6 +32,9 @@ public:
 	void add(const std::string &name, const std::vector<std::pair<std::string, std::string>> &labels, std::atomic<int64_t> *location, Type type = TYPE_COUNTER);
 	void add(const std::string &name, const std::vector<std::pair<std::string, std::string>> &labels, std::atomic<double> *location, Type type = TYPE_COUNTER);
 
+	// Only integer histogram, ie. keys are 0..(N-1).
+	void add_histogram(const std::string &name, const std::vector<std::pair<std::string, std::string>> &labels, std::atomic<int64_t> *location, size_t num_elements);
+
 	std::string serialize() const;
 
 private:
@@ -50,9 +53,18 @@ private:
 		};
 	};
 
+	// TODO: This needs to be more general.
+	struct Histogram {
+		std::string name;
+		std::vector<std::pair<std::string, std::string>> labels;
+		std::atomic<int64_t> *location_int64;  // First bucket.
+		size_t num_elements;
+	};
+
 	mutable std::mutex mu;
 	std::map<std::string, Type> types;
 	std::vector<Metric> metrics;
+	std::vector<Histogram> histograms;
 };
 
 extern Metrics global_metrics;

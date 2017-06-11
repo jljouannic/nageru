@@ -9,6 +9,26 @@ using namespace std;
 
 Metrics global_metrics;
 
+namespace {
+
+string serialize_name(const string &name, const vector<pair<string, string>> &labels)
+{
+	if (labels.empty()) {
+		return "nageru_" + name;
+	}
+
+	string label_str;
+	for (const pair<string, string> &label : labels) {
+		if (!label_str.empty()) {
+			label_str += ",";
+		}
+		label_str += label.first + "=\"" + label.second + "\"";
+	}
+	return "nageru_" + name + "{" + label_str + "}";
+}
+
+}  // namespace
+
 void Metrics::add(const string &name, const vector<pair<string, string>> &labels, atomic<int64_t> *location, Metrics::Type type)
 {
 	Metric metric;
@@ -37,6 +57,18 @@ void Metrics::add(const string &name, const vector<pair<string, string>> &labels
 	types[name] = type;
 }
 
+void Metrics::add_histogram(const string &name, const vector<pair<string, string>> &labels, atomic<int64_t> *location, size_t num_elements)
+{
+	Histogram histogram;
+	histogram.name = name;
+	histogram.labels = labels;
+	histogram.location_int64 = location;
+	histogram.num_elements = num_elements;
+
+	lock_guard<mutex> lock(mu);
+	histograms.push_back(histogram);
+}
+
 string Metrics::serialize() const
 {
 	stringstream ss;
@@ -50,27 +82,32 @@ string Metrics::serialize() const
 		}
 	}
 	for (const Metric &metric : metrics) {
-		string name;
-		if (metric.labels.empty()) {
-			name = "nageru_" + metric.name;
-		} else {
-			name = "nageru_" + metric.name + "{";
-			bool first = true;
-			for (const pair<string, string> &label : metric.labels) {
-				if (!first) {
-					name += ",";
-				}
-				first = false;
-				name += label.first + "=\"" + label.second + "\"";
-			}
-			name += "}";
-		}
+		string name = serialize_name(metric.name, metric.labels);
 
 		if (metric.data_type == DATA_TYPE_INT64) {
 			ss << name << " " << metric.location_int64->load() << "\n";
 		} else {
 			ss << name << " " << metric.location_double->load() << "\n";
 		}
+	}
+	for (const Histogram &histogram : histograms) {
+		ss << "# TYPE nageru_" << histogram.name << " histogram\n";
+
+		int64_t sum = 0, count = 0;
+		for (size_t i = 0; i < histogram.num_elements; ++i) {
+			char buf[16];
+			snprintf(buf, sizeof(buf), "%lu", i);
+			vector<pair<string, string>> labels = histogram.labels;
+			labels.emplace_back("le", buf);
+
+			int64_t val = histogram.location_int64[i].load();
+			sum += i * val;
+			count += val;
+			ss << serialize_name(histogram.name + "_bucket", labels) << " " << count << "\n";
+		}
+
+		ss << serialize_name(histogram.name + "_sum", histogram.labels) << " " << sum << "\n";
+		ss << serialize_name(histogram.name + "_count", histogram.labels) << " " << count << "\n";
 	}
 
 	return ss.str();

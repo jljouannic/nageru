@@ -11,6 +11,7 @@
 #include <type_traits>
 
 #include "flags.h"
+#include "metrics.h"
 
 using namespace std;
 using namespace std::chrono;
@@ -36,6 +37,14 @@ X264SpeedControl::X264SpeedControl(x264_t *x264, float f_speed, int i_buffer_siz
 	stat.max_buffer = 0;
 	stat.avg_preset = 0.0;
 	stat.den = 0;
+
+	metric_x264_speedcontrol_buffer_available_seconds = buffer_fill * 1e-6;
+	metric_x264_speedcontrol_buffer_size_seconds = buffer_size * 1e-6;
+	global_metrics.add_histogram("x264_speedcontrol_preset_used_frames", {}, metric_x264_speedcontrol_preset_used_frames, SC_PRESETS);
+	global_metrics.add("x264_speedcontrol_buffer_available_seconds", &metric_x264_speedcontrol_buffer_available_seconds, Metrics::TYPE_GAUGE);
+	global_metrics.add("x264_speedcontrol_buffer_size_seconds", &metric_x264_speedcontrol_buffer_size_seconds, Metrics::TYPE_GAUGE);
+	global_metrics.add("x264_speedcontrol_idle_frames", &metric_x264_speedcontrol_idle_frames);
+	global_metrics.add("x264_speedcontrol_late_frames", &metric_x264_speedcontrol_late_frames);
 }
 
 X264SpeedControl::~X264SpeedControl()
@@ -74,7 +83,6 @@ typedef struct
 // Note that the two first and the two last are also used for extrapolation
 // should the desired time be outside the range. Thus, it is disadvantageous if
 // they are chosen so that the timings are too close to each other.
-#define SC_PRESETS 26
 static const sc_preset_t presets[SC_PRESETS] = {
 #define I4 X264_ANALYSE_I4x4
 #define I8 X264_ANALYSE_I8x8
@@ -174,6 +182,7 @@ void X264SpeedControl::before_frame(float new_buffer_fill, int new_buffer_size, 
 		set_buffer_size(new_buffer_size);
 	}
 	buffer_fill = buffer_size * new_buffer_fill;
+	metric_x264_speedcontrol_buffer_available_seconds = buffer_fill * 1e-6;
 
 	steady_clock::time_point t;
 
@@ -216,8 +225,11 @@ void X264SpeedControl::before_frame(float new_buffer_fill, int new_buffer_size, 
 			first = false;
 		}
 		buffer_fill = buffer_size;
+		metric_x264_speedcontrol_buffer_available_seconds = buffer_fill * 1e-6;
+		++metric_x264_speedcontrol_idle_frames;
 	} else if (buffer_fill <= 0) {  // oops, we're late
 		// fprintf(stderr, "speedcontrol underflow (%.6f sec)\n", buffer_fill/1e6);
+		++metric_x264_speedcontrol_late_frames;
 	}
 
 	{
@@ -324,4 +336,6 @@ void X264SpeedControl::apply_preset(int new_preset)
 	}
 	dyn.x264_encoder_reconfig(x264, &p);
 	preset = new_preset;
+
+	++metric_x264_speedcontrol_preset_used_frames[new_preset];
 }
