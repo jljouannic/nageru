@@ -122,6 +122,10 @@ private:
 	std::atomic<int64_t> metric_x264_output_frames_i{0};
 	std::atomic<int64_t> metric_x264_output_frames_p{0};
 	std::atomic<int64_t> metric_x264_output_frames_b{0};
+
+	static constexpr size_t crf_buckets = 50;
+	std::atomic<int64_t> metric_x264_crf[crf_buckets]{{0}};
+        std::atomic<double> metric_x264_crf_sum{0.0};
 };
 
 #endif  // !defined(_X264ENCODE_H)

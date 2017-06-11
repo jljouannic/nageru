@@ -65,6 +65,7 @@ X264Encoder::X264Encoder(AVOutputFormat *oformat)
 	global_metrics.add("x264_output_frames", {{ "type", "i" }}, &metric_x264_output_frames_i);
 	global_metrics.add("x264_output_frames", {{ "type", "p" }}, &metric_x264_output_frames_p);
 	global_metrics.add("x264_output_frames", {{ "type", "b" }}, &metric_x264_output_frames_b);
+	global_metrics.add_histogram("x264_crf", {}, metric_x264_crf, &metric_x264_crf_sum, crf_buckets);
 }
 
 X264Encoder::~X264Encoder()
@@ -362,6 +363,16 @@ void X264Encoder::encode_frame(X264Encoder::QueuedFrame qf)
 	} else {
 		++metric_x264_output_frames_p;
 	}
+
+	if (pic.prop.f_crf_avg <= 0.0) {
+		++metric_x264_crf[0];
+	} else if (pic.prop.f_crf_avg <= crf_buckets - 1) {
+		++metric_x264_crf[int(floor(pic.prop.f_crf_avg))];
+	} else {
+		// Just clamp; this isn't ideal, but at least the total count will be right.
+		++metric_x264_crf[crf_buckets - 1];
+	}
+	metric_x264_crf_sum = metric_x264_crf_sum + pic.prop.f_crf_avg;
 
 	if (frames_being_encoded.count(pic.i_pts)) {
 		ReceivedTimestamps received_ts = frames_being_encoded[pic.i_pts];

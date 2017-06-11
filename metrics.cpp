@@ -57,12 +57,13 @@ void Metrics::add(const string &name, const vector<pair<string, string>> &labels
 	types[name] = type;
 }
 
-void Metrics::add_histogram(const string &name, const vector<pair<string, string>> &labels, atomic<int64_t> *location, size_t num_elements)
+void Metrics::add_histogram(const string &name, const vector<pair<string, string>> &labels, atomic<int64_t> *first_bucket_location, atomic<double> *sum_location, size_t num_elements)
 {
 	Histogram histogram;
 	histogram.name = name;
 	histogram.labels = labels;
-	histogram.location_int64 = location;
+	histogram.first_bucket_location = first_bucket_location;
+	histogram.sum_location = sum_location;
 	histogram.num_elements = num_elements;
 
 	lock_guard<mutex> lock(mu);
@@ -93,20 +94,19 @@ string Metrics::serialize() const
 	for (const Histogram &histogram : histograms) {
 		ss << "# TYPE nageru_" << histogram.name << " histogram\n";
 
-		int64_t sum = 0, count = 0;
+		int64_t count = 0;
 		for (size_t i = 0; i < histogram.num_elements; ++i) {
 			char buf[16];
 			snprintf(buf, sizeof(buf), "%lu", i);
 			vector<pair<string, string>> labels = histogram.labels;
 			labels.emplace_back("le", buf);
 
-			int64_t val = histogram.location_int64[i].load();
-			sum += i * val;
+			int64_t val = histogram.first_bucket_location[i].load();
 			count += val;
 			ss << serialize_name(histogram.name + "_bucket", labels) << " " << count << "\n";
 		}
 
-		ss << serialize_name(histogram.name + "_sum", histogram.labels) << " " << sum << "\n";
+		ss << serialize_name(histogram.name + "_sum", histogram.labels) << " " << histogram.sum_location->load() << "\n";
 		ss << serialize_name(histogram.name + "_count", histogram.labels) << " " << count << "\n";
 	}
 

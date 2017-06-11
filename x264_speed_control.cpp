@@ -40,7 +40,7 @@ X264SpeedControl::X264SpeedControl(x264_t *x264, float f_speed, int i_buffer_siz
 
 	metric_x264_speedcontrol_buffer_available_seconds = buffer_fill * 1e-6;
 	metric_x264_speedcontrol_buffer_size_seconds = buffer_size * 1e-6;
-	global_metrics.add_histogram("x264_speedcontrol_preset_used_frames", {}, metric_x264_speedcontrol_preset_used_frames, SC_PRESETS);
+	global_metrics.add_histogram("x264_speedcontrol_preset_used_frames", {}, metric_x264_speedcontrol_preset_used_frames, &metric_x264_speedcontrol_preset_used_frames_sum, SC_PRESETS);
 	global_metrics.add("x264_speedcontrol_buffer_available_seconds", &metric_x264_speedcontrol_buffer_available_seconds, Metrics::TYPE_GAUGE);
 	global_metrics.add("x264_speedcontrol_buffer_size_seconds", &metric_x264_speedcontrol_buffer_size_seconds, Metrics::TYPE_GAUGE);
 	global_metrics.add("x264_speedcontrol_idle_frames", &metric_x264_speedcontrol_idle_frames);
@@ -338,4 +338,6 @@ void X264SpeedControl::apply_preset(int new_preset)
 	preset = new_preset;
 
 	++metric_x264_speedcontrol_preset_used_frames[new_preset];
+	// Non-atomic add, but that's fine, since there are no concurrent writers.
+	metric_x264_speedcontrol_preset_used_frames_sum = metric_x264_speedcontrol_preset_used_frames_sum + new_preset;
 }
