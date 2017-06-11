@@ -32,6 +32,7 @@ extern "C" {
 
 #include <movit/image_format.h>
 
+#include "defs.h"
 #include "print_latency.h"
 #include "x264_dynamic.h"
 
@@ -113,6 +114,14 @@ private:
 
 	// Key is the pts of the frame.
 	std::unordered_map<int64_t, ReceivedTimestamps> frames_being_encoded;
+
+	// Metrics.
+	std::atomic<int64_t> metric_x264_queued_frames{0};
+	std::atomic<int64_t> metric_x264_max_queued_frames{X264_QUEUE_LENGTH};
+	std::atomic<int64_t> metric_x264_dropped_frames{0};
+	std::atomic<int64_t> metric_x264_output_frames_i{0};
+	std::atomic<int64_t> metric_x264_output_frames_p{0};
+	std::atomic<int64_t> metric_x264_output_frames_b{0};
 };
 
 #endif  // !defined(_X264ENCODE_H)

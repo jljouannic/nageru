@@ -11,6 +11,7 @@
 
 #include "defs.h"
 #include "flags.h"
+#include "metrics.h"
 #include "mux.h"
 #include "print_latency.h"
 #include "timebase.h"
@@ -57,6 +58,13 @@ X264Encoder::X264Encoder(AVOutputFormat *oformat)
 		free_frames.push(frame_pool.get() + i * (global_flags.width * global_flags.height * 2 * bytes_per_pixel));
 	}
 	encoder_thread = thread(&X264Encoder::encoder_thread_func, this);
+
+	global_metrics.add("x264_queued_frames", &metric_x264_queued_frames, Metrics::TYPE_GAUGE);
+	global_metrics.add("x264_max_queued_frames", &metric_x264_max_queued_frames, Metrics::TYPE_GAUGE);
+	global_metrics.add("x264_dropped_frames", &metric_x264_dropped_frames);
+	global_metrics.add("x264_output_frames", {{ "type", "i" }}, &metric_x264_output_frames_i);
+	global_metrics.add("x264_output_frames", {{ "type", "p" }}, &metric_x264_output_frames_p);
+	global_metrics.add("x264_output_frames", {{ "type", "b" }}, &metric_x264_output_frames_b);
 }
 
 X264Encoder::~X264Encoder()
@@ -83,6 +91,7 @@ void X264Encoder::add_frame(int64_t pts, int64_t duration, YCbCrLumaCoefficients
 		lock_guard<mutex> lock(mu);
 		if (free_frames.empty()) {
 			fprintf(stderr, "WARNING: x264 queue full, dropping frame with pts %ld\n", pts);
+			++metric_x264_dropped_frames;
 			return;
 		}
 
@@ -97,6 +106,7 @@ void X264Encoder::add_frame(int64_t pts, int64_t duration, YCbCrLumaCoefficients
 		lock_guard<mutex> lock(mu);
 		queued_frames.push(qf);
 		queued_frames_nonempty.notify_all();
+		metric_x264_queued_frames = queued_frames.size();
 	}
 }
 	
@@ -249,6 +259,7 @@ void X264Encoder::encoder_thread_func()
 				qf.data = nullptr;
 			}
 
+			metric_x264_queued_frames = queued_frames.size();
 			frames_left = !queued_frames.empty();
 		}
 
@@ -343,6 +354,14 @@ void X264Encoder::encode_frame(X264Encoder::QueuedFrame qf)
 	}
 
 	if (num_nal == 0) return;
+
+	if (IS_X264_TYPE_I(pic.i_type)) {
+		++metric_x264_output_frames_i;
+	} else if (IS_X264_TYPE_B(pic.i_type)) {
+		++metric_x264_output_frames_b;
+	} else {
+		++metric_x264_output_frames_p;
+	}
 
 	if (frames_being_encoded.count(pic.i_pts)) {
 		ReceivedTimestamps received_ts = frames_being_encoded[pic.i_pts];
