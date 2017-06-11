@@ -124,6 +124,7 @@ private:
 	std::atomic<int64_t> metric_x264_output_frames_p{0};
 	std::atomic<int64_t> metric_x264_output_frames_b{0};
 	Histogram metric_x264_crf;
+	LatencyHistogram latency_histogram;
 };
 
 #endif  // !defined(_X264ENCODE_H)

@@ -1,6 +1,7 @@
 #include "metrics.h"
 
 #include <assert.h>
+#include <math.h>
 
 #include <algorithm>
 #include <locale>
@@ -116,6 +117,15 @@ void Histogram::init_uniform(size_t num_buckets)
 	buckets.reset(new Bucket[num_buckets]);
 	for (size_t i = 0; i < num_buckets; ++i) {
 		buckets[i].val = i;
+	}
+}
+
+void Histogram::init_geometric(double min, double max, size_t num_buckets)
+{
+	this->num_buckets = num_buckets;
+	buckets.reset(new Bucket[num_buckets]);
+	for (size_t i = 0; i < num_buckets; ++i) {
+		buckets[i].val = min * pow(max / min, double(i) / (num_buckets - 1));
 	}
 }
 

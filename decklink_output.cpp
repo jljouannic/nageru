@@ -22,6 +22,7 @@ DeckLinkOutput::DeckLinkOutput(ResourcePool *resource_pool, QSurface *surface, u
 	: resource_pool(resource_pool), surface(surface), width(width), height(height), card_index(card_index)
 {
 	chroma_subsampler.reset(new ChromaSubsampler(resource_pool));
+	latency_histogram.init("decklink_output");
 }
 
 void DeckLinkOutput::set_device(IDeckLink *decklink)
@@ -395,7 +396,7 @@ HRESULT DeckLinkOutput::ScheduledFrameCompleted(/* in */ IDeckLinkVideoFrame *co
 	}
 
 	static int frameno = 0;
-	print_latency("DeckLink output latency (frame received → output on HDMI):", frame->received_ts, false, &frameno);
+	print_latency("DeckLink output latency (frame received → output on HDMI):", frame->received_ts, false, &frameno, &latency_histogram);
 
 	{
 		lock_guard<mutex> lock(frame_queue_mutex);

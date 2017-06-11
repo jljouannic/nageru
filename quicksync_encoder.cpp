@@ -1414,7 +1414,7 @@ void QuickSyncEncoderImpl::save_codeddata(GLSurface *surf, storage_task task)
 
 	static int frameno = 0;
 	print_latency("Current Quick Sync latency (video inputs → disk mux):",
-		task.received_ts, (task.frame_type == FRAME_B), &frameno);
+		task.received_ts, (task.frame_type == FRAME_B), &frameno, &qs_latency_histogram);
 
 	{
 		// Add video.
@@ -1560,6 +1560,9 @@ QuickSyncEncoderImpl::QuickSyncEncoderImpl(const std::string &filename, Resource
 		memset(&pic_param, 0, sizeof(pic_param));
 		memset(&slice_param, 0, sizeof(slice_param));
 	}
+
+	mixer_latency_histogram.init("mixer");
+	qs_latency_histogram.init("quick_sync");
 
 	storage_thread = thread(&QuickSyncEncoderImpl::storage_task_thread, this);
 
@@ -1962,7 +1965,7 @@ void QuickSyncEncoderImpl::pass_frame(QuickSyncEncoderImpl::PendingFrame frame, 
 	ReceivedTimestamps received_ts = find_received_timestamp(frame.input_frames);
 	static int frameno = 0;
 	print_latency("Current mixer latency (video inputs → ready for encode):",
-		received_ts, false, &frameno);
+		received_ts, false, &frameno, &mixer_latency_histogram);
 
 	// Release back any input frames we needed to render this frame.
 	frame.input_frames.clear();

@@ -72,6 +72,7 @@ class Histogram {
 public:
 	void init(const std::vector<double> &bucket_vals);
 	void init_uniform(size_t num_buckets);  // Sets up buckets 0..(N-1).
+	void init_geometric(double min, double max, size_t num_buckets);
 	void count_event(double val);
 	std::string serialize(const std::string &name, const std::vector<std::pair<std::string, std::string>> &labels) const;
 

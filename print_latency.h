@@ -10,6 +10,7 @@
 #include <vector>
 
 #include "ref_counted_frame.h"
+#include "metrics.h"
 
 // Since every output frame is based on multiple input frames, we need
 // more than one start timestamp. For now, we keep just the smallest
@@ -18,9 +19,15 @@
 struct ReceivedTimestamps {
 	std::chrono::steady_clock::time_point min_ts, max_ts;
 };
+struct LatencyHistogram {
+	void init(const std::string &measuring_point);  // Initializes histograms and registers them in global_metrics.
+
+	Histogram histogram_lowest_latency_input, histogram_highest_latency_input;
+	Histogram histogram_lowest_latency_input_bframe, histogram_highest_latency_input_bframe;
+};
 
 ReceivedTimestamps find_received_timestamp(const std::vector<RefCountedFrame> &input_frames);
 
-void print_latency(const std::string &header, const ReceivedTimestamps &received_ts, bool is_b_frame, int *frameno);
+void print_latency(const std::string &header, const ReceivedTimestamps &received_ts, bool is_b_frame, int *frameno, LatencyHistogram *histogram);
 
 #endif  // !defined(_PRINT_LATENCY_H)

@@ -68,6 +68,8 @@ X264Encoder::X264Encoder(AVOutputFormat *oformat)
 
 	metric_x264_crf.init_uniform(50);
 	global_metrics.add("x264_crf", &metric_x264_crf);
+
+	latency_histogram.init("x264");
 }
 
 X264Encoder::~X264Encoder()
@@ -375,7 +377,7 @@ void X264Encoder::encode_frame(X264Encoder::QueuedFrame qf)
 		static int frameno = 0;
 		print_latency("Current x264 latency (video inputs → network mux):",
 			received_ts, (pic.i_type == X264_TYPE_B || pic.i_type == X264_TYPE_BREF),
-			&frameno);
+			&frameno, &latency_histogram);
 	} else {
 		assert(false);
 	}
