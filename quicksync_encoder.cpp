@@ -71,6 +71,7 @@ namespace {
 bool mux_metrics_inited = false;
 LatencyHistogram mixer_latency_histogram, qs_latency_histogram;
 MuxMetrics current_file_mux_metrics, total_mux_metrics;
+std::atomic<double> metric_current_file_start_time_seconds{0.0 / 0.0};
 
 }  // namespace
 
@@ -1576,6 +1577,7 @@ QuickSyncEncoderImpl::QuickSyncEncoderImpl(const std::string &filename, Resource
 		qs_latency_histogram.init("quick_sync");
 		current_file_mux_metrics.init({{ "destination", "current_file" }});
 		total_mux_metrics.init({{ "destination", "files_total" }});
+		global_metrics.add("current_file_start_time_seconds", &metric_current_file_start_time_seconds, Metrics::TYPE_GAUGE);
 		mux_metrics_inited = true;
 	}
 
@@ -1808,6 +1810,7 @@ void QuickSyncEncoderImpl::shutdown()
 void QuickSyncEncoderImpl::close_file()
 {
 	file_mux.reset();
+	metric_current_file_start_time_seconds = 0.0 / 0.0;
 }
 
 void QuickSyncEncoderImpl::open_output_file(const std::string &filename)
@@ -1836,6 +1839,7 @@ void QuickSyncEncoderImpl::open_output_file(const std::string &filename)
 	file_mux.reset(new Mux(avctx, frame_width, frame_height, Mux::CODEC_H264, video_extradata, audio_codecpar.get(), TIMEBASE,
 		std::bind(&DiskSpaceEstimator::report_write, disk_space_estimator, filename, _1),
 		{ &current_file_mux_metrics, &total_mux_metrics }));
+	metric_current_file_start_time_seconds = get_timestamp_for_metrics();
 
 	if (global_flags.x264_video_to_disk) {
 		x264_encoder->add_mux(file_mux.get());
