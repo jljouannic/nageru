@@ -11,6 +11,7 @@
 
 #include <stdint.h>
 #include <sys/types.h>
+#include <atomic>
 #include <deque>
 #include <functional>
 #include <string>
@@ -43,6 +44,9 @@ private:
 		off_t size;
 	};
 	std::deque<MeasurePoint> measure_points;
+
+	// Metrics.
+	std::atomic<int64_t> metric_disk_free_bytes{-1};
 };
 
 extern DiskSpaceEstimator *global_disk_space_estimator;
