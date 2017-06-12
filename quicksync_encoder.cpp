@@ -1574,6 +1574,8 @@ QuickSyncEncoderImpl::QuickSyncEncoderImpl(const std::string &filename, Resource
 	if (!mux_metrics_inited) {
 		mixer_latency_histogram.init("mixer");
 		qs_latency_histogram.init("quick_sync");
+		current_file_mux_metrics.init({{ "destination", "current_file" }});
+		total_mux_metrics.init({{ "destination", "files_total" }});
 		mux_metrics_inited = true;
 	}
 
@@ -1828,11 +1830,6 @@ void QuickSyncEncoderImpl::open_output_file(const std::string &filename)
 		video_extradata = x264_encoder->get_global_headers();
 	}
 
-	if (!mux_metrics_inited) {
-		current_file_mux_metrics.init({{ "destination", "current_file" }});
-		total_mux_metrics.init({{ "destination", "files_total" }});
-		mux_metrics_inited = true;
-	}
 	current_file_mux_metrics.reset();
 
 	AVCodecParametersWithDeleter audio_codecpar = file_audio_encoder->get_codec_parameters();
