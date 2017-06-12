@@ -4,12 +4,19 @@
 #include <math.h>
 
 #include <algorithm>
+#include <chrono>
 #include <locale>
 #include <sstream>
 
 using namespace std;
+using namespace std::chrono;
 
 Metrics global_metrics;
+
+double get_timestamp_for_metrics()
+{
+	return duration<double>(system_clock::now().time_since_epoch()).count();
+}
 
 namespace {
 

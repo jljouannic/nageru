@@ -15,6 +15,12 @@
 
 class Histogram;
 
+// Prometheus recommends the use of timestamps instead of “time since event”,
+// so you can use this to get the number of seconds since the epoch.
+// Note that this will be wrong if your clock changes, so for non-metric use,
+// you should use std::chrono::steady_clock instead.
+double get_timestamp_for_metrics();
+
 class Metrics {
 public:
 	enum Type {

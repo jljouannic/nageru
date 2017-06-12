@@ -402,9 +402,11 @@ Mixer::Mixer(const QSurfaceFormat &format, unsigned num_cards)
 		set_output_card_internal(global_flags.output_card);
 	}
 
+	metric_start_time_seconds = get_timestamp_for_metrics();
+
 	global_metrics.add("frames_output_total", &metric_frames_output_total);
 	global_metrics.add("frames_output_dropped", &metric_frames_output_dropped);
-	global_metrics.add("uptime_seconds", &metric_uptime_seconds);
+	global_metrics.add("start_time_seconds", &metric_start_time_seconds);
 	global_metrics.add("memory_used_bytes", &metrics_memory_used_bytes);
 	global_metrics.add("metrics_memory_locked_limit_bytes", &metrics_memory_locked_limit_bytes);
 }
@@ -937,7 +939,6 @@ void Mixer::thread_func()
 
 		metric_frames_output_total = frame_num;
 		metric_frames_output_dropped = stats_dropped_frames;
-		metric_uptime_seconds = elapsed;
 
 		if (frame_num % 100 == 0) {
 			printf("%d frames (%d dropped) in %.3f seconds = %.1f fps (%.1f ms/frame)",
