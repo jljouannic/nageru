@@ -51,16 +51,30 @@ public:
 	std::string serialize() const;
 
 private:
+	static std::string serialize_name(const std::string &name, const std::vector<std::pair<std::string, std::string>> &labels);
+
 	enum DataType {
 		DATA_TYPE_INT64,
 		DATA_TYPE_DOUBLE,
 		DATA_TYPE_HISTOGRAM,
 	};
+	struct MetricKey {
+		MetricKey(const std::string &name, const std::vector<std::pair<std::string, std::string>> labels)
+			: name(name), labels(labels), serialized(serialize_name(name, labels))
+		{
+		}
 
+		bool operator< (const MetricKey &other) const
+		{
+			return serialized < other.serialized;
+		}
+
+		const std::string name;
+		const std::vector<std::pair<std::string, std::string>> labels;
+		const std::string serialized;
+	};
 	struct Metric {
 		DataType data_type;
-		std::string name;
-		std::vector<std::pair<std::string, std::string>> labels;
 		union {
 			std::atomic<int64_t> *location_int64;
 			std::atomic<double> *location_double;
@@ -69,9 +83,11 @@ private:
 	};
 
 	mutable std::mutex mu;
-	std::map<std::string, Type> types;
-	std::vector<Metric> metrics;
+	std::map<std::string, Type> types;  // Ordered the same as metrics, assuming no { signs in names (which are illegal).
+	std::map<MetricKey, Metric> metrics;
 	std::vector<Histogram> histograms;
+
+	friend class Histogram;
 };
 
 class Histogram {

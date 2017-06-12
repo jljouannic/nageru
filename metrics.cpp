@@ -18,9 +18,7 @@ double get_timestamp_for_metrics()
 	return duration<double>(system_clock::now().time_since_epoch()).count();
 }
 
-namespace {
-
-string serialize_name(const string &name, const vector<pair<string, string>> &labels)
+string Metrics::serialize_name(const string &name, const vector<pair<string, string>> &labels)
 {
 	if (labels.empty()) {
 		return "nageru_" + name;
@@ -36,18 +34,14 @@ string serialize_name(const string &name, const vector<pair<string, string>> &la
 	return "nageru_" + name + "{" + label_str + "}";
 }
 
-}  // namespace
-
 void Metrics::add(const string &name, const vector<pair<string, string>> &labels, atomic<int64_t> *location, Metrics::Type type)
 {
 	Metric metric;
 	metric.data_type = DATA_TYPE_INT64;
-	metric.name = name;
-	metric.labels = labels;
 	metric.location_int64 = location;
 
 	lock_guard<mutex> lock(mu);
-	metrics.push_back(metric);
+	metrics.emplace(MetricKey(name, labels), metric);
 	assert(types.count(name) == 0 || types[name] == type);
 	types[name] = type;
 }
@@ -56,12 +50,10 @@ void Metrics::add(const string &name, const vector<pair<string, string>> &labels
 {
 	Metric metric;
 	metric.data_type = DATA_TYPE_DOUBLE;
-	metric.name = name;
-	metric.labels = labels;
 	metric.location_double = location;
 
 	lock_guard<mutex> lock(mu);
-	metrics.push_back(metric);
+	metrics.emplace(MetricKey(name, labels), metric);
 	assert(types.count(name) == 0 || types[name] == type);
 	types[name] = type;
 }
@@ -70,12 +62,10 @@ void Metrics::add(const string &name, const vector<pair<string, string>> &labels
 {
 	Metric metric;
 	metric.data_type = DATA_TYPE_HISTOGRAM;
-	metric.name = name;
-	metric.labels = labels;
 	metric.location_histogram = location;
 
 	lock_guard<mutex> lock(mu);
-	metrics.push_back(metric);
+	metrics.emplace(MetricKey(name, labels), metric);
 	assert(types.count(name) == 0 || types[name] == TYPE_HISTOGRAM);
 	types[name] = TYPE_HISTOGRAM;
 }
@@ -87,22 +77,29 @@ string Metrics::serialize() const
 	ss.precision(20);
 
 	lock_guard<mutex> lock(mu);
-	for (const auto &name_and_type : types) {
-		if (name_and_type.second == TYPE_GAUGE) {
-			ss << "# TYPE nageru_" << name_and_type.first << " gauge\n";
-		} else if (name_and_type.second == TYPE_HISTOGRAM) {
-			ss << "# TYPE nageru_" << name_and_type.first << " histogram\n";
+	auto type_it = types.cbegin();
+	for (const auto &key_and_metric : metrics) {
+		const string &name = key_and_metric.first.serialized;
+		const Metric &metric = key_and_metric.second;
+
+		if (type_it != types.cend() &&
+		    key_and_metric.first.name == type_it->first) {
+			// It's the first time we print out any metric with this name,
+			// so add the type header.
+			if (type_it->second == TYPE_GAUGE) {
+				ss << "# TYPE nageru_" << type_it->first << " gauge\n";
+			} else if (type_it->second == TYPE_HISTOGRAM) {
+				ss << "# TYPE nageru_" << type_it->first << " histogram\n";
+			}
+			++type_it;
 		}
-	}
-	for (const Metric &metric : metrics) {
-		string name = serialize_name(metric.name, metric.labels);
 
 		if (metric.data_type == DATA_TYPE_INT64) {
 			ss << name << " " << metric.location_int64->load() << "\n";
 		} else if (metric.data_type == DATA_TYPE_DOUBLE) {
 			ss << name << " " << metric.location_double->load() << "\n";
 		} else {
-			ss << metric.location_histogram->serialize(metric.name, metric.labels);
+			ss << metric.location_histogram->serialize(key_and_metric.first.name, key_and_metric.first.labels);
 		}
 	}
 
@@ -167,13 +164,13 @@ string Histogram::serialize(const string &name, const vector<pair<string, string
 		bucket_labels.emplace_back("le", le_ss.str());
 
 		count += buckets[bucket_idx].count.load();
-		ss << serialize_name(name + "_bucket", bucket_labels) << " " << count << "\n";
+		ss << Metrics::serialize_name(name + "_bucket", bucket_labels) << " " << count << "\n";
 	}
 
 	count += count_after_last_bucket.load();
 
-	ss << serialize_name(name + "_sum", labels) << " " << sum.load() << "\n";
-	ss << serialize_name(name + "_count", labels) << " " << count << "\n";
+	ss << Metrics::serialize_name(name + "_sum", labels) << " " << sum.load() << "\n";
+	ss << Metrics::serialize_name(name + "_count", labels) << " " << count << "\n";
 
 	return ss.str();
 }
