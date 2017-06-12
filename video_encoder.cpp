@@ -186,7 +186,8 @@ void VideoEncoder::open_output_stream()
 
 	int time_base = global_flags.stream_coarse_timebase ? COARSE_TIMEBASE : TIMEBASE;
 	stream_mux.reset(new Mux(avctx, width, height, video_codec, video_extradata, stream_audio_encoder->get_codec_parameters().get(), time_base,
-		/*write_callback=*/nullptr));
+		/*write_callback=*/nullptr, { &stream_mux_metrics }));
+	stream_mux_metrics.init({{ "destination", "http" }});
 }
 
 int VideoEncoder::write_packet2_thunk(void *opaque, uint8_t *buf, int buf_size, AVIODataMarkerType type, int64_t time)

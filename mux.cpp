@@ -23,6 +23,7 @@ extern "C" {
 
 #include "defs.h"
 #include "flags.h"
+#include "metrics.h"
 #include "timebase.h"
 
 using namespace std;
@@ -45,8 +46,8 @@ struct PacketBefore {
 	const AVFormatContext * const ctx;
 };
 
-Mux::Mux(AVFormatContext *avctx, int width, int height, Codec video_codec, const string &video_extradata, const AVCodecParameters *audio_codecpar, int time_base, std::function<void(int64_t)> write_callback)
-	: avctx(avctx), write_callback(write_callback)
+Mux::Mux(AVFormatContext *avctx, int width, int height, Codec video_codec, const string &video_extradata, const AVCodecParameters *audio_codecpar, int time_base, std::function<void(int64_t)> write_callback, const vector<MuxMetrics *> &metrics)
+	: avctx(avctx), write_callback(write_callback), metrics(metrics)
 {
 	avstream_video = avformat_new_stream(avctx, nullptr);
 	if (avstream_video == nullptr) {
@@ -109,6 +110,9 @@ Mux::Mux(AVFormatContext *avctx, int width, int height, Codec video_codec, const
 		fprintf(stderr, "avformat_write_header() failed\n");
 		exit(1);
 	}
+	for (MuxMetrics *metric : metrics) {
+		metric->metric_written_bytes += avctx->pb->pos;
+	}
 
 	// Make sure the header is written before the constructor exits.
 	avio_flush(avctx->pb);
@@ -116,7 +120,12 @@ Mux::Mux(AVFormatContext *avctx, int width, int height, Codec video_codec, const
 
 Mux::~Mux()
 {
+	int64_t old_pos = avctx->pb->pos;
 	av_write_trailer(avctx);
+	for (MuxMetrics *metric : metrics) {
+		metric->metric_written_bytes += avctx->pb->pos - old_pos;
+	}
+
 	if (!(avctx->oformat->flags & AVFMT_NOFILE) &&
 	    !(avctx->flags & AVFMT_FLAG_CUSTOM_IO)) {
 		avio_closep(&avctx->pb);
@@ -165,11 +174,24 @@ void Mux::add_packet(const AVPacket &pkt, int64_t pts, int64_t dts)
 
 void Mux::write_packet_or_die(const AVPacket &pkt)
 {
+	for (MuxMetrics *metric : metrics) {
+		if (pkt.stream_index == 0) {
+			metric->metric_video_bytes += pkt.size;
+		} else if (pkt.stream_index == 1) {
+			metric->metric_audio_bytes += pkt.size;
+		} else {
+			assert(false);
+		}
+	}
+	int64_t old_pos = avctx->pb->pos;
 	if (av_interleaved_write_frame(avctx, const_cast<AVPacket *>(&pkt)) < 0) {
 		fprintf(stderr, "av_interleaved_write_frame() failed\n");
 		exit(1);
 	}
 	avio_flush(avctx->pb);
+	for (MuxMetrics *metric : metrics) {
+		metric->metric_written_bytes += avctx->pb->pos - old_pos;
+	}
 }
 
 void Mux::plug()
@@ -193,4 +215,17 @@ void Mux::unplug()
 		av_packet_free(&pkt);
 	}
 	plugged_packets.clear();
+}
+
+void MuxMetrics::init(const vector<pair<string, string>> &labels)
+{
+	vector<pair<string, string>> labels_video = labels;
+	labels_video.emplace_back("stream", "video");
+	global_metrics.add("mux_stream_bytes", labels_video, &metric_video_bytes);
+
+	vector<pair<string, string>> labels_audio = labels;
+	labels_audio.emplace_back("stream", "audio");
+	global_metrics.add("mux_stream_bytes", labels_audio, &metric_audio_bytes);
+
+	global_metrics.add("mux_written_bytes", labels, &metric_written_bytes);
 }

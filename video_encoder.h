@@ -20,6 +20,7 @@ extern "C" {
 #include <libavformat/avio.h>
 }
 
+#include "mux.h"
 #include "ref_counted_gl_sync.h"
 
 class AudioEncoder;
@@ -94,6 +95,7 @@ private:
 	std::unique_ptr<X264Encoder> x264_encoder;  // nullptr if not using x264.
 
 	std::string stream_mux_header;
+	MuxMetrics stream_mux_metrics;
 
 	std::atomic<int> quicksync_encoders_in_shutdown{0};
 	std::atomic<int> overriding_bitrate{0};
