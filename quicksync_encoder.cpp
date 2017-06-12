@@ -64,6 +64,15 @@ using namespace std::placeholders;
 class QOpenGLContext;
 class QSurface;
 
+namespace {
+
+// These need to survive several QuickSyncEncoderImpl instances,
+// so they are outside.
+bool mux_metrics_inited = false;
+LatencyHistogram mixer_latency_histogram, qs_latency_histogram;
+
+}  // namespace
+
 #define CHECK_VASTATUS(va_status, func)                                 \
     if (va_status != VA_STATUS_SUCCESS) {                               \
         fprintf(stderr, "%s:%d (%s) failed with %d\n", __func__, __LINE__, func, va_status); \
@@ -1561,8 +1570,11 @@ QuickSyncEncoderImpl::QuickSyncEncoderImpl(const std::string &filename, Resource
 		memset(&slice_param, 0, sizeof(slice_param));
 	}
 
-	mixer_latency_histogram.init("mixer");
-	qs_latency_histogram.init("quick_sync");
+	if (!mux_metrics_inited) {
+		mixer_latency_histogram.init("mixer");
+		qs_latency_histogram.init("quick_sync");
+		mux_metrics_inited = true;
+	}
 
 	storage_thread = thread(&QuickSyncEncoderImpl::storage_task_thread, this);
 

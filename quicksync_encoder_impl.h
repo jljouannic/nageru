@@ -222,7 +222,6 @@ private:
 	int frame_height_mbaligned;
 
 	DiskSpaceEstimator *disk_space_estimator;
-	LatencyHistogram mixer_latency_histogram, qs_latency_histogram;
 };
 
 #endif  // !defined(_QUICKSYNC_ENCODER_IMPL_H)
