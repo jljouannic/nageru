@@ -20,8 +20,13 @@ double get_timestamp_for_metrics()
 
 string Metrics::serialize_name(const string &name, const vector<pair<string, string>> &labels)
 {
+	return "nageru_" + name + serialize_labels(labels);
+}
+
+string Metrics::serialize_labels(const vector<pair<string, string>> &labels)
+{
 	if (labels.empty()) {
-		return "nageru_" + name;
+		return "";
 	}
 
 	string label_str;
@@ -31,7 +36,7 @@ string Metrics::serialize_name(const string &name, const vector<pair<string, str
 		}
 		label_str += label.first + "=\"" + label.second + "\"";
 	}
-	return "nageru_" + name + "{" + label_str + "}";
+	return "{" + label_str + "}";
 }
 
 void Metrics::add(const string &name, const vector<pair<string, string>> &labels, atomic<int64_t> *location, Metrics::Type type)
@@ -79,7 +84,7 @@ string Metrics::serialize() const
 	lock_guard<mutex> lock(mu);
 	auto type_it = types.cbegin();
 	for (const auto &key_and_metric : metrics) {
-		const string &name = key_and_metric.first.serialized;
+		string name = "nageru_" + key_and_metric.first.name + key_and_metric.first.serialized_labels;
 		const Metric &metric = key_and_metric.second;
 
 		if (type_it != types.cend() &&
