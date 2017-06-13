@@ -75,6 +75,22 @@ void Metrics::add(const string &name, const vector<pair<string, string>> &labels
 	types[name] = TYPE_HISTOGRAM;
 }
 
+void Metrics::remove(const string &name, const vector<pair<string, string>> &labels)
+{
+	lock_guard<mutex> lock(mu);
+
+	auto it = metrics.find(MetricKey(name, labels));
+	assert(it != metrics.end());
+
+	// If this is the last metric with this name, remove the type as well.
+	if (!((it != metrics.begin() && prev(it)->first.name == name) ||
+	      (it != metrics.end() && next(it)->first.name == name))) {
+		types.erase(name);
+	}
+
+	metrics.erase(it);
+}
+
 string Metrics::serialize() const
 {
 	stringstream ss;

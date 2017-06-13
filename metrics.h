@@ -48,6 +48,13 @@ public:
 	void add(const std::string &name, const std::vector<std::pair<std::string, std::string>> &labels, std::atomic<double> *location, Type type = TYPE_COUNTER);
 	void add(const std::string &name, const std::vector<std::pair<std::string, std::string>> &labels, Histogram *location);
 
+	void remove(const std::string &name)
+	{
+		remove(name, {});
+	}
+
+	void remove(const std::string &name, const std::vector<std::pair<std::string, std::string>> &labels);
+
 	std::string serialize() const;
 
 private:

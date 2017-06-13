@@ -394,6 +394,19 @@ private:
 	std::atomic<double> metric_audio_peak_dbfs{0.0 / 0.0};
 	std::atomic<double> metric_audio_final_makeup_gain_db{0.0};
 	std::atomic<double> metric_audio_correlation{0.0};
+
+	// These are all gauges corresponding to the elements of BusLevel.
+	// In a sense, they'd probably do better as histograms, but that's an
+	// awful lot of time series when you have many buses.
+	struct BusMetrics {
+		std::vector<std::pair<std::string, std::string>> labels;
+		std::atomic<double> current_level_dbfs[2]{{0.0/0.0},{0.0/0.0}};
+		std::atomic<double> peak_level_dbfs[2]{{0.0/0.0},{0.0/0.0}};
+		std::atomic<double> historic_peak_dbfs{0.0/0.0};
+		std::atomic<double> gain_staging_db{0.0/0.0};
+		std::atomic<double> compressor_attenuation_db{0.0/0.0};
+	};
+	std::unique_ptr<BusMetrics[]> bus_metrics;  // One for each bus in <input_mapping>.
 };
 
 extern AudioMixer *global_audio_mixer;

@@ -849,18 +849,22 @@ void AudioMixer::send_audio_level_callback()
 	{
 		lock_guard<mutex> lock(compressor_mutex);
 		for (unsigned bus_index = 0; bus_index < bus_levels.size(); ++bus_index) {
-			bus_levels[bus_index].current_level_dbfs[0] = to_db(peak_history[bus_index][0].current_level);
-			bus_levels[bus_index].current_level_dbfs[1] = to_db(peak_history[bus_index][1].current_level);
-			bus_levels[bus_index].peak_level_dbfs[0] = to_db(peak_history[bus_index][0].current_peak);
-			bus_levels[bus_index].peak_level_dbfs[1] = to_db(peak_history[bus_index][1].current_peak);
-			bus_levels[bus_index].historic_peak_dbfs = to_db(
+			BusLevel &levels = bus_levels[bus_index];
+			BusMetrics &metrics = bus_metrics[bus_index];
+
+			levels.current_level_dbfs[0] = metrics.current_level_dbfs[0] = to_db(peak_history[bus_index][0].current_level);
+			levels.current_level_dbfs[1] = metrics.current_level_dbfs[1] = to_db(peak_history[bus_index][1].current_level);
+			levels.peak_level_dbfs[0] = metrics.peak_level_dbfs[0] = to_db(peak_history[bus_index][0].current_peak);
+			levels.peak_level_dbfs[1] = metrics.peak_level_dbfs[1] = to_db(peak_history[bus_index][1].current_peak);
+			levels.historic_peak_dbfs = metrics.historic_peak_dbfs = to_db(
 				max(peak_history[bus_index][0].historic_peak,
 				    peak_history[bus_index][1].historic_peak));
-			bus_levels[bus_index].gain_staging_db = gain_staging_db[bus_index];
+			levels.gain_staging_db = metrics.gain_staging_db = gain_staging_db[bus_index];
 			if (compressor_enabled[bus_index]) {
-				bus_levels[bus_index].compressor_attenuation_db = -to_db(compressor[bus_index]->get_attenuation());
+				levels.compressor_attenuation_db = metrics.compressor_attenuation_db = -to_db(compressor[bus_index]->get_attenuation());
 			} else {
-				bus_levels[bus_index].compressor_attenuation_db = 0.0;
+				levels.compressor_attenuation_db = 0.0;
+				metrics.compressor_attenuation_db = 0.0 / 0.0;
 			}
 		}
 	}
@@ -981,6 +985,62 @@ void AudioMixer::set_input_mapping_lock_held(const InputMapping &new_input_mappi
 				}
 			}
 		}
+	}
+
+	// Kill all the old metrics, and set up new ones.
+	for (unsigned bus_index = 0; bus_index < input_mapping.buses.size(); ++bus_index) {
+		BusMetrics &metrics = bus_metrics[bus_index];
+
+		vector<pair<string, string>> labels_left = metrics.labels;
+		labels_left.emplace_back("channel", "left");
+		vector<pair<string, string>> labels_right = metrics.labels;
+		labels_right.emplace_back("channel", "right");
+
+		global_metrics.remove("bus_current_level_dbfs", labels_left);
+		global_metrics.remove("bus_current_level_dbfs", labels_right);
+		global_metrics.remove("bus_peak_level_dbfs", labels_left);
+		global_metrics.remove("bus_peak_level_dbfs", labels_right);
+		global_metrics.remove("bus_historic_peak_dbfs", metrics.labels);
+		global_metrics.remove("bus_gain_staging_db", metrics.labels);
+		global_metrics.remove("bus_compressor_attenuation_db", metrics.labels);
+	}
+	bus_metrics.reset(new BusMetrics[new_input_mapping.buses.size()]);
+	for (unsigned bus_index = 0; bus_index < new_input_mapping.buses.size(); ++bus_index) {
+		const InputMapping::Bus &bus = new_input_mapping.buses[bus_index];
+		BusMetrics &metrics = bus_metrics[bus_index];
+
+		char bus_index_str[16], source_index_str[16], source_channels_str[64];
+		snprintf(bus_index_str, sizeof(bus_index_str), "%u", bus_index);
+		snprintf(source_index_str, sizeof(source_index_str), "%u", bus.device.index);
+		snprintf(source_channels_str, sizeof(source_channels_str), "%d:%d", bus.source_channel[0], bus.source_channel[1]);
+
+		vector<pair<string, string>> labels;
+		metrics.labels.emplace_back("index", bus_index_str);
+		metrics.labels.emplace_back("name", bus.name);
+		if (bus.device.type == InputSourceType::SILENCE) {
+			metrics.labels.emplace_back("source_type", "silence");
+		} else if (bus.device.type == InputSourceType::CAPTURE_CARD) {
+			metrics.labels.emplace_back("source_type", "capture_card");
+		} else if (bus.device.type == InputSourceType::ALSA_INPUT) {
+			metrics.labels.emplace_back("source_type", "alsa_input");
+		} else {
+			assert(false);
+		}
+		metrics.labels.emplace_back("source_index", source_index_str);
+		metrics.labels.emplace_back("source_channels", source_channels_str);
+
+		vector<pair<string, string>> labels_left = metrics.labels;
+		labels_left.emplace_back("channel", "left");
+		vector<pair<string, string>> labels_right = metrics.labels;
+		labels_right.emplace_back("channel", "right");
+
+		global_metrics.add("bus_current_level_dbfs", labels_left, &metrics.current_level_dbfs[0], Metrics::TYPE_GAUGE);
+		global_metrics.add("bus_current_level_dbfs", labels_right, &metrics.current_level_dbfs[1], Metrics::TYPE_GAUGE);
+		global_metrics.add("bus_peak_level_dbfs", labels_left, &metrics.peak_level_dbfs[0], Metrics::TYPE_GAUGE);
+		global_metrics.add("bus_peak_level_dbfs", labels_right, &metrics.peak_level_dbfs[1], Metrics::TYPE_GAUGE);
+		global_metrics.add("bus_historic_peak_dbfs", metrics.labels, &metrics.historic_peak_dbfs, Metrics::TYPE_GAUGE);
+		global_metrics.add("bus_gain_staging_db", metrics.labels, &metrics.gain_staging_db, Metrics::TYPE_GAUGE);
+		global_metrics.add("bus_compressor_attenuation_db", metrics.labels, &metrics.compressor_attenuation_db, Metrics::TYPE_GAUGE);
 	}
 
 	// Reset resamplers for all cards that don't have the exact same state as before.
