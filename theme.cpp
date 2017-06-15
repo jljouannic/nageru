@@ -5,9 +5,11 @@
 #include <epoxy/gl.h>
 #include <lauxlib.h>
 #include <lua.hpp>
+#include <movit/deinterlace_effect.h>
 #include <movit/effect.h>
 #include <movit/effect_chain.h>
 #include <movit/image_format.h>
+#include <movit/input.h>
 #include <movit/mix_effect.h>
 #include <movit/multiply_effect.h>
 #include <movit/overlay_effect.h>
@@ -26,11 +28,9 @@
 #include <utility>
 
 #include "defs.h"
-#include "deinterlace_effect.h"
 #include "ffmpeg_capture.h"
 #include "flags.h"
 #include "image_input.h"
-#include "input.h"
 #include "input_state.h"
 #include "pbo_frame_allocator.h"
 

@@ -10,7 +10,6 @@
 #include "decklink_util.h"
 #include "flags.h"
 #include "print_latency.h"
-#include "resource_pool.h"
 #include "timebase.h"
 #include "v210_converter.h"
 

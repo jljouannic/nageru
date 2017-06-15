@@ -1,6 +1,7 @@
 #include "image_input.h"
 
 #include <errno.h>
+#include <movit/flat_input.h>
 #include <movit/image_format.h>
 #include <stdint.h>
 #include <stdio.h>
@@ -32,7 +33,6 @@ extern "C" {
 #include "ffmpeg_raii.h"
 #include "ffmpeg_util.h"
 #include "flags.h"
-#include "flat_input.h"
 
 struct SwsContext;
 
