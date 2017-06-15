@@ -71,8 +71,6 @@ void print_latency(const string &header, const ReceivedTimestamps &received_ts, 
 		return;
 
 	const steady_clock::time_point now = steady_clock::now();
-	duration<double> lowest_latency = now - *max_element(received_ts.ts.begin(), received_ts.ts.end());
-	duration<double> highest_latency = now - *min_element(received_ts.ts.begin(), received_ts.ts.end());
 
 	unsigned num_cards = global_mixer->get_num_cards();
 	assert(received_ts.ts.size() == num_cards * FRAME_HISTORY_LENGTH);
@@ -89,6 +87,17 @@ void print_latency(const string &header, const ReceivedTimestamps &received_ts, 
 
 	// 101 is chosen so that it's prime, which is unlikely to get the same frame type every time.
 	if (global_flags.print_video_latency && (++*frameno % 101) == 0) {
+		// Find min and max timestamp of all input frames that have a timestamp.
+		steady_clock::time_point min_ts = steady_clock::time_point::max(), max_ts = steady_clock::time_point::min();
+		for (const auto &ts : received_ts.ts) {
+			if (ts > steady_clock::time_point::min()) {
+				min_ts = min(min_ts, ts);
+				max_ts = max(max_ts, ts);
+			}
+		}
+		duration<double> lowest_latency = now - max_ts;
+		duration<double> highest_latency = now - min_ts;
+
 		printf("%-60s %4.0f ms (lowest-latency input), %4.0f ms (highest-latency input)",
 			header.c_str(), 1e3 * lowest_latency.count(), 1e3 * highest_latency.count());
 
