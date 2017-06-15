@@ -118,7 +118,13 @@ string Metrics::serialize() const
 		if (metric.data_type == DATA_TYPE_INT64) {
 			ss << name << " " << metric.location_int64->load() << "\n";
 		} else if (metric.data_type == DATA_TYPE_DOUBLE) {
-			ss << name << " " << metric.location_double->load() << "\n";
+			double val = metric.location_double->load();
+			if (isnan(val)) {
+				// Prometheus can't handle “-nan”.
+				ss << name << " NaN\n";
+			} else {
+				ss << name << " " << val << "\n";
+			}
 		} else {
 			ss << metric.location_histogram->serialize(key_and_metric.first.name, key_and_metric.first.labels);
 		}
