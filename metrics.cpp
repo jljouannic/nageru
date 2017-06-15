@@ -63,10 +63,11 @@ void Metrics::add(const string &name, const vector<pair<string, string>> &labels
 	types[name] = type;
 }
 
-void Metrics::add(const string &name, const vector<pair<string, string>> &labels, Histogram *location)
+void Metrics::add(const string &name, const vector<pair<string, string>> &labels, Histogram *location, Laziness laziness)
 {
 	Metric metric;
 	metric.data_type = DATA_TYPE_HISTOGRAM;
+	metric.laziness = laziness;
 	metric.location_histogram = location;
 
 	lock_guard<mutex> lock(mu);
@@ -126,7 +127,7 @@ string Metrics::serialize() const
 				ss << name << " " << val << "\n";
 			}
 		} else {
-			ss << metric.location_histogram->serialize(key_and_metric.first.name, key_and_metric.first.labels);
+			ss << metric.location_histogram->serialize(metric.laziness, key_and_metric.first.name, key_and_metric.first.labels);
 		}
 	}
 
@@ -175,8 +176,22 @@ void Histogram::count_event(double val)
 	sum = sum + val;
 }
 
-string Histogram::serialize(const string &name, const vector<pair<string, string>> &labels) const
+string Histogram::serialize(Metrics::Laziness laziness, const string &name, const vector<pair<string, string>> &labels) const
 {
+	// Check if the histogram is empty and should not be serialized.
+	if (laziness == Metrics::PRINT_WHEN_NONEMPTY && count_after_last_bucket.load() == 0) {
+		bool empty = true;
+		for (size_t bucket_idx = 0; bucket_idx < num_buckets; ++bucket_idx) {
+			if (buckets[bucket_idx].count.load() != 0) {
+				empty = false;
+				break;
+			}
+		}
+		if (empty) {
+			return "";
+		}
+	}
+
 	stringstream ss;
 	ss.imbue(locale("C"));
 	ss.precision(20);

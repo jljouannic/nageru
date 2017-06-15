@@ -28,6 +28,10 @@ public:
 		TYPE_GAUGE,
 		TYPE_HISTOGRAM,  // Internal use only.
 	};
+	enum Laziness {
+		PRINT_ALWAYS,
+		PRINT_WHEN_NONEMPTY,
+	};
 
 	void add(const std::string &name, std::atomic<int64_t> *location, Type type = TYPE_COUNTER)
 	{
@@ -46,7 +50,7 @@ public:
 
 	void add(const std::string &name, const std::vector<std::pair<std::string, std::string>> &labels, std::atomic<int64_t> *location, Type type = TYPE_COUNTER);
 	void add(const std::string &name, const std::vector<std::pair<std::string, std::string>> &labels, std::atomic<double> *location, Type type = TYPE_COUNTER);
-	void add(const std::string &name, const std::vector<std::pair<std::string, std::string>> &labels, Histogram *location);
+	void add(const std::string &name, const std::vector<std::pair<std::string, std::string>> &labels, Histogram *location, Laziness laziness = PRINT_ALWAYS);
 
 	void remove(const std::string &name)
 	{
@@ -85,6 +89,7 @@ private:
 	};
 	struct Metric {
 		DataType data_type;
+		Laziness laziness;  // Only for TYPE_HISTOGRAM.
 		union {
 			std::atomic<int64_t> *location_int64;
 			std::atomic<double> *location_double;
@@ -106,7 +111,7 @@ public:
 	void init_uniform(size_t num_buckets);  // Sets up buckets 0..(N-1).
 	void init_geometric(double min, double max, size_t num_buckets);
 	void count_event(double val);
-	std::string serialize(const std::string &name, const std::vector<std::pair<std::string, std::string>> &labels) const;
+	std::string serialize(Metrics::Laziness laziness, const std::string &name, const std::vector<std::pair<std::string, std::string>> &labels) const;
 
 private:
 	// Bucket <i> counts number of events where val[i - 1] < x <= val[i].

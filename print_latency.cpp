@@ -2,8 +2,10 @@
 
 #include "flags.h"
 #include "metrics.h"
+#include "mixer.h"
 
 #include <stdio.h>
+#include <algorithm>
 #include <chrono>
 #include <string>
 
@@ -12,53 +14,77 @@ using namespace std::chrono;
 
 ReceivedTimestamps find_received_timestamp(const vector<RefCountedFrame> &input_frames)
 {
-	// Find min and max timestamp of all input frames that have a timestamp.
-	steady_clock::time_point min_ts = steady_clock::time_point::max(), max_ts = steady_clock::time_point::min();
-	for (const RefCountedFrame &input_frame : input_frames) {
-		if (input_frame && input_frame->received_timestamp > steady_clock::time_point::min()) {
-			min_ts = min(min_ts, input_frame->received_timestamp);
-			max_ts = max(max_ts, input_frame->received_timestamp);
+	unsigned num_cards = global_mixer->get_num_cards();
+	assert(input_frames.size() == num_cards * FRAME_HISTORY_LENGTH);
+
+	ReceivedTimestamps ts;
+	for (unsigned card_index = 0; card_index < num_cards; ++card_index) {
+		for (unsigned frame_index = 0; frame_index < FRAME_HISTORY_LENGTH; ++frame_index) {
+			const RefCountedFrame &input_frame = input_frames[card_index * FRAME_HISTORY_LENGTH + frame_index];
+			if (input_frame == nullptr ||
+			    (frame_index > 0 && input_frame.get() == input_frames[card_index * FRAME_HISTORY_LENGTH + frame_index - 1].get())) {
+				ts.ts.push_back(steady_clock::time_point::min());
+			} else {
+				ts.ts.push_back(input_frame->received_timestamp);
+			}
 		}
 	}
-	return { min_ts, max_ts };
+	return ts;
 }
 
 void LatencyHistogram::init(const string &measuring_point)
 {
-	histogram_lowest_latency_input.init_geometric(0.001, 10.0, 30);
-	histogram_highest_latency_input.init_geometric(0.001, 10.0, 30);
-	histogram_lowest_latency_input_bframe.init_geometric(0.001, 10.0, 30);
-	histogram_highest_latency_input_bframe.init_geometric(0.001, 10.0, 30);
+	unsigned num_cards = global_flags.num_cards;  // The mixer might not be ready yet.
+	histograms.resize(num_cards * FRAME_HISTORY_LENGTH * 2);
+	for (unsigned card_index = 0; card_index < num_cards; ++card_index) {
+		char card_index_str[64];
+		snprintf(card_index_str, sizeof(card_index_str), "%u", card_index);
+		histograms[card_index].resize(FRAME_HISTORY_LENGTH);
+		for (unsigned frame_index = 0; frame_index < FRAME_HISTORY_LENGTH; ++frame_index) {
+			char frame_index_str[64];
+			snprintf(frame_index_str, sizeof(frame_index_str), "%u", frame_index);
 
-	global_metrics.add("latency_seconds",
-		{{ "measuring_point", measuring_point }, { "input", "lowest_latency" }, { "frame_type", "i/p" }},
-		&histogram_lowest_latency_input);
-	global_metrics.add("latency_seconds",
-		{{ "measuring_point", measuring_point }, { "input", "highest_latency" }, { "frame_type", "i/p" }},
-		&histogram_highest_latency_input);
-	global_metrics.add("latency_seconds",
-		{{ "measuring_point", measuring_point }, { "input", "lowest_latency" }, { "frame_type", "b" }},
-		&histogram_lowest_latency_input_bframe);
-	global_metrics.add("latency_seconds",
-		{{ "measuring_point", measuring_point }, { "input", "highest_latency" }, { "frame_type", "b" }},
-		&histogram_highest_latency_input_bframe);
+			histograms[card_index][frame_index].reset(new Histogram[2]);
+			histograms[card_index][frame_index][0].init_geometric(0.001, 10.0, 30);
+			histograms[card_index][frame_index][1].init_geometric(0.001, 10.0, 30);
+			global_metrics.add("latency_seconds",
+				{{ "measuring_point", measuring_point },
+				 { "card", card_index_str },
+				 { "frame_age", frame_index_str },
+				 { "frame_type", "i/p" }},
+				 &histograms[card_index][frame_index][0],
+				(frame_index == 0) ? Metrics::PRINT_ALWAYS : Metrics::PRINT_WHEN_NONEMPTY);
+			global_metrics.add("latency_seconds",
+				{{ "measuring_point", measuring_point },
+				 { "card", card_index_str },
+				 { "frame_age", frame_index_str },
+				 { "frame_type", "b" }},
+				 &histograms[card_index][frame_index][1],
+				Metrics::PRINT_WHEN_NONEMPTY);
+		}
+	}
 }
 
 void print_latency(const string &header, const ReceivedTimestamps &received_ts, bool is_b_frame, int *frameno, LatencyHistogram *histogram)
 {
-	if (received_ts.max_ts == steady_clock::time_point::min())
+	if (received_ts.ts.empty())
 		return;
 
 	const steady_clock::time_point now = steady_clock::now();
-	duration<double> lowest_latency = now - received_ts.max_ts;
-	duration<double> highest_latency = now - received_ts.min_ts;
+	duration<double> lowest_latency = now - *max_element(received_ts.ts.begin(), received_ts.ts.end());
+	duration<double> highest_latency = now - *min_element(received_ts.ts.begin(), received_ts.ts.end());
 
-	if (is_b_frame) {
-		histogram->histogram_lowest_latency_input_bframe.count_event(lowest_latency.count());
-		histogram->histogram_highest_latency_input_bframe.count_event(highest_latency.count());
-	} else {
-		histogram->histogram_lowest_latency_input.count_event(lowest_latency.count());
-		histogram->histogram_highest_latency_input.count_event(highest_latency.count());
+	unsigned num_cards = global_mixer->get_num_cards();
+	assert(received_ts.ts.size() == num_cards * FRAME_HISTORY_LENGTH);
+	for (unsigned card_index = 0; card_index < num_cards; ++card_index) {
+		for (unsigned frame_index = 0; frame_index < FRAME_HISTORY_LENGTH; ++frame_index) {
+			steady_clock::time_point ts = received_ts.ts[card_index * FRAME_HISTORY_LENGTH + frame_index];
+			if (ts == steady_clock::time_point::min()) {
+				continue;
+			}
+			duration<double> latency = now - ts;
+			histogram->histograms[card_index][frame_index][is_b_frame].count_event(latency.count());
+		}
 	}
 
 	// 101 is chosen so that it's prime, which is unlikely to get the same frame type every time.

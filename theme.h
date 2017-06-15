@@ -34,7 +34,8 @@ public:
 		movit::EffectChain *chain;
 		std::function<void()> setup_chain;
 
-		// May have duplicates.
+		// FRAME_HISTORY frames for each input, in order. Will contain duplicates
+		// for non-interlaced inputs.
 		std::vector<RefCountedFrame> input_frames;
 	};
 

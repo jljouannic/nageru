@@ -13,17 +13,16 @@
 #include "metrics.h"
 
 // Since every output frame is based on multiple input frames, we need
-// more than one start timestamp. For now, we keep just the smallest
-// and largest timestamp, so that we can print out a range.
-// For both of these, steady_clock::time_point::min() is used for “not set”.
+// more than one start timestamp; one for each input.
+// For all of these, steady_clock::time_point::min() is used for “not set”.
 struct ReceivedTimestamps {
-	std::chrono::steady_clock::time_point min_ts, max_ts;
+	std::vector<std::chrono::steady_clock::time_point> ts;
 };
 struct LatencyHistogram {
 	void init(const std::string &measuring_point);  // Initializes histograms and registers them in global_metrics.
 
-	Histogram histogram_lowest_latency_input, histogram_highest_latency_input;
-	Histogram histogram_lowest_latency_input_bframe, histogram_highest_latency_input_bframe;
+	// Indices: card number, frame history number, b-frame or not (1/0).
+	std::vector<std::vector<std::unique_ptr<Histogram[]>>> histograms;
 };
 
 ReceivedTimestamps find_received_timestamp(const std::vector<RefCountedFrame> &input_frames);
