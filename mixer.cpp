@@ -207,8 +207,6 @@ void QueueLengthPolicy::register_metrics(const vector<pair<string, string>> &lab
 
 void QueueLengthPolicy::update_policy(unsigned queue_length)
 {
-	metric_input_queue_length_frames = queue_length;
-
 	if (queue_length == 0) {  // Starvation.
 		if (been_at_safe_point_since_last_starvation && safe_queue_length < unsigned(global_flags.max_input_queue_frames)) {
 			++safe_queue_length;
@@ -1047,6 +1045,7 @@ void Mixer::trim_queue(CaptureCard *card, unsigned card_index)
 		++dropped_frames;
 	}
 
+	metric_input_queue_length_frames = queue_length;
 	card->metric_input_dropped_frames_jitter += dropped_frames;
 
 #if 0
