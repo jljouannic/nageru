@@ -234,8 +234,11 @@ string Histogram::serialize(Metrics::Laziness laziness, const string &name, cons
 	return ss.str();
 }
 
-Summary::Summary(const vector<double> &quantiles, double window_seconds)
-	: quantiles(quantiles), window(window_seconds) {}
+void Summary::init(const vector<double> &quantiles, double window_seconds)
+{
+	this->quantiles = quantiles;
+	window = duration<double>(window_seconds);
+}
 
 void Summary::count_event(double val)
 {

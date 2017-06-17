@@ -145,13 +145,13 @@ private:
 // need anything fancy.
 class Summary {
 public:
-	Summary(const std::vector<double> &quantiles, double window_seconds);
+	void init(const std::vector<double> &quantiles, double window_seconds);
 	void count_event(double val);
 	std::string serialize(Metrics::Laziness laziness, const std::string &name, const std::vector<std::pair<std::string, std::string>> &labels);
 
 private:
-	const std::vector<double> quantiles;
-	const std::chrono::duration<double> window;
+	std::vector<double> quantiles;
+	std::chrono::duration<double> window;
 
 	mutable std::mutex mu;
 	std::deque<std::pair<std::chrono::steady_clock::time_point, double>> values;

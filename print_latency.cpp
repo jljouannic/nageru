@@ -44,9 +44,10 @@ void LatencyHistogram::init(const string &measuring_point)
 			char frame_index_str[64];
 			snprintf(frame_index_str, sizeof(frame_index_str), "%u", frame_index);
 
-			summaries[card_index][frame_index].reset(
-				new Summary[2]{{{0.01, 0.1, 0.25, 0.5, 0.75, 0.9, 0.99}, 60.0},
-				               {{0.01, 0.1, 0.25, 0.5, 0.75, 0.9, 0.99}, 60.0}});
+			vector<double> quantiles{0.01, 0.1, 0.25, 0.5, 0.75, 0.9, 0.99};
+			summaries[card_index][frame_index].reset(new Summary[2]);
+			summaries[card_index][frame_index][0].init(quantiles, 60.0);
+			summaries[card_index][frame_index][1].init(quantiles, 60.0);
 			global_metrics.add("latency_seconds",
 				{{ "measuring_point", measuring_point },
 				 { "card", card_index_str },
