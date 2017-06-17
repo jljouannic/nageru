@@ -408,7 +408,7 @@ Mixer::Mixer(const QSurfaceFormat &format, unsigned num_cards)
 	global_metrics.add("frames_output_dropped", &metric_frames_output_dropped);
 	global_metrics.add("start_time_seconds", &metric_start_time_seconds, Metrics::TYPE_GAUGE);
 	global_metrics.add("memory_used_bytes", &metrics_memory_used_bytes);
-	global_metrics.add("metrics_memory_locked_limit_bytes", &metrics_memory_locked_limit_bytes);
+	global_metrics.add("memory_locked_limit_bytes", &metrics_memory_locked_limit_bytes);
 }
 
 Mixer::~Mixer()
