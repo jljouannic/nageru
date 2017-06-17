@@ -239,9 +239,9 @@ Mixer::Mixer(const QSurfaceFormat &format, unsigned num_cards)
 	  mixer_surface(create_surface(format)),
 	  h264_encoder_surface(create_surface(format)),
 	  decklink_output_surface(create_surface(format)),
-	  ycbcr_interpretation(global_flags.ycbcr_interpretation),
 	  audio_mixer(num_cards)
 {
+	memcpy(ycbcr_interpretation, global_flags.ycbcr_interpretation, sizeof(ycbcr_interpretation));
 	CHECK(init_movit(MOVIT_SHADER_DIR, MOVIT_DEBUG_OFF));
 	check_error();
 
