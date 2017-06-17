@@ -7,7 +7,9 @@
 #include <string.h>
 #include <unistd.h>
 #include <x264.h>
+#include <atomic>
 #include <cstdint>
+#include <mutex>
 
 #include "defs.h"
 #include "flags.h"
@@ -28,6 +30,18 @@ using namespace std;
 using namespace std::chrono;
 
 namespace {
+
+// X264Encoder can be restarted if --record-x264-video is set, so make these
+// metrics global.
+atomic<int64_t> metric_x264_queued_frames{0};
+atomic<int64_t> metric_x264_max_queued_frames{X264_QUEUE_LENGTH};
+atomic<int64_t> metric_x264_dropped_frames{0};
+atomic<int64_t> metric_x264_output_frames_i{0};
+atomic<int64_t> metric_x264_output_frames_p{0};
+atomic<int64_t> metric_x264_output_frames_b{0};
+Histogram metric_x264_crf;
+LatencyHistogram x264_latency_histogram;
+once_flag x264_metrics_inited;
 
 void update_vbv_settings(x264_param_t *param)
 {
@@ -52,24 +66,25 @@ X264Encoder::X264Encoder(AVOutputFormat *oformat)
 	: wants_global_headers(oformat->flags & AVFMT_GLOBALHEADER),
 	  dyn(load_x264_for_bit_depth(global_flags.x264_bit_depth))
 {
+	call_once(x264_metrics_inited, [&](){
+		global_metrics.add("x264_queued_frames", &metric_x264_queued_frames, Metrics::TYPE_GAUGE);
+		global_metrics.add("x264_max_queued_frames", &metric_x264_max_queued_frames, Metrics::TYPE_GAUGE);
+		global_metrics.add("x264_dropped_frames", &metric_x264_dropped_frames);
+		global_metrics.add("x264_output_frames", {{ "type", "i" }}, &metric_x264_output_frames_i);
+		global_metrics.add("x264_output_frames", {{ "type", "p" }}, &metric_x264_output_frames_p);
+		global_metrics.add("x264_output_frames", {{ "type", "b" }}, &metric_x264_output_frames_b);
+
+		metric_x264_crf.init_uniform(50);
+		global_metrics.add("x264_crf", &metric_x264_crf);
+		x264_latency_histogram.init("x264");
+	});
+
 	size_t bytes_per_pixel = global_flags.x264_bit_depth > 8 ? 2 : 1;
 	frame_pool.reset(new uint8_t[global_flags.width * global_flags.height * 2 * bytes_per_pixel * X264_QUEUE_LENGTH]);
 	for (unsigned i = 0; i < X264_QUEUE_LENGTH; ++i) {
 		free_frames.push(frame_pool.get() + i * (global_flags.width * global_flags.height * 2 * bytes_per_pixel));
 	}
 	encoder_thread = thread(&X264Encoder::encoder_thread_func, this);
-
-	global_metrics.add("x264_queued_frames", &metric_x264_queued_frames, Metrics::TYPE_GAUGE);
-	global_metrics.add("x264_max_queued_frames", &metric_x264_max_queued_frames, Metrics::TYPE_GAUGE);
-	global_metrics.add("x264_dropped_frames", &metric_x264_dropped_frames);
-	global_metrics.add("x264_output_frames", {{ "type", "i" }}, &metric_x264_output_frames_i);
-	global_metrics.add("x264_output_frames", {{ "type", "p" }}, &metric_x264_output_frames_p);
-	global_metrics.add("x264_output_frames", {{ "type", "b" }}, &metric_x264_output_frames_b);
-
-	metric_x264_crf.init_uniform(50);
-	global_metrics.add("x264_crf", &metric_x264_crf);
-
-	latency_histogram.init("x264");
 }
 
 X264Encoder::~X264Encoder()
@@ -377,7 +392,7 @@ void X264Encoder::encode_frame(X264Encoder::QueuedFrame qf)
 		static int frameno = 0;
 		print_latency("Current x264 latency (video inputs → network mux):",
 			received_ts, (pic.i_type == X264_TYPE_B || pic.i_type == X264_TYPE_BREF),
-			&frameno, &latency_histogram);
+			&frameno, &x264_latency_histogram);
 	} else {
 		assert(false);
 	}
