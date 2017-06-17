@@ -495,6 +495,7 @@ void Mixer::configure_card(unsigned card_index, CaptureInterface *capture, CardT
 		assert(false);
 	}
 	card->queue_length_policy.register_metrics(labels);
+	global_metrics.add("input_received_frames", labels, &card->metric_input_received_frames);
 	global_metrics.add("input_dropped_frames_jitter", labels, &card->metric_input_dropped_frames_jitter);
 	global_metrics.add("input_dropped_frames_error", labels, &card->metric_input_dropped_frames_error);
 	global_metrics.add("input_dropped_frames_resets", labels, &card->metric_input_resets);
@@ -572,6 +573,7 @@ void Mixer::bm_frame(unsigned card_index, uint16_t timecode,
 	DeviceSpec device{InputSourceType::CAPTURE_CARD, card_index};
 	CaptureCard *card = &cards[card_index];
 
+	++card->metric_input_received_frames;
 	card->metric_input_has_signal_bool = video_format.has_signal;
 	card->metric_input_is_connected_bool = video_format.is_connected;
 	card->metric_input_interlaced_bool = video_format.interlaced;

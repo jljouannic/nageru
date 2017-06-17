@@ -455,6 +455,7 @@ private:
 		int last_timecode = -1;  // Unwrapped.
 
 		// Metrics.
+		std::atomic<int64_t> metric_input_received_frames{0};
 		std::atomic<int64_t> metric_input_dropped_frames_jitter{0};
 		std::atomic<int64_t> metric_input_dropped_frames_error{0};
 		std::atomic<int64_t> metric_input_resets{0};
