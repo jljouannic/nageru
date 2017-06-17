@@ -262,7 +262,7 @@ void DeckLinkOutput::send_frame(GLuint y_tex, GLuint cbcr_tex, YCbCrLumaCoeffici
 		last_frame_had_mode_mismatch = false;
 	}
 
-	unique_ptr<Frame> frame = move(get_frame());
+	unique_ptr<Frame> frame = get_frame();
 	if (global_flags.ten_bit_output) {
 		chroma_subsampler->create_v210(y_tex, cbcr_tex, width, height, frame->uyvy_tex);
 	} else {
