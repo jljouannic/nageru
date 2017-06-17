@@ -217,6 +217,7 @@ void QueueLengthPolicy::update_policy(unsigned queue_length)
 		been_at_safe_point_since_last_starvation = false;
 		++metric_input_duped_frames;
 		metric_input_queue_safe_length_frames = safe_queue_length;
+		metric_input_queue_length_frames = 0;
 		return;
 	}
 	if (queue_length >= safe_queue_length) {
@@ -229,6 +230,7 @@ void QueueLengthPolicy::update_policy(unsigned queue_length)
 			card_index, safe_queue_length);
 		frames_with_at_least_one = 0;
 	}
+	metric_input_queue_length_frames = min(queue_length, safe_queue_length);  // The caller will drop frames for us if needed.
 }
 
 Mixer::Mixer(const QSurfaceFormat &format, unsigned num_cards)
@@ -1045,7 +1047,6 @@ void Mixer::trim_queue(CaptureCard *card, unsigned card_index)
 		++dropped_frames;
 	}
 
-	metric_input_queue_length_frames = queue_length;
 	card->metric_input_dropped_frames_jitter += dropped_frames;
 
 #if 0
