@@ -45,9 +45,10 @@ void LatencyHistogram::init(const string &measuring_point)
 			snprintf(frame_index_str, sizeof(frame_index_str), "%u", frame_index);
 
 			vector<double> quantiles{0.01, 0.1, 0.25, 0.5, 0.75, 0.9, 0.99};
-			summaries[card_index][frame_index].reset(new Summary[2]);
+			summaries[card_index][frame_index].reset(new Summary[3]);
 			summaries[card_index][frame_index][0].init(quantiles, 60.0);
 			summaries[card_index][frame_index][1].init(quantiles, 60.0);
+			summaries[card_index][frame_index][2].init(quantiles, 60.0);
 			global_metrics.add("latency_seconds",
 				{{ "measuring_point", measuring_point },
 				 { "card", card_index_str },
@@ -62,6 +63,13 @@ void LatencyHistogram::init(const string &measuring_point)
 				 { "frame_type", "b" }},
 				 &summaries[card_index][frame_index][1],
 				Metrics::PRINT_WHEN_NONEMPTY);
+			global_metrics.add("latency_seconds",
+				{{ "measuring_point", measuring_point },
+				 { "card", card_index_str },
+				 { "frame_age", frame_index_str },
+				 { "frame_type", "total" }},
+				 &summaries[card_index][frame_index][2],
+				(frame_index == 0) ? Metrics::PRINT_ALWAYS : Metrics::PRINT_WHEN_NONEMPTY);
 		}
 	}
 }
@@ -83,6 +91,7 @@ void print_latency(const string &header, const ReceivedTimestamps &received_ts, 
 			}
 			duration<double> latency = now - ts;
 			histogram->summaries[card_index][frame_index][is_b_frame].count_event(latency.count());
+			histogram->summaries[card_index][frame_index][2].count_event(latency.count());
 		}
 	}
 
