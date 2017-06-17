@@ -131,7 +131,7 @@ public:
 	void stop_dequeue_thread() override;
 	bool get_disconnected() const override { return false; }  // We never unplug.
 
-	std::map<uint32_t, bmusb::VideoMode> get_available_video_modes() const;
+	std::map<uint32_t, bmusb::VideoMode> get_available_video_modes() const override;
 	void set_video_mode(uint32_t video_mode_id) override {}  // Ignore.
 	uint32_t get_current_video_mode() const override { return 0; }
 
