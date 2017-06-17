@@ -68,7 +68,7 @@ namespace {
 
 // These need to survive several QuickSyncEncoderImpl instances,
 // so they are outside.
-bool quick_sync_metrics_inited = false;
+once_flag quick_sync_metrics_inited;
 LatencyHistogram mixer_latency_histogram, qs_latency_histogram;
 MuxMetrics current_file_mux_metrics, total_mux_metrics;
 std::atomic<double> metric_current_file_start_time_seconds{0.0 / 0.0};
@@ -1573,15 +1573,14 @@ QuickSyncEncoderImpl::QuickSyncEncoderImpl(const std::string &filename, Resource
 		memset(&slice_param, 0, sizeof(slice_param));
 	}
 
-	if (!quick_sync_metrics_inited) {
+	call_once(quick_sync_metrics_inited, [](){
 		mixer_latency_histogram.init("mixer");
 		qs_latency_histogram.init("quick_sync");
 		current_file_mux_metrics.init({{ "destination", "current_file" }});
 		total_mux_metrics.init({{ "destination", "files_total" }});
 		global_metrics.add("current_file_start_time_seconds", &metric_current_file_start_time_seconds, Metrics::TYPE_GAUGE);
 		global_metrics.add("quick_sync_stalled_frames", &metric_quick_sync_stalled_frames);
-		quick_sync_metrics_inited = true;
-	}
+	});
 
 	storage_thread = thread(&QuickSyncEncoderImpl::storage_task_thread, this);
 

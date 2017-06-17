@@ -66,7 +66,7 @@ X264Encoder::X264Encoder(AVOutputFormat *oformat)
 	: wants_global_headers(oformat->flags & AVFMT_GLOBALHEADER),
 	  dyn(load_x264_for_bit_depth(global_flags.x264_bit_depth))
 {
-	call_once(x264_metrics_inited, [&](){
+	call_once(x264_metrics_inited, [](){
 		global_metrics.add("x264_queued_frames", &metric_x264_queued_frames, Metrics::TYPE_GAUGE);
 		global_metrics.add("x264_max_queued_frames", &metric_x264_max_queued_frames, Metrics::TYPE_GAUGE);
 		global_metrics.add("x264_dropped_frames", &metric_x264_dropped_frames);

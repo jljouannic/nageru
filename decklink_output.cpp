@@ -3,6 +3,8 @@
 #include <movit/resource_pool.h>  // Must be above the Xlib includes.
 #include <pthread.h>
 
+#include <mutex>
+
 #include <epoxy/egl.h>
 
 #include "chroma_subsampler.h"
@@ -20,7 +22,7 @@ using namespace std::chrono;
 namespace {
 
 // This class can be deleted during regular use, so make all the metrics static.
-bool metrics_inited = false;
+once_flag decklink_metrics_inited;
 LatencyHistogram latency_histogram;
 atomic<int64_t> metric_decklink_output_width_pixels{-1};
 atomic<int64_t> metric_decklink_output_height_pixels{-1};
@@ -49,7 +51,7 @@ DeckLinkOutput::DeckLinkOutput(ResourcePool *resource_pool, QSurface *surface, u
 {
 	chroma_subsampler.reset(new ChromaSubsampler(resource_pool));
 
-	if (!metrics_inited) {
+	call_once(decklink_metrics_inited, [](){
 		latency_histogram.init("decklink_output");
 		global_metrics.add("decklink_output_width_pixels", &metric_decklink_output_width_pixels, Metrics::TYPE_GAUGE);
 		global_metrics.add("decklink_output_height_pixels", &metric_decklink_output_height_pixels, Metrics::TYPE_GAUGE);
@@ -70,9 +72,7 @@ DeckLinkOutput::DeckLinkOutput(ResourcePool *resource_pool, QSurface *surface, u
 		global_metrics.add("decklink_output_completed_frames", {{ "status", "unknown" }}, &metric_decklink_output_completed_frames_unknown);
 
 		global_metrics.add("decklink_output_scheduled_samples", &metric_decklink_output_scheduled_samples);
-
-		metrics_inited = true;
-	}
+	});
 }
 
 void DeckLinkOutput::set_device(IDeckLink *decklink)
