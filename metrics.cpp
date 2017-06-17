@@ -76,6 +76,19 @@ void Metrics::add(const string &name, const vector<pair<string, string>> &labels
 	types[name] = TYPE_HISTOGRAM;
 }
 
+void Metrics::add(const string &name, const vector<pair<string, string>> &labels, Summary *location, Laziness laziness)
+{
+	Metric metric;
+	metric.data_type = DATA_TYPE_SUMMARY;
+	metric.laziness = laziness;
+	metric.location_summary = location;
+
+	lock_guard<mutex> lock(mu);
+	metrics.emplace(MetricKey(name, labels), metric);
+	assert(types.count(name) == 0 || types[name] == TYPE_SUMMARY);
+	types[name] = TYPE_SUMMARY;
+}
+
 void Metrics::remove(const string &name, const vector<pair<string, string>> &labels)
 {
 	lock_guard<mutex> lock(mu);
@@ -112,6 +125,8 @@ string Metrics::serialize() const
 				ss << "# TYPE nageru_" << type_it->first << " gauge\n";
 			} else if (type_it->second == TYPE_HISTOGRAM) {
 				ss << "# TYPE nageru_" << type_it->first << " histogram\n";
+			} else if (type_it->second == TYPE_SUMMARY) {
+				ss << "# TYPE nageru_" << type_it->first << " summary\n";
 			}
 			++type_it;
 		}
@@ -126,8 +141,10 @@ string Metrics::serialize() const
 			} else {
 				ss << name << " " << val << "\n";
 			}
-		} else {
+		} else if (metric.data_type == DATA_TYPE_HISTOGRAM) {
 			ss << metric.location_histogram->serialize(metric.laziness, key_and_metric.first.name, key_and_metric.first.labels);
+		} else {
+			ss << metric.location_summary->serialize(metric.laziness, key_and_metric.first.name, key_and_metric.first.labels);
 		}
 	}
 
@@ -214,5 +231,93 @@ string Histogram::serialize(Metrics::Laziness laziness, const string &name, cons
 	ss << Metrics::serialize_name(name + "_sum", labels) << " " << sum.load() << "\n";
 	ss << Metrics::serialize_name(name + "_count", labels) << " " << count << "\n";
 
+	return ss.str();
+}
+
+Summary::Summary(const vector<double> &quantiles, double window_seconds)
+	: quantiles(quantiles), window(window_seconds) {}
+
+void Summary::count_event(double val)
+{
+	steady_clock::time_point now = steady_clock::now();
+	steady_clock::time_point cutoff = now - duration_cast<steady_clock::duration>(window);
+
+	lock_guard<mutex> lock(mu);
+	values.emplace_back(now, val);
+	while (!values.empty() && values.front().first < cutoff) {
+		values.pop_front();
+	}
+
+	// Non-atomic add, but that's fine, since there are no concurrent writers.
+	sum = sum + val;
+	++count;
+}
+
+string Summary::serialize(Metrics::Laziness laziness, const string &name, const vector<pair<string, string>> &labels)
+{
+	steady_clock::time_point now = steady_clock::now();
+	steady_clock::time_point cutoff = now - duration_cast<steady_clock::duration>(window);
+
+	vector<double> values_copy;
+	{
+		lock_guard<mutex> lock(mu);
+		while (!values.empty() && values.front().first < cutoff) {
+			values.pop_front();
+		}
+		values_copy.reserve(values.size());
+		for (const auto &time_and_value : values) {
+			values_copy.push_back(time_and_value.second);
+		}
+	}
+
+	vector<pair<double, double>> answers;
+	if (values_copy.size() == 0) {
+		if (laziness == Metrics::PRINT_WHEN_NONEMPTY) {
+			return "";
+		}
+		for (double quantile : quantiles) {
+			answers.emplace_back(quantile, 0.0 / 0.0);
+		}
+	} else if (values_copy.size() == 1) {
+		for (double quantile : quantiles) {
+			answers.emplace_back(quantile, values_copy[0]);
+		}
+	} else {
+		// We could probably do repeated nth_element, but the constant factor
+		// gets a bit high, so just sorting probably is about as fast.
+		sort(values_copy.begin(), values_copy.end());
+		for (double quantile : quantiles) {
+			double idx = quantile * (values_copy.size() - 1);
+			size_t idx_floor = size_t(floor(idx));
+			const double v0 = values_copy[idx_floor];
+
+			if (idx_floor == values_copy.size() - 1) {
+				answers.emplace_back(quantile, values_copy[idx_floor]);
+			} else {
+				// Linear interpolation.
+				double t = idx - idx_floor;
+				const double v1 = values_copy[idx_floor + 1];
+				answers.emplace_back(quantile, v0 + t * (v1 - v0));
+			}
+		}
+	}
+
+	stringstream ss;
+	ss.imbue(locale("C"));
+	ss.precision(20);
+
+	for (const auto &quantile_and_value : answers) {
+		stringstream quantile_ss;
+		quantile_ss.imbue(locale("C"));
+		quantile_ss.precision(3);
+		quantile_ss << quantile_and_value.first;
+		vector<pair<string, string>> quantile_labels = labels;
+		quantile_labels.emplace_back("quantile", quantile_ss.str());
+
+		ss << Metrics::serialize_name(name, quantile_labels) << " " << quantile_and_value.second << "\n";
+	}
+
+	ss << Metrics::serialize_name(name + "_sum", labels) << " " << sum.load() << "\n";
+	ss << Metrics::serialize_name(name + "_count", labels) << " " << count.load() << "\n";
 	return ss.str();
 }

@@ -22,7 +22,7 @@ struct LatencyHistogram {
 	void init(const std::string &measuring_point);  // Initializes histograms and registers them in global_metrics.
 
 	// Indices: card number, frame history number, b-frame or not (1/0).
-	std::vector<std::vector<std::unique_ptr<Histogram[]>>> histograms;
+	std::vector<std::vector<std::unique_ptr<Summary[]>>> summaries;
 };
 
 ReceivedTimestamps find_received_timestamp(const std::vector<RefCountedFrame> &input_frames);

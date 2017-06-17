@@ -7,13 +7,17 @@
 // which makes it quite unwieldy. Thus, we'll package our own for the time being.
 
 #include <atomic>
+#include <chrono>
+#include <deque>
 #include <map>
 #include <memory>
 #include <mutex>
 #include <string>
+#include <utility>
 #include <vector>
 
 class Histogram;
+class Summary;
 
 // Prometheus recommends the use of timestamps instead of “time since event”,
 // so you can use this to get the number of seconds since the epoch.
@@ -27,6 +31,7 @@ public:
 		TYPE_COUNTER,
 		TYPE_GAUGE,
 		TYPE_HISTOGRAM,  // Internal use only.
+		TYPE_SUMMARY,  // Internal use only.
 	};
 	enum Laziness {
 		PRINT_ALWAYS,
@@ -48,9 +53,15 @@ public:
 		add(name, {}, location);
 	}
 
+	void add(const std::string &name, Summary *location)
+	{
+		add(name, {}, location);
+	}
+
 	void add(const std::string &name, const std::vector<std::pair<std::string, std::string>> &labels, std::atomic<int64_t> *location, Type type = TYPE_COUNTER);
 	void add(const std::string &name, const std::vector<std::pair<std::string, std::string>> &labels, std::atomic<double> *location, Type type = TYPE_COUNTER);
 	void add(const std::string &name, const std::vector<std::pair<std::string, std::string>> &labels, Histogram *location, Laziness laziness = PRINT_ALWAYS);
+	void add(const std::string &name, const std::vector<std::pair<std::string, std::string>> &labels, Summary *location, Laziness laziness = PRINT_ALWAYS);
 
 	void remove(const std::string &name)
 	{
@@ -69,6 +80,7 @@ private:
 		DATA_TYPE_INT64,
 		DATA_TYPE_DOUBLE,
 		DATA_TYPE_HISTOGRAM,
+		DATA_TYPE_SUMMARY,
 	};
 	struct MetricKey {
 		MetricKey(const std::string &name, const std::vector<std::pair<std::string, std::string>> labels)
@@ -94,15 +106,16 @@ private:
 			std::atomic<int64_t> *location_int64;
 			std::atomic<double> *location_double;
 			Histogram *location_histogram;
+			Summary *location_summary;
 		};
 	};
 
 	mutable std::mutex mu;
 	std::map<std::string, Type> types;  // Ordered the same as metrics.
 	std::map<MetricKey, Metric> metrics;
-	std::vector<Histogram> histograms;
 
 	friend class Histogram;
+	friend class Summary;
 };
 
 class Histogram {
@@ -125,6 +138,25 @@ private:
 	size_t num_buckets;
 	std::atomic<double> sum{0.0};
 	std::atomic<int64_t> count_after_last_bucket{0};
+};
+
+// This is a pretty dumb streaming quantile class, but it's exact, and we don't have
+// too many values (typically one per frame, and one-minute interval), so we don't
+// need anything fancy.
+class Summary {
+public:
+	Summary(const std::vector<double> &quantiles, double window_seconds);
+	void count_event(double val);
+	std::string serialize(Metrics::Laziness laziness, const std::string &name, const std::vector<std::pair<std::string, std::string>> &labels);
+
+private:
+	const std::vector<double> quantiles;
+	const std::chrono::duration<double> window;
+
+	mutable std::mutex mu;
+	std::deque<std::pair<std::chrono::steady_clock::time_point, double>> values;
+	std::atomic<double> sum{0.0};
+	std::atomic<int64_t> count{0};
 };
 
 extern Metrics global_metrics;

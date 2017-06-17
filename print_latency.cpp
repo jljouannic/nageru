@@ -35,31 +35,31 @@ ReceivedTimestamps find_received_timestamp(const vector<RefCountedFrame> &input_
 void LatencyHistogram::init(const string &measuring_point)
 {
 	unsigned num_cards = global_flags.num_cards;  // The mixer might not be ready yet.
-	histograms.resize(num_cards * FRAME_HISTORY_LENGTH * 2);
+	summaries.resize(num_cards * FRAME_HISTORY_LENGTH * 2);
 	for (unsigned card_index = 0; card_index < num_cards; ++card_index) {
 		char card_index_str[64];
 		snprintf(card_index_str, sizeof(card_index_str), "%u", card_index);
-		histograms[card_index].resize(FRAME_HISTORY_LENGTH);
+		summaries[card_index].resize(FRAME_HISTORY_LENGTH);
 		for (unsigned frame_index = 0; frame_index < FRAME_HISTORY_LENGTH; ++frame_index) {
 			char frame_index_str[64];
 			snprintf(frame_index_str, sizeof(frame_index_str), "%u", frame_index);
 
-			histograms[card_index][frame_index].reset(new Histogram[2]);
-			histograms[card_index][frame_index][0].init_geometric(0.001, 10.0, 30);
-			histograms[card_index][frame_index][1].init_geometric(0.001, 10.0, 30);
+			summaries[card_index][frame_index].reset(
+				new Summary[2]{{{0.01, 0.1, 0.25, 0.5, 0.75, 0.9, 0.99}, 60.0},
+				               {{0.01, 0.1, 0.25, 0.5, 0.75, 0.9, 0.99}, 60.0}});
 			global_metrics.add("latency_seconds",
 				{{ "measuring_point", measuring_point },
 				 { "card", card_index_str },
 				 { "frame_age", frame_index_str },
 				 { "frame_type", "i/p" }},
-				 &histograms[card_index][frame_index][0],
+				 &summaries[card_index][frame_index][0],
 				(frame_index == 0) ? Metrics::PRINT_ALWAYS : Metrics::PRINT_WHEN_NONEMPTY);
 			global_metrics.add("latency_seconds",
 				{{ "measuring_point", measuring_point },
 				 { "card", card_index_str },
 				 { "frame_age", frame_index_str },
 				 { "frame_type", "b" }},
-				 &histograms[card_index][frame_index][1],
+				 &summaries[card_index][frame_index][1],
 				Metrics::PRINT_WHEN_NONEMPTY);
 		}
 	}
@@ -81,7 +81,7 @@ void print_latency(const string &header, const ReceivedTimestamps &received_ts, 
 				continue;
 			}
 			duration<double> latency = now - ts;
-			histogram->histograms[card_index][frame_index][is_b_frame].count_event(latency.count());
+			histogram->summaries[card_index][frame_index][is_b_frame].count_event(latency.count());
 		}
 	}
 
