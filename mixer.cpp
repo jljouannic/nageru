@@ -979,7 +979,7 @@ void Mixer::thread_func()
 
 			printf("\n");
 
-			metrics_memory_used_bytes = used.ru_maxrss;
+			metrics_memory_used_bytes = used.ru_maxrss * 1024;
 		}
 
 
