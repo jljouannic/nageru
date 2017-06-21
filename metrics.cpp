@@ -317,7 +317,13 @@ string Summary::serialize(Metrics::Laziness laziness, const string &name, const 
 		vector<pair<string, string>> quantile_labels = labels;
 		quantile_labels.emplace_back("quantile", quantile_ss.str());
 
-		ss << Metrics::serialize_name(name, quantile_labels) << " " << quantile_and_value.second << "\n";
+		double val = quantile_and_value.second;;
+		if (isnan(val)) {
+			// Prometheus can't handle “-nan”.
+			ss << Metrics::serialize_name(name, quantile_labels) << " NaN\n";
+		} else {
+			ss << Metrics::serialize_name(name, quantile_labels) << " " << val << "\n";
+		}
 	}
 
 	ss << Metrics::serialize_name(name + "_sum", labels) << " " << sum.load() << "\n";
