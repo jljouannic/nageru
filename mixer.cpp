@@ -1084,6 +1084,7 @@ start:
 		// and then restart.
 		assert(cards[master_card_index].capture->get_disconnected());
 		handle_hotplugged_cards();
+		lock.unlock();
 		goto start;
 	}
 
