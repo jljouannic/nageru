@@ -319,6 +319,14 @@ HRESULT STDMETHODCALLTYPE DeckLinkCapture::VideoInputFrameArrived(
 		char thread_name[16];
 		snprintf(thread_name, sizeof(thread_name), "DeckLink_C_%d", card_index);
 		pthread_setname_np(pthread_self(), thread_name);
+
+		sched_param param;
+		memset(&param, 0, sizeof(param));
+		param.sched_priority = 1;
+		if (sched_setscheduler(0, SCHED_RR, &param) == -1) {
+			printf("couldn't set realtime priority for DeckLink thread: %s\n", strerror(errno));
+		}
+
 		if (has_dequeue_callbacks) {
 			dequeue_init_callback();
 		}
