@@ -475,6 +475,24 @@ void Mixer::configure_card(unsigned card_index, CaptureInterface *capture, CardT
 	audio_mixer.set_display_name(device, card->capture->get_description());
 	audio_mixer.trigger_state_changed_callback();
 
+	// Unregister old metrics, if any.
+	if (!card->labels.empty()) {
+		const vector<pair<string, string>> &labels = card->labels;
+		global_metrics.remove("input_received_frames", labels);
+		global_metrics.remove("input_dropped_frames_jitter", labels);
+		global_metrics.remove("input_dropped_frames_error", labels);
+		global_metrics.remove("input_dropped_frames_resets", labels);
+
+		global_metrics.remove("input_has_signal_bool", labels);
+		global_metrics.remove("input_is_connected_bool", labels);
+		global_metrics.remove("input_interlaced_bool", labels);
+		global_metrics.remove("input_width_pixels", labels);
+		global_metrics.remove("input_height_pixels", labels);
+		global_metrics.remove("input_frame_rate_nom", labels);
+		global_metrics.remove("input_frame_rate_den", labels);
+		global_metrics.remove("input_sample_rate_hz", labels);
+	}
+
 	// Register metrics.
 	vector<pair<string, string>> labels;
 	char card_name[64];
@@ -508,6 +526,7 @@ void Mixer::configure_card(unsigned card_index, CaptureInterface *capture, CardT
 	global_metrics.add("input_frame_rate_nom", labels, &card->metric_input_frame_rate_nom, Metrics::TYPE_GAUGE);
 	global_metrics.add("input_frame_rate_den", labels, &card->metric_input_frame_rate_den, Metrics::TYPE_GAUGE);
 	global_metrics.add("input_sample_rate_hz", labels, &card->metric_input_sample_rate_hz, Metrics::TYPE_GAUGE);
+	card->labels = labels;
 }
 
 void Mixer::set_output_card_internal(int card_index)
