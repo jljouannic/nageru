@@ -135,7 +135,7 @@ private:
 
 	bool is_shutdown = false;
 	bool has_released_gl_resources = false;
-	bool use_zerocopy;
+	std::atomic<bool> use_zerocopy;
 	int drm_fd = -1;
 
 	std::thread encode_thread, storage_thread;

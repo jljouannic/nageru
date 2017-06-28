@@ -136,14 +136,17 @@ void VideoEncoder::change_x264_bitrate(unsigned rate_kbit)
 
 void VideoEncoder::add_audio(int64_t pts, std::vector<float> audio)
 {
-	lock_guard<mutex> lock(qs_mu);
-	quicksync_encoder->add_audio(pts, audio);
+	{
+		lock_guard<mutex> lock(qs_mu);
+		quicksync_encoder->add_audio(pts, audio);
+	}
 	stream_audio_encoder->encode_audio(audio, pts + quicksync_encoder->global_delay());
 }
 
 bool VideoEncoder::is_zerocopy() const
 {
-	lock_guard<mutex> lock(qs_mu);
+	// Explicitly do _not_ take qs_mu; this is called from the mixer,
+	// and qs_mu might be contended. is_zerocopy() is thread safe.
 	return quicksync_encoder->is_zerocopy();
 }
 
