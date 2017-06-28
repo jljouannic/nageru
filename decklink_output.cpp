@@ -2,6 +2,7 @@
 #include <movit/util.h>
 #include <movit/resource_pool.h>  // Must be above the Xlib includes.
 #include <pthread.h>
+#include <unistd.h>
 
 #include <mutex>
 
@@ -543,7 +544,15 @@ void DeckLinkOutput::present_thread_func()
 			++metric_decklink_output_inflight_frames;
 		}
 
-		glClientWaitSync(frame->fence.get(), /*flags=*/0, GL_TIMEOUT_IGNORED);
+		for ( ;; ) {
+			int err = glClientWaitSync(frame->fence.get(), /*flags=*/0, 0);
+			if (err == GL_TIMEOUT_EXPIRED) {
+				// NVIDIA likes to busy-wait; yield instead.
+				this_thread::sleep_for(milliseconds(1));
+			} else {
+				break;
+			}
+		}
 		check_error();
 		frame->fence.reset();
 

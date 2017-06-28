@@ -1981,8 +1981,12 @@ void QuickSyncEncoderImpl::pass_frame(QuickSyncEncoderImpl::PendingFrame frame, 
 	// Wait for the GPU to be done with the frame.
 	GLenum sync_status;
 	do {
-		sync_status = glClientWaitSync(frame.fence.get(), 0, 1000000000);
+		sync_status = glClientWaitSync(frame.fence.get(), 0, 0);
 		check_error();
+		if (sync_status == GL_TIMEOUT_EXPIRED) {
+			// NVIDIA likes to busy-wait; yield instead.
+			this_thread::sleep_for(milliseconds(1));
+		}
 	} while (sync_status == GL_TIMEOUT_EXPIRED);
 	assert(sync_status != GL_WAIT_FAILED);
 
