@@ -84,7 +84,7 @@ private:
 
 	std::mutex m;
 	lua_State *L;  // Protected by <m>.
-	const InputState *input_state;  // Protected by <m>. Only set temporarily, during chain setup.
+	const InputState *input_state = nullptr;  // Protected by <m>. Only set temporarily, during chain setup.
 	movit::ResourcePool *resource_pool;
 	int num_channels;
 	unsigned num_cards;
@@ -108,8 +108,8 @@ public:
 	// Note: <override_bounce> is irrelevant for PixelFormat_8BitBGRA.
 	LiveInputWrapper(Theme *theme, movit::EffectChain *chain, bmusb::PixelFormat pixel_format, bool override_bounce, bool deinterlace);
 
-	void connect_signal(int signal_num);
-	void connect_signal_raw(int signal_num);
+	void connect_signal(int signal_num);  // Must be called with the theme's <m> lock held, since it accesses theme->input_state.
+	void connect_signal_raw(int signal_num, const InputState &input_state);
 	movit::Effect *get_effect() const
 	{
 		if (deinterlace) {

@@ -775,12 +775,12 @@ void LiveInputWrapper::connect_signal(int signal_num)
 	}
 
 	signal_num = theme->map_signal(signal_num);
-	connect_signal_raw(signal_num);
+	connect_signal_raw(signal_num, *theme->input_state);
 }
 
-void LiveInputWrapper::connect_signal_raw(int signal_num)
+void LiveInputWrapper::connect_signal_raw(int signal_num, const InputState &input_state)
 {
-	BufferedFrame first_frame = theme->input_state->buffered_frames[signal_num][0];
+	BufferedFrame first_frame = input_state.buffered_frames[signal_num][0];
 	if (first_frame.frame == nullptr) {
 		// No data yet.
 		return;
@@ -792,10 +792,10 @@ void LiveInputWrapper::connect_signal_raw(int signal_num)
 		height = userdata->last_height[first_frame.field_number];
 	}
 
-	movit::YCbCrLumaCoefficients ycbcr_coefficients = theme->input_state->ycbcr_coefficients[signal_num];
-	bool full_range = theme->input_state->full_range[signal_num];
+	movit::YCbCrLumaCoefficients ycbcr_coefficients = input_state.ycbcr_coefficients[signal_num];
+	bool full_range = input_state.full_range[signal_num];
 
-	if (theme->input_state->ycbcr_coefficients_auto[signal_num]) {
+	if (input_state.ycbcr_coefficients_auto[signal_num]) {
 		full_range = false;
 
 		// The Blackmagic driver docs claim that the device outputs Y'CbCr
@@ -819,7 +819,7 @@ void LiveInputWrapper::connect_signal_raw(int signal_num)
 
 	BufferedFrame last_good_frame = first_frame;
 	for (unsigned i = 0; i < max(ycbcr_inputs.size(), rgba_inputs.size()); ++i) {
-		BufferedFrame frame = theme->input_state->buffered_frames[signal_num][i];
+		BufferedFrame frame = input_state.buffered_frames[signal_num][i];
 		if (frame.frame == nullptr) {
 			// Not enough data; reuse last frame (well, field).
 			// This is suboptimal, but we have nothing better.
@@ -871,7 +871,7 @@ void LiveInputWrapper::connect_signal_raw(int signal_num)
 	}
 
 	if (deinterlace) {
-		BufferedFrame frame = theme->input_state->buffered_frames[signal_num][0];
+		BufferedFrame frame = input_state.buffered_frames[signal_num][0];
 		CHECK(deinterlace_effect->set_int("current_field_position", frame.field_number));
 	}
 }
@@ -1027,6 +1027,7 @@ Theme::Chain Theme::get_chain(unsigned num, float t, unsigned width, unsigned he
 	chain.setup_chain = [this, funcref, input_state]{
 		unique_lock<mutex> lock(m);
 
+		assert(this->input_state == nullptr);
 		this->input_state = &input_state;
 
 		// Set up state, including connecting signals.
@@ -1036,6 +1037,8 @@ Theme::Chain Theme::get_chain(unsigned num, float t, unsigned width, unsigned he
 			exit(1);
 		}
 		assert(lua_gettop(L) == 0);
+
+		this->input_state = nullptr;
 	};
 
 	// TODO: Can we do better, e.g. by running setup_chain() and seeing what it references?

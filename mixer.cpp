@@ -1334,7 +1334,7 @@ void Mixer::render_one_frame(int64_t duration)
 	// The theme can't (or at least shouldn't!) call connect_signal() on
 	// each FFmpeg input, so we'll do it here.
 	for (const pair<LiveInputWrapper *, FFmpegCapture *> &conn : theme->get_signal_connections()) {
-		conn.first->connect_signal_raw(conn.second->get_card_index());
+		conn.first->connect_signal_raw(conn.second->get_card_index(), input_state);
 	}
 
 	// If HDMI/SDI output is active and the user has requested auto mode,
