@@ -77,6 +77,8 @@ int main(int argc, char *argv[])
 		uses_mlock = true;
 	}
 
+	pthread_setname_np(pthread_self(), "Nageru_UI");
+
 	int rc = app.exec();
 	global_mixer->quit();
 	mainWindow.mixer_shutting_down();
