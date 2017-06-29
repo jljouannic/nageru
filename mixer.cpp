@@ -738,11 +738,6 @@ void Mixer::bm_frame(unsigned card_index, uint16_t timecode,
 
 	card->last_timecode = timecode;
 
-	// Calculate jitter for this card here. We do it on arrival so that we
-	// make sure every frame counts, even the dropped ones -- and it will also
-	// make sure the jitter number is as recent as possible, should it change.
-	card->jitter_history.frame_arrived(video_frame.received_timestamp, frame_length, dropped_frames);
-
 	PBOFrameAllocator::Userdata *userdata = (PBOFrameAllocator::Userdata *)video_frame.userdata;
 
 	size_t cbcr_width, cbcr_height, cbcr_offset, y_offset;
@@ -786,8 +781,9 @@ void Mixer::bm_frame(unsigned card_index, uint16_t timecode,
 			new_frame.dropped_frames = dropped_frames;
 			new_frame.received_timestamp = video_frame.received_timestamp;
 			card->new_frames.push_back(move(new_frame));
-			card->new_frames_changed.notify_all();
+			card->jitter_history.frame_arrived(video_frame.received_timestamp, frame_length, dropped_frames);
 		}
+		card->new_frames_changed.notify_all();
 		return;
 	}
 
@@ -911,8 +907,9 @@ void Mixer::bm_frame(unsigned card_index, uint16_t timecode,
 			new_frame.dropped_frames = dropped_frames;
 			new_frame.received_timestamp = video_frame.received_timestamp;  // Ignore the audio timestamp.
 			card->new_frames.push_back(move(new_frame));
-			card->new_frames_changed.notify_all();
+			card->jitter_history.frame_arrived(video_frame.received_timestamp, frame_length, dropped_frames);
 		}
+		card->new_frames_changed.notify_all();
 	}
 }
 
