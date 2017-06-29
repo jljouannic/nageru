@@ -12,6 +12,7 @@
 #include "decklink_output.h"
 #include "decklink_util.h"
 #include "flags.h"
+#include "metrics.h"
 #include "print_latency.h"
 #include "timebase.h"
 #include "v210_converter.h"
@@ -45,6 +46,8 @@ atomic<int64_t> metric_decklink_output_completed_frames_unknown{0};
 
 atomic<int64_t> metric_decklink_output_scheduled_samples{0};
 
+Summary metric_decklink_output_margin_seconds;
+
 }  // namespace
 
 DeckLinkOutput::DeckLinkOutput(ResourcePool *resource_pool, QSurface *surface, unsigned width, unsigned height, unsigned card_index)
@@ -73,6 +76,9 @@ DeckLinkOutput::DeckLinkOutput(ResourcePool *resource_pool, QSurface *surface, u
 		global_metrics.add("decklink_output_completed_frames", {{ "status", "unknown" }}, &metric_decklink_output_completed_frames_unknown);
 
 		global_metrics.add("decklink_output_scheduled_samples", &metric_decklink_output_scheduled_samples);
+		vector<double> quantiles{0.01, 0.1, 0.25, 0.5, 0.75, 0.9, 0.99};
+		metric_decklink_output_margin_seconds.init(quantiles, 60.0);
+		global_metrics.add("decklink_output_margin_seconds", &metric_decklink_output_margin_seconds);
 	});
 }
 
@@ -372,6 +378,9 @@ void DeckLinkOutput::wait_for_frame(int64_t pts, int *dropped_frames, int64_t *f
 
 	*frame_timestamp = steady_clock::now() +
 		nanoseconds((target_time - stream_frame_time) * 1000000000 / TIMEBASE);
+
+	metric_decklink_output_margin_seconds.count_event(
+		(target_time - stream_frame_time) / double(TIMEBASE));
 
 	// If we're ahead of time, wait for the frame to (approximately) start.
 	if (stream_frame_time < target_time) {
