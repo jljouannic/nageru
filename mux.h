@@ -10,10 +10,12 @@ extern "C" {
 
 #include <sys/types.h>
 #include <atomic>
+#include <condition_variable>
 #include <functional>
 #include <mutex>
 #include <string>
 #include <utility>
+#include <thread>
 #include <vector>
 
 struct MuxMetrics {
@@ -39,13 +41,24 @@ public:
 		CODEC_H264,
 		CODEC_NV12,  // Uncompressed 4:2:0.
 	};
+	enum WriteStrategy {
+		// add_packet() will write the packet immediately, unless plugged.
+		WRITE_FOREGROUND,
+
+		// All writes will happen on a separate thread, so add_packet()
+		// won't block. Use this if writing to a file and you might be
+		// holding a mutex (because blocking I/O with a mutex held is
+		// not good). Note that this will clone every packet, so it has
+		// higher overhead.
+		WRITE_BACKGROUND,
+	};
 
 	// Takes ownership of avctx. <write_callback> will be called every time
 	// a write has been made to the video stream (id 0), with the pts of
 	// the just-written frame. (write_callback can be nullptr.)
 	// Does not take ownership of <metrics>; elements in there, if any,
 	// will be added to.
-	Mux(AVFormatContext *avctx, int width, int height, Codec video_codec, const std::string &video_extradata, const AVCodecParameters *audio_codecpar, int time_base, std::function<void(int64_t)> write_callback, const std::vector<MuxMetrics *> &metrics);
+	Mux(AVFormatContext *avctx, int width, int height, Codec video_codec, const std::string &video_extradata, const AVCodecParameters *audio_codecpar, int time_base, std::function<void(int64_t)> write_callback, WriteStrategy write_strategy, const std::vector<MuxMetrics *> &metrics);
 	~Mux();
 	void add_packet(const AVPacket &pkt, int64_t pts, int64_t dts);
 
@@ -61,17 +74,36 @@ public:
 	void unplug();
 
 private:
-	void write_packet_or_die(const AVPacket &pkt);  // Must be called with <mu> held.
+	// If write_strategy == WRITE_FOREGORUND, Must be called with <mu> held.
+	void write_packet_or_die(const AVPacket &pkt, int64_t unscaled_pts);
+	void thread_func();
+
+	WriteStrategy write_strategy;
 
 	std::mutex mu;
-	AVFormatContext *avctx;  // Protected by <mu>.
+
+	// These are only in use if write_strategy == WRITE_BACKGROUND.
+	std::atomic<bool> writer_thread_should_quit{false};
+	std::thread writer_thread;
+
+	AVFormatContext *avctx;  // Protected by <mu>, iff write_strategy == WRITE_BACKGROUND.
 	int plug_count = 0;  // Protected by <mu>.
-	std::vector<AVPacket *> plugged_packets;  // Protected by <mu>.
+
+	// Protected by <mu>. If write_strategy == WRITE_FOREGROUND,
+	// this is only in use when plugging.
+	struct QueuedPacket {
+		AVPacket *pkt;
+		int64_t unscaled_pts;
+	};
+	std::vector<QueuedPacket> packet_queue;
+	std::condition_variable packet_queue_ready;
 
 	AVStream *avstream_video, *avstream_audio;
 
 	std::function<void(int64_t)> write_callback;
 	std::vector<MuxMetrics *> metrics;
+
+	friend struct PacketBefore;
 };
 
 #endif  // !defined(_MUX_H)

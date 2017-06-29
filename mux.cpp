@@ -31,7 +31,9 @@ using namespace std;
 struct PacketBefore {
 	PacketBefore(const AVFormatContext *ctx) : ctx(ctx) {}
 
-	bool operator() (const AVPacket *a, const AVPacket *b) const {
+	bool operator() (const Mux::QueuedPacket &a_qp, const Mux::QueuedPacket &b_qp) const {
+		const AVPacket *a = a_qp.pkt;
+		const AVPacket *b = b_qp.pkt;
 		int64_t a_dts = (a->dts == AV_NOPTS_VALUE ? a->pts : a->dts);
 		int64_t b_dts = (b->dts == AV_NOPTS_VALUE ? b->pts : b->dts);
 		AVRational a_timebase = ctx->streams[a->stream_index]->time_base;
@@ -46,8 +48,8 @@ struct PacketBefore {
 	const AVFormatContext * const ctx;
 };
 
-Mux::Mux(AVFormatContext *avctx, int width, int height, Codec video_codec, const string &video_extradata, const AVCodecParameters *audio_codecpar, int time_base, std::function<void(int64_t)> write_callback, const vector<MuxMetrics *> &metrics)
-	: avctx(avctx), write_callback(write_callback), metrics(metrics)
+Mux::Mux(AVFormatContext *avctx, int width, int height, Codec video_codec, const string &video_extradata, const AVCodecParameters *audio_codecpar, int time_base, std::function<void(int64_t)> write_callback, WriteStrategy write_strategy, const vector<MuxMetrics *> &metrics)
+	: write_strategy(write_strategy), avctx(avctx), write_callback(write_callback), metrics(metrics)
 {
 	avstream_video = avformat_new_stream(avctx, nullptr);
 	if (avstream_video == nullptr) {
@@ -116,10 +118,20 @@ Mux::Mux(AVFormatContext *avctx, int width, int height, Codec video_codec, const
 
 	// Make sure the header is written before the constructor exits.
 	avio_flush(avctx->pb);
+
+	if (write_strategy == WRITE_BACKGROUND) {
+		writer_thread = thread(&Mux::thread_func, this);
+	}
 }
 
 Mux::~Mux()
 {
+	assert(plug_count == 0);
+	if (write_strategy == WRITE_BACKGROUND) {
+		writer_thread_should_quit = true;
+		packet_queue_ready.notify_all();
+		writer_thread.join();
+	}
 	int64_t old_pos = avctx->pb->pos;
 	av_write_trailer(avctx);
 	for (MuxMetrics *metric : metrics) {
@@ -154,25 +166,20 @@ void Mux::add_packet(const AVPacket &pkt, int64_t pts, int64_t dts)
 
 	{
 		lock_guard<mutex> lock(mu);
-		if (plug_count > 0) {
-			plugged_packets.push_back(av_packet_clone(&pkt_copy));
+		if (write_strategy == WriteStrategy::WRITE_BACKGROUND) {
+			packet_queue.push_back(QueuedPacket{ av_packet_clone(&pkt_copy), pts });
+			if (plug_count == 0) packet_queue_ready.notify_all();
+		} else if (plug_count > 0) {
+			packet_queue.push_back(QueuedPacket{ av_packet_clone(&pkt_copy), pts });
 		} else {
-			write_packet_or_die(pkt_copy);
+			write_packet_or_die(pkt_copy, pts);
 		}
 	}
 
 	av_packet_unref(&pkt_copy);
-
-	// Note: This will be wrong in the case of plugged packets, but that only happens
-	// for network streams, not for files, and write callbacks are only really relevant
-	// for files. (We don't want to do this from write_packet_or_die, as it only has
-	// the rescaled pts, which is unsuitable for callback.)
-	if (pkt.stream_index == 0 && write_callback != nullptr) {
-		write_callback(pts);
-	}
 }
 
-void Mux::write_packet_or_die(const AVPacket &pkt)
+void Mux::write_packet_or_die(const AVPacket &pkt, int64_t unscaled_pts)
 {
 	for (MuxMetrics *metric : metrics) {
 		if (pkt.stream_index == 0) {
@@ -192,6 +199,10 @@ void Mux::write_packet_or_die(const AVPacket &pkt)
 	for (MuxMetrics *metric : metrics) {
 		metric->metric_written_bytes += avctx->pb->pos - old_pos;
 	}
+
+	if (pkt.stream_index == 0 && write_callback != nullptr) {
+		write_callback(unscaled_pts);
+	}
 }
 
 void Mux::plug()
@@ -208,13 +219,42 @@ void Mux::unplug()
 	}
 	assert(plug_count >= 0);
 
-	sort(plugged_packets.begin(), plugged_packets.end(), PacketBefore(avctx));
+	sort(packet_queue.begin(), packet_queue.end(), PacketBefore(avctx));
 
-	for (AVPacket *pkt : plugged_packets) {
-		write_packet_or_die(*pkt);
-		av_packet_free(&pkt);
+	if (write_strategy == WRITE_BACKGROUND) {
+		packet_queue_ready.notify_all();
+	} else {
+		for (QueuedPacket &qp : packet_queue) {
+			write_packet_or_die(*qp.pkt, qp.unscaled_pts);
+			av_packet_free(&qp.pkt);
+		}
+		packet_queue.clear();
 	}
-	plugged_packets.clear();
+}
+
+void Mux::thread_func()
+{
+	unique_lock<mutex> lock(mu);
+	for ( ;; ) {
+		packet_queue_ready.wait(lock, [this]() {
+			return writer_thread_should_quit || (!packet_queue.empty() && plug_count == 0);
+		});
+		if (writer_thread_should_quit && packet_queue.empty()) {
+			// All done.
+			break;
+		}
+
+		assert(!packet_queue.empty() && plug_count == 0);
+		vector<QueuedPacket> packets;
+		swap(packets, packet_queue);
+
+		lock.unlock();
+		for (QueuedPacket &qp : packets) {
+			write_packet_or_die(*qp.pkt, qp.unscaled_pts);
+			av_packet_free(&qp.pkt);
+		}
+		lock.lock();
+	}
 }
 
 void MuxMetrics::init(const vector<pair<string, string>> &labels)
