@@ -729,7 +729,9 @@ void Mixer::bm_frame(unsigned card_index, uint16_t timecode,
 		} while (!success);
 	}
 
-	audio_mixer.add_audio(device, audio_frame.data + audio_offset, num_samples, audio_format, frame_length, audio_frame.received_timestamp);
+	if (num_samples > 0) {
+		audio_mixer.add_audio(device, audio_frame.data + audio_offset, num_samples, audio_format, frame_length, audio_frame.received_timestamp);
+	}
 
 	// Done with the audio, so release it.
 	if (audio_frame.owner) {
