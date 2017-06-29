@@ -59,14 +59,16 @@ class ResourcePool;
 // This is just a pimpl, because including anything X11-related in a .h file
 // tends to trip up Qt. All the real logic is in QuickSyncEncoderImpl,
 // defined in quicksync_encoder_impl.h.
+//
+// This class is _not_ thread-safe, except where mentioned.
 class QuickSyncEncoder {
 public:
         QuickSyncEncoder(const std::string &filename, movit::ResourcePool *resource_pool, QSurface *surface, const std::string &va_display, int width, int height, AVOutputFormat *oformat, X264Encoder *x264_encoder, DiskSpaceEstimator *disk_space_estimator);
         ~QuickSyncEncoder();
 
 	void set_stream_mux(Mux *mux);  // Does not take ownership. Must be called unless x264 is used for the stream.
-	void add_audio(int64_t pts, std::vector<float> audio);
-	bool is_zerocopy() const;
+	void add_audio(int64_t pts, std::vector<float> audio);  // Thread-safe.
+	bool is_zerocopy() const;  // Thread-safe.
 
 	// See VideoEncoder::begin_frame().
 	bool begin_frame(int64_t pts, int64_t duration, movit::YCbCrLumaCoefficients ycbcr_coefficients, const std::vector<RefCountedFrame> &input_frames, GLuint *y_tex, GLuint *cbcr_tex);

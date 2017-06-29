@@ -1719,6 +1719,7 @@ bool QuickSyncEncoderImpl::begin_frame(int64_t pts, int64_t duration, YCbCrLumaC
 
 void QuickSyncEncoderImpl::add_audio(int64_t pts, vector<float> audio)
 {
+	lock_guard<mutex> lock(file_audio_encoder_mutex);
 	assert(!is_shutdown);
 	file_audio_encoder->encode_audio(audio, pts + global_delay());
 }
@@ -1800,7 +1801,10 @@ void QuickSyncEncoderImpl::shutdown()
 	storage_thread.join();
 
 	// Encode any leftover audio in the queues, and also any delayed frames.
-	file_audio_encoder->encode_last_audio();
+	{
+		lock_guard<mutex> lock(file_audio_encoder_mutex);
+		file_audio_encoder->encode_last_audio();
+	}
 
 	if (!global_flags.x264_video_to_disk) {
 		release_encode();
@@ -1837,11 +1841,14 @@ void QuickSyncEncoderImpl::open_output_file(const std::string &filename)
 
 	current_file_mux_metrics.reset();
 
-	AVCodecParametersWithDeleter audio_codecpar = file_audio_encoder->get_codec_parameters();
-	file_mux.reset(new Mux(avctx, frame_width, frame_height, Mux::CODEC_H264, video_extradata, audio_codecpar.get(), TIMEBASE,
-		std::bind(&DiskSpaceEstimator::report_write, disk_space_estimator, filename, _1),
-		Mux::WRITE_BACKGROUND,
-		{ &current_file_mux_metrics, &total_mux_metrics }));
+	{
+		lock_guard<mutex> lock(file_audio_encoder_mutex);
+		AVCodecParametersWithDeleter audio_codecpar = file_audio_encoder->get_codec_parameters();
+		file_mux.reset(new Mux(avctx, frame_width, frame_height, Mux::CODEC_H264, video_extradata, audio_codecpar.get(), TIMEBASE,
+			std::bind(&DiskSpaceEstimator::report_write, disk_space_estimator, filename, _1),
+			Mux::WRITE_BACKGROUND,
+			{ &current_file_mux_metrics, &total_mux_metrics }));
+	}
 	metric_current_file_start_time_seconds = get_timestamp_for_metrics();
 
 	if (global_flags.x264_video_to_disk) {

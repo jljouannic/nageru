@@ -79,8 +79,8 @@ private:
 	int write_packet2(uint8_t *buf, int buf_size, AVIODataMarkerType type, int64_t time);
 
 	AVOutputFormat *oformat;
-	mutable std::mutex qs_mu;
-	std::unique_ptr<QuickSyncEncoder> quicksync_encoder;  // Under <qs_mu>.
+	mutable std::mutex qs_mu, qs_audio_mu;
+	std::unique_ptr<QuickSyncEncoder> quicksync_encoder;  // Under <qs_mu> _and_ <qs_audio_mu>.
 	movit::ResourcePool *resource_pool;
 	QSurface *surface;
 	std::string va_display;

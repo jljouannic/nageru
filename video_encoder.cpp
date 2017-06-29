@@ -96,7 +96,8 @@ void VideoEncoder::do_cut(int frame)
 	// the same time, it means pts could come out of order to the stream mux,
 	// and we need to plug it until the shutdown is complete.
 	stream_mux->plug();
-	lock_guard<mutex> lock(qs_mu);
+	lock(qs_mu, qs_audio_mu);
+	lock_guard<mutex> lock1(qs_mu, adopt_lock), lock2(qs_audio_mu, adopt_lock);
 	QuickSyncEncoder *old_encoder = quicksync_encoder.release();  // When we go C++14, we can use move capture instead.
 	X264Encoder *old_x264_encoder = nullptr;
 	if (global_flags.x264_video_to_disk) {
@@ -136,8 +137,11 @@ void VideoEncoder::change_x264_bitrate(unsigned rate_kbit)
 
 void VideoEncoder::add_audio(int64_t pts, std::vector<float> audio)
 {
+	// Take only qs_audio_mu, since add_audio() is thread safe
+	// (we can only conflict with do_cut(), which takes qs_audio_mu)
+	// and we don't want to contend with begin_frame().
 	{
-		lock_guard<mutex> lock(qs_mu);
+		lock_guard<mutex> lock(qs_audio_mu);
 		quicksync_encoder->add_audio(pts, audio);
 	}
 	stream_audio_encoder->encode_audio(audio, pts + quicksync_encoder->global_delay());
@@ -146,7 +150,9 @@ void VideoEncoder::add_audio(int64_t pts, std::vector<float> audio)
 bool VideoEncoder::is_zerocopy() const
 {
 	// Explicitly do _not_ take qs_mu; this is called from the mixer,
-	// and qs_mu might be contended. is_zerocopy() is thread safe.
+	// and qs_mu might be contended. is_zerocopy() is thread safe
+	// and never called in parallel with do_cut() (both happen only
+	// from the mixer thread).
 	return quicksync_encoder->is_zerocopy();
 }
 

@@ -162,6 +162,7 @@ private:
 	std::map<int, PendingFrame> reorder_buffer;
 	int quicksync_encoding_frame_num = 0;
 
+	std::mutex file_audio_encoder_mutex;
 	std::unique_ptr<AudioEncoder> file_audio_encoder;
 
 	X264Encoder *x264_encoder;  // nullptr if not using x264.
