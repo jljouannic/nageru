@@ -20,6 +20,7 @@ map<uint32_t, VideoMode> summarize_video_modes(IDeckLinkDisplayModeIterator *mod
 			mode.name = "Unknown mode";
 		} else {
 			mode.name = mode_name;
+			free((char *)mode_name);
 		}
 
 		mode.autodetect = false;
