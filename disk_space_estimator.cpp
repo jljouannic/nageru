@@ -50,7 +50,12 @@ void DiskSpaceEstimator::report_write(const std::string &filename, uint64_t pts)
 		double bytes_per_second = double(st.st_size - measure_points.front().size) /
 			(pts - measure_points.front().pts) * TIMEBASE;
 		double seconds_left = free_bytes / bytes_per_second;
-		callback(free_bytes, seconds_left);
+
+		// Only report every second, since updating the UI can be expensive.
+		if (last_pts_reported == 0 || pts - last_pts_reported >= TIMEBASE) {
+			callback(free_bytes, seconds_left);
+			last_pts_reported = pts;
+		}
 	}
 
 	measure_points.push_back({ pts, st.st_size });

@@ -44,6 +44,7 @@ private:
 		off_t size;
 	};
 	std::deque<MeasurePoint> measure_points;
+	uint64_t last_pts_reported = 0;
 
 	// Metrics.
 	std::atomic<int64_t> metric_disk_free_bytes{-1};
