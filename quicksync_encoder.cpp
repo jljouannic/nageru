@@ -118,14 +118,6 @@ static constexpr unsigned int MaxFrameNum = (2<<16);
 static constexpr unsigned int MaxPicOrderCntLsb = (2<<8);
 static constexpr unsigned int Log2MaxFrameNum = 16;
 static constexpr unsigned int Log2MaxPicOrderCntLsb = 8;
-static constexpr int rc_default_modes[] = {  // Priority list of modes.
-    VA_RC_VBR,
-    VA_RC_CQP,
-    VA_RC_VBR_CONSTRAINED,
-    VA_RC_CBR,
-    VA_RC_VCM,
-    VA_RC_NONE,
-};
 
 using namespace std;
 
@@ -714,26 +706,6 @@ void encoding2display_order(
 }
 
 
-static const char *rc_to_string(int rc_mode)
-{
-    switch (rc_mode) {
-    case VA_RC_NONE:
-        return "NONE";
-    case VA_RC_CBR:
-        return "CBR";
-    case VA_RC_VBR:
-        return "VBR";
-    case VA_RC_VCM:
-        return "VCM";
-    case VA_RC_CQP:
-        return "CQP";
-    case VA_RC_VBR_CONSTRAINED:
-        return "VBR_CONSTRAINED";
-    default:
-        return "Unknown";
-    }
-}
-
 void QuickSyncEncoderImpl::enable_zerocopy_if_possible()
 {
 	if (global_flags.x264_video_to_disk) {
@@ -879,23 +851,13 @@ int QuickSyncEncoderImpl::init_va(const string &va_display)
     }
     
     if (attrib[VAConfigAttribRateControl].value != VA_ATTRIB_NOT_SUPPORTED) {
-        int tmp = attrib[VAConfigAttribRateControl].value;
-
-        if (rc_mode == -1 || !(rc_mode & tmp))  {
-            if (rc_mode != -1) {
-                printf("Warning: Don't support the specified RateControl mode: %s!!!, switch to ", rc_to_string(rc_mode));
-            }
-
-            for (i = 0; i < sizeof(rc_default_modes) / sizeof(rc_default_modes[0]); i++) {
-                if (rc_default_modes[i] & tmp) {
-                    rc_mode = rc_default_modes[i];
-                    break;
-                }
-            }
+        if (!(attrib[VAConfigAttribRateControl].value & VA_RC_CQP)) {
+            fprintf(stderr, "ERROR: VA-API encoder does not support CQP mode.\n");
+            exit(1);
         }
 
         config_attrib[config_attrib_num].type = VAConfigAttribRateControl;
-        config_attrib[config_attrib_num].value = rc_mode;
+        config_attrib[config_attrib_num].value = VA_RC_CQP;
         config_attrib_num++;
     }
     
