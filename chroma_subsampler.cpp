@@ -102,6 +102,10 @@ ChromaSubsampler::ChromaSubsampler(ResourcePool *resource_pool)
 		"} \n";
 	cbcr_program_num = resource_pool->compile_glsl_program(cbcr_vert_shader, cbcr_frag_shader, frag_shader_outputs);
 	check_error();
+	cbcr_chroma_offset_0_location = get_uniform_location(cbcr_program_num, "foo", "chroma_offset_0");
+	check_error();
+	cbcr_chroma_offset_1_location = get_uniform_location(cbcr_program_num, "foo", "chroma_offset_1");
+	check_error();
 
 	cbcr_texture_sampler_uniform = glGetUniformLocation(cbcr_program_num, "cbcr_tex");
 	check_error();
@@ -152,6 +156,14 @@ ChromaSubsampler::ChromaSubsampler(ResourcePool *resource_pool)
 		"} \n";
 
 	uyvy_program_num = resource_pool->compile_glsl_program(uyvy_vert_shader, uyvy_frag_shader, frag_shader_outputs);
+	check_error();
+	uyvy_luma_offset_0_location = get_uniform_location(uyvy_program_num, "foo", "luma_offset_0");
+	check_error();
+	uyvy_luma_offset_1_location = get_uniform_location(uyvy_program_num, "foo", "luma_offset_1");
+	check_error();
+	uyvy_chroma_offset_0_location = get_uniform_location(uyvy_program_num, "foo", "chroma_offset_0");
+	check_error();
+	uyvy_chroma_offset_1_location = get_uniform_location(uyvy_program_num, "foo", "chroma_offset_1");
 	check_error();
 
 	uyvy_y_texture_sampler_uniform = glGetUniformLocation(uyvy_program_num, "y_tex");
@@ -293,11 +305,10 @@ void ChromaSubsampler::subsample_chroma(GLuint cbcr_tex, unsigned width, unsigne
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
 	check_error();
 
-	float chroma_offset_0[] = { -1.0f / width, 0.0f };
-	float chroma_offset_1[] = { -0.0f / width, 0.0f };
-	set_uniform_vec2(cbcr_program_num, "foo", "chroma_offset_0", chroma_offset_0);
-	set_uniform_vec2(cbcr_program_num, "foo", "chroma_offset_1", chroma_offset_1);
-
+	glUniform2f(cbcr_chroma_offset_0_location, -1.0f / width, 0.0f);
+	check_error();
+	glUniform2f(cbcr_chroma_offset_1_location, -0.0f / width, 0.0f);
+	check_error();
 	glUniform1i(cbcr_texture_sampler_uniform, 0);
 
 	glBindBuffer(GL_ARRAY_BUFFER, vbo);
@@ -372,14 +383,14 @@ void ChromaSubsampler::create_uyvy(GLuint y_tex, GLuint cbcr_tex, unsigned width
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
 	check_error();
 
-	float y_offset_0[] = { -0.5f / width, 0.0f };
-	float y_offset_1[] = {  0.5f / width, 0.0f };
-	float cbcr_offset0[] = { -1.0f / width, 0.0f };
-	float cbcr_offset1[] = { -0.0f / width, 0.0f };
-	set_uniform_vec2(uyvy_program_num, "foo", "luma_offset_0", y_offset_0);
-	set_uniform_vec2(uyvy_program_num, "foo", "luma_offset_1", y_offset_1);
-	set_uniform_vec2(uyvy_program_num, "foo", "chroma_offset_0", cbcr_offset0);
-	set_uniform_vec2(uyvy_program_num, "foo", "chroma_offset_1", cbcr_offset1);
+	glUniform2f(uyvy_luma_offset_0_location, -0.5f / width, 0.0f);
+	check_error();
+	glUniform2f(uyvy_luma_offset_1_location,  0.5f / width, 0.0f);
+	check_error();
+	glUniform2f(uyvy_chroma_offset_0_location, -1.0f / width, 0.0f);
+	check_error();
+	glUniform2f(uyvy_chroma_offset_1_location, -0.0f / width, 0.0f);
+	check_error();
 
 	glBindBuffer(GL_ARRAY_BUFFER, vbo);
 	check_error();
