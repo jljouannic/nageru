@@ -139,6 +139,7 @@ public:
 	// Call after picking out a frame, so 0 means starvation.
 	void update_policy(std::chrono::steady_clock::time_point now,
 	                   std::chrono::steady_clock::time_point expected_next_frame,
+			   int64_t input_frame_duration,
 	                   int64_t master_frame_duration,
 	                   double max_input_card_jitter_seconds,
 	                   double max_master_card_jitter_seconds);

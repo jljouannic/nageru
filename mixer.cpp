@@ -256,10 +256,12 @@ void QueueLengthPolicy::unregister_metrics(const vector<pair<string, string>> &l
 
 void QueueLengthPolicy::update_policy(steady_clock::time_point now,
                                       steady_clock::time_point expected_next_frame,
+                                      int64_t input_frame_duration,
                                       int64_t master_frame_duration,
                                       double max_input_card_jitter_seconds,
                                       double max_master_card_jitter_seconds)
 {
+	double input_frame_duration_seconds = input_frame_duration / double(TIMEBASE);
 	double master_frame_duration_seconds = master_frame_duration / double(TIMEBASE);
 
 	// Figure out when we can expect the next frame for this card, assuming
@@ -279,8 +281,8 @@ void QueueLengthPolicy::update_policy(steady_clock::time_point now,
 	// We account for this by looking at the situation five frames ahead,
 	// assuming everything else is the same.
 	double frames_allowed;
-	if (max_master_card_jitter_seconds < max_input_card_jitter_seconds) {
-		frames_allowed = frames_needed + 5 * (max_input_card_jitter_seconds - max_master_card_jitter_seconds) / master_frame_duration_seconds;
+	if (master_frame_duration < input_frame_duration) {
+		frames_allowed = frames_needed + 5 * (input_frame_duration_seconds - master_frame_duration_seconds) / master_frame_duration_seconds;
 	} else {
 		frames_allowed = frames_needed;
 	}
@@ -1206,6 +1208,7 @@ start:
 			card->queue_length_policy.update_policy(
 				output_frame_info.frame_timestamp,
 				card->jitter_history.get_expected_next_frame(),
+				new_frames[master_card_index].length,
 				output_frame_info.frame_duration,
 				card->jitter_history.estimate_max_jitter(),
 				output_jitter_history.estimate_max_jitter());
