@@ -42,7 +42,7 @@ Nageru is in beta stage. It currently needs:
    but also for stability. You need at least version 0.7.0.
 
  - Movit, my GPU-based video filter library (https://movit.sesse.net).
-   You will need at least version 1.5.1.
+   You will need at least version 1.5.2.
 
  - Qt 5.5 or newer for the GUI.
 
@@ -79,9 +79,9 @@ with:
     libasound2-dev libx264-dev libbmusb-dev protobuf-compiler \
     libprotobuf-dev libpci-dev
 
-Exceptions as of May 2017:
+Exceptions as of July 2017:
 
-  - You will need Movit from experimental; stretch only has 1.4.0.
+  - You will need Movit from git; stretch only has 1.4.0.
 
   - You will need bmusb from experimental; stretch only has 0.5.4.
 

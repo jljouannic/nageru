@@ -273,10 +273,7 @@ ChromaSubsampler::~ChromaSubsampler()
 
 void ChromaSubsampler::subsample_chroma(GLuint cbcr_tex, unsigned width, unsigned height, GLuint dst_tex, GLuint dst2_tex)
 {
-	GLuint vao;
-	glGenVertexArrays(1, &vao);
-	check_error();
-
+	GLuint vao = resource_pool->create_vec2_vao({ cbcr_position_attribute_index, cbcr_texcoord_attribute_index }, vbo);
 	glBindVertexArray(vao);
 	check_error();
 
@@ -311,38 +308,24 @@ void ChromaSubsampler::subsample_chroma(GLuint cbcr_tex, unsigned width, unsigne
 	check_error();
 	glUniform1i(cbcr_texture_sampler_uniform, 0);
 
-	glBindBuffer(GL_ARRAY_BUFFER, vbo);
-	check_error();
-
-	for (GLint attr_index : { cbcr_position_attribute_index, cbcr_texcoord_attribute_index }) {
-		glEnableVertexAttribArray(attr_index);
-		check_error();
-		glVertexAttribPointer(attr_index, 2, GL_FLOAT, GL_FALSE, 0, BUFFER_OFFSET(0));
-		check_error();
-	}
-
 	glDrawArrays(GL_TRIANGLES, 0, 3);
 	check_error();
-
-	for (GLint attr_index : { cbcr_position_attribute_index, cbcr_texcoord_attribute_index }) {
-		glDisableVertexAttribArray(attr_index);
-		check_error();
-	}
 
 	glUseProgram(0);
 	check_error();
 	glBindFramebuffer(GL_FRAMEBUFFER, 0);
 	check_error();
+	glBindVertexArray(0);
+	check_error();
 
 	resource_pool->release_fbo(fbo);
-	glDeleteVertexArrays(1, &vao);
-	check_error();
+	resource_pool->release_vec2_vao(vao);
 }
 
 void ChromaSubsampler::create_uyvy(GLuint y_tex, GLuint cbcr_tex, unsigned width, unsigned height, GLuint dst_tex)
 {
-	GLuint vao;
-	glGenVertexArrays(1, &vao);
+	GLuint vao = resource_pool->create_vec2_vao({ cbcr_position_attribute_index, cbcr_texcoord_attribute_index }, vbo);
+	glBindVertexArray(vao);
 	check_error();
 
 	glBindVertexArray(vao);
@@ -395,22 +378,8 @@ void ChromaSubsampler::create_uyvy(GLuint y_tex, GLuint cbcr_tex, unsigned width
 	glBindBuffer(GL_ARRAY_BUFFER, vbo);
 	check_error();
 
-	for (GLint attr_index : { uyvy_position_attribute_index, uyvy_texcoord_attribute_index }) {
-		if (attr_index == -1) continue;
-		glEnableVertexAttribArray(attr_index);
-		check_error();
-		glVertexAttribPointer(attr_index, 2, GL_FLOAT, GL_FALSE, 0, BUFFER_OFFSET(0));
-		check_error();
-	}
-
 	glDrawArrays(GL_TRIANGLES, 0, 3);
 	check_error();
-
-	for (GLint attr_index : { uyvy_position_attribute_index, uyvy_texcoord_attribute_index }) {
-		if (attr_index == -1) continue;
-		glDisableVertexAttribArray(attr_index);
-		check_error();
-	}
 
 	glActiveTexture(GL_TEXTURE0);
 	check_error();
@@ -418,9 +387,11 @@ void ChromaSubsampler::create_uyvy(GLuint y_tex, GLuint cbcr_tex, unsigned width
 	check_error();
 	glBindFramebuffer(GL_FRAMEBUFFER, 0);
 	check_error();
+	glBindVertexArray(0);
+	check_error();
 
 	resource_pool->release_fbo(fbo);
-	glDeleteVertexArrays(1, &vao);
+	resource_pool->release_vec2_vao(vao);
 }
 
 void ChromaSubsampler::create_v210(GLuint y_tex, GLuint cbcr_tex, unsigned width, unsigned height, GLuint dst_tex)

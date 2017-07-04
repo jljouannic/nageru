@@ -42,12 +42,12 @@ private:
 
 	GLuint cbcr_program_num;  // Owned by <resource_pool>.
 	GLuint cbcr_texture_sampler_uniform;
-	GLuint cbcr_position_attribute_index, cbcr_texcoord_attribute_index;
+	GLint cbcr_position_attribute_index, cbcr_texcoord_attribute_index;
 	GLuint cbcr_chroma_offset_0_location, cbcr_chroma_offset_1_location;
 
 	GLuint uyvy_program_num;  // Owned by <resource_pool>.
 	GLuint uyvy_y_texture_sampler_uniform, uyvy_cbcr_texture_sampler_uniform;
-	GLuint uyvy_position_attribute_index, uyvy_texcoord_attribute_index;
+	GLint uyvy_position_attribute_index, uyvy_texcoord_attribute_index;
 	GLuint uyvy_luma_offset_0_location, uyvy_luma_offset_1_location;
 	GLuint uyvy_chroma_offset_0_location, uyvy_chroma_offset_1_location;
 
