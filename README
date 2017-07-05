@@ -81,9 +81,9 @@ with:
 
 Exceptions as of July 2017:
 
-  - You will need Movit from git; stretch only has 1.4.0.
+  - You will need Movit from unstable; stretch only has 1.4.0.
 
-  - You will need bmusb from experimental; stretch only has 0.5.4.
+  - You will need bmusb from unstable; stretch only has 0.5.4.
 
 The patches/ directory contains a patch that helps zita-resampler performance.
 It is meant for upstream, but was not in at the time Nageru was released.
