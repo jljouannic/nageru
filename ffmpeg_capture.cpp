@@ -411,6 +411,9 @@ bool FFmpegCapture::play_video(const string &pathname)
                 audio_format.num_channels = 8;
 
 		for ( ;; ) {
+			if (last_pts == 0 && pts_origin == 0) {
+				pts_origin = frame->pts;	
+			}
 			next_frame_start = compute_frame_start(frame->pts, pts_origin, video_timebase, start, rate);
 			video_frame.received_timestamp = next_frame_start;
 			bool finished_wakeup = producer_thread_should_quit.sleep_until(next_frame_start);
