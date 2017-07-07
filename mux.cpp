@@ -145,7 +145,7 @@ Mux::~Mux()
 	avformat_free_context(avctx);
 }
 
-void Mux::add_packet(const AVPacket &pkt, int64_t pts, int64_t dts)
+void Mux::add_packet(const AVPacket &pkt, int64_t pts, int64_t dts, AVRational timebase)
 {
 	AVPacket pkt_copy;
 	if (av_copy_packet(&pkt_copy, &pkt) < 0) {
@@ -153,13 +153,13 @@ void Mux::add_packet(const AVPacket &pkt, int64_t pts, int64_t dts)
 		exit(1);
 	}
 	if (pkt.stream_index == 0) {
-		pkt_copy.pts = av_rescale_q(pts, AVRational{1, TIMEBASE}, avstream_video->time_base);
-		pkt_copy.dts = av_rescale_q(dts, AVRational{1, TIMEBASE}, avstream_video->time_base);
-		pkt_copy.duration = av_rescale_q(pkt.duration, AVRational{1, TIMEBASE}, avstream_video->time_base);
+		pkt_copy.pts = av_rescale_q(pts, timebase, avstream_video->time_base);
+		pkt_copy.dts = av_rescale_q(dts, timebase, avstream_video->time_base);
+		pkt_copy.duration = av_rescale_q(pkt.duration, timebase, avstream_video->time_base);
 	} else if (pkt.stream_index == 1) {
-		pkt_copy.pts = av_rescale_q(pts, AVRational{1, TIMEBASE}, avstream_audio->time_base);
-		pkt_copy.dts = av_rescale_q(dts, AVRational{1, TIMEBASE}, avstream_audio->time_base);
-		pkt_copy.duration = av_rescale_q(pkt.duration, AVRational{1, TIMEBASE}, avstream_audio->time_base);
+		pkt_copy.pts = av_rescale_q(pts, timebase, avstream_audio->time_base);
+		pkt_copy.dts = av_rescale_q(dts, timebase, avstream_audio->time_base);
+		pkt_copy.duration = av_rescale_q(pkt.duration, timebase, avstream_audio->time_base);
 	} else {
 		assert(false);
 	}

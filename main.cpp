@@ -21,7 +21,7 @@ extern "C" {
 
 int main(int argc, char *argv[])
 {
-	parse_flags(argc, argv);
+	parse_flags(PROGRAM_NAGERU, argc, argv);
 
 	if (global_flags.va_display.empty() ||
 	    global_flags.va_display[0] != '/') {

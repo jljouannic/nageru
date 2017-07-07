@@ -31,6 +31,7 @@ extern "C" {
 #include "ffmpeg_util.h"
 #include "flags.h"
 #include "image_input.h"
+#include "timebase.h"
 
 #define FRAME_SIZE (8 << 20)  // 8 MB.
 
@@ -70,6 +71,9 @@ AVPixelFormat decide_dst_format(AVPixelFormat src_format, bmusb::PixelFormat dst
 {
 	if (dst_format_type == bmusb::PixelFormat_8BitBGRA) {
 		return AV_PIX_FMT_BGRA;
+	}
+	if (dst_format_type == FFmpegCapture::PixelFormat_NV12) {
+		return AV_PIX_FMT_NV12;
 	}
 
 	assert(dst_format_type == bmusb::PixelFormat_8BitYCbCrPlanar);
@@ -313,7 +317,7 @@ void FFmpegCapture::send_disconnected_frame()
 		video_frame.len = width * height * 4;
 		memset(video_frame.data, 0, video_frame.len);
 
-		frame_callback(timecode++,
+		frame_callback(-1, AVRational{1, TIMEBASE}, timecode++,
 			video_frame, /*video_offset=*/0, video_format,
 			FrameAllocator::Frame(), /*audio_offset=*/0, AudioFormat());
 	}
@@ -350,6 +354,8 @@ bool FFmpegCapture::play_video(const string &pathname)
 		return false;
 	}
 
+	int audio_stream_index = find_stream_index(format_ctx.get(), AVMEDIA_TYPE_AUDIO);
+
 	const AVCodecParameters *codecpar = format_ctx->streams[video_stream_index]->codecpar;
 	video_timebase = format_ctx->streams[video_stream_index]->time_base;
 	AVCodecContextWithDeleter codec_ctx = avcodec_alloc_context3_unique(nullptr);
@@ -378,7 +384,7 @@ bool FFmpegCapture::play_video(const string &pathname)
 		}
 
 		bool error;
-		AVFrameWithDeleter frame = decode_frame(format_ctx.get(), codec_ctx.get(), pathname, video_stream_index, &error);
+		AVFrameWithDeleter frame = decode_frame(format_ctx.get(), codec_ctx.get(), pathname, video_stream_index, audio_stream_index, &error);
 		if (error) {
 			return false;
 		}
@@ -418,7 +424,7 @@ bool FFmpegCapture::play_video(const string &pathname)
 			video_frame.received_timestamp = next_frame_start;
 			bool finished_wakeup = producer_thread_should_quit.sleep_until(next_frame_start);
 			if (finished_wakeup) {
-				frame_callback(timecode++,
+				frame_callback(frame->pts, video_timebase, timecode++,
 					video_frame, 0, video_format,
 					audio_frame, 0, audio_format);
 				break;
@@ -494,7 +500,7 @@ bool FFmpegCapture::process_queued_commands(AVFormatContext *format_ctx, const s
 	return false;
 }
 
-AVFrameWithDeleter FFmpegCapture::decode_frame(AVFormatContext *format_ctx, AVCodecContext *codec_ctx, const std::string &pathname, int video_stream_index, bool *error)
+AVFrameWithDeleter FFmpegCapture::decode_frame(AVFormatContext *format_ctx, AVCodecContext *codec_ctx, const std::string &pathname, int video_stream_index, int audio_stream_index, bool *error)
 {
 	*error = false;
 
@@ -510,6 +516,9 @@ AVFrameWithDeleter FFmpegCapture::decode_frame(AVFormatContext *format_ctx, AVCo
 		pkt.data = nullptr;
 		pkt.size = 0;
 		if (av_read_frame(format_ctx, &pkt) == 0) {
+			if (pkt.stream_index == audio_stream_index && audio_callback != nullptr) {
+				audio_callback(&pkt, format_ctx->streams[audio_stream_index]->time_base);
+			}
 			if (pkt.stream_index != video_stream_index) {
 				// Ignore audio for now.
 				continue;
@@ -547,6 +556,8 @@ VideoFormat FFmpegCapture::construct_video_format(const AVFrame *frame, AVRation
 	video_format.height = height;
 	if (pixel_format == bmusb::PixelFormat_8BitBGRA) {
 		video_format.stride = width * 4;
+	} else if (pixel_format == FFmpegCapture::PixelFormat_NV12) {
+		video_format.stride = width;
 	} else {
 		assert(pixel_format == bmusb::PixelFormat_8BitYCbCrPlanar);
 		video_format.stride = width;
@@ -597,6 +608,17 @@ FrameAllocator::Frame FFmpegCapture::make_video_frame(const AVFrame *frame, cons
 		pic_data[0] = video_frame.data;
 		linesizes[0] = width * 4;
 		video_frame.len = (width * 4) * height;
+	} else if (pixel_format == PixelFormat_NV12) {
+		pic_data[0] = video_frame.data;
+		linesizes[0] = width;
+
+		pic_data[1] = pic_data[0] + width * height;
+		linesizes[1] = width;
+
+		video_frame.len = (width * 2) * height;
+
+		const AVPixFmtDescriptor *desc = av_pix_fmt_desc_get(sws_dst_format);
+		current_frame_ycbcr_format = decode_ycbcr_format(desc, frame);
 	} else {
 		assert(pixel_format == bmusb::PixelFormat_8BitYCbCrPlanar);
 		const AVPixFmtDescriptor *desc = av_pix_fmt_desc_get(sws_dst_format);

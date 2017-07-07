@@ -30,9 +30,12 @@ OBJS += quicksync_encoder.o x264_encoder.o x264_dynamic.o x264_speed_control.o v
 # DeckLink
 OBJS += decklink_capture.o decklink_util.o decklink_output.o decklink/DeckLinkAPIDispatch.o
 
+KAERU_OBJS = kaeru.o x264_encoder.o mux.o metrics.o flags.o audio_encoder.o x264_speed_control.o print_latency.o x264_dynamic.o ffmpeg_raii.o ffmpeg_capture.o ffmpeg_util.o httpd.o metacube2.o
+
 # bmusb
 ifeq ($(EMBEDDED_BMUSB),yes)
   OBJS += bmusb/bmusb.o bmusb/fake_capture.o
+  KAERU_OBJS += bmusb/bmusb.o
 endif
 
 # FFmpeg input
@@ -58,6 +61,8 @@ all: nageru benchmark_audio_mixer
 
 nageru: $(OBJS)
 	$(CXX) -o $@ $^ $(LDFLAGS) $(LDLIBS)
+kaeru: $(KAERU_OBJS)
+	$(CXX) -o $@ $^ $(LDFLAGS) $(LDLIBS)
 benchmark_audio_mixer: $(BM_OBJS)
 	$(CXX) -o $@ $^ $(LDFLAGS) $(LDLIBS)
 
@@ -73,11 +78,11 @@ mainwindow.o: midi_mapping.pb.h
 midi_mapper.o: midi_mapping.pb.h
 midi_mapping_dialog.o: ui_midi_mapping.h midi_mapping.pb.h
 
-DEPS=$(OBJS:.o=.d) $(BM_OBJS:.o=.d)
+DEPS=$(OBJS:.o=.d) $(BM_OBJS:.o=.d) $(KAERU_OBJS:.o=.d)
 -include $(DEPS)
 
 clean:
-	$(RM) $(OBJS) $(BM_OBJS) $(DEPS) nageru benchmark_audio_mixer ui_aboutdialog.h ui_analyzer.h ui_mainwindow.h ui_display.h ui_about.h ui_audio_miniview.h ui_audio_expanded_view.h ui_input_mapping.h ui_midi_mapping.h chain-*.frag *.dot *.pb.cc *.pb.h $(OBJS_WITH_MOC:.o=.moc.cpp) ellipsis_label.moc.cpp clickable_label.moc.cpp
+	$(RM) $(OBJS) $(BM_OBJS) $(KAERU_OBJS) $(DEPS) nageru benchmark_audio_mixer ui_aboutdialog.h ui_analyzer.h ui_mainwindow.h ui_display.h ui_about.h ui_audio_miniview.h ui_audio_expanded_view.h ui_input_mapping.h ui_midi_mapping.h chain-*.frag *.dot *.pb.cc *.pb.h $(OBJS_WITH_MOC:.o=.moc.cpp) ellipsis_label.moc.cpp clickable_label.moc.cpp
 
 PREFIX=/usr/local
 install:

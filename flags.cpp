@@ -60,29 +60,35 @@ enum LongOption {
 	OPTION_INPUT_YCBCR_INTERPRETATION,
 };
 
-void usage()
+void usage(Program program)
 {
-	fprintf(stderr, "Usage: nageru [OPTION]...\n");
+	if (program == PROGRAM_KAERU) {
+		fprintf(stderr, "Usage: kaeru [OPTION]... SOURCE_URL\n");
+	} else {
+		fprintf(stderr, "Usage: nageru [OPTION]...\n");
+	}
 	fprintf(stderr, "\n");
 	fprintf(stderr, "      --help                      print usage information\n");
 	fprintf(stderr, "  -w, --width                     output width in pixels (default 1280)\n");
 	fprintf(stderr, "  -h, --height                    output height in pixels (default 720)\n");
-	fprintf(stderr, "  -c, --num-cards                 set number of input cards (default 2)\n");
-	fprintf(stderr, "  -o, --output-card=CARD          also output signal to the given card (default none)\n");
-	fprintf(stderr, "  -t, --theme=FILE                choose theme (default theme.lua)\n");
-	fprintf(stderr, "  -I, --theme-dir=DIR             search for theme in this directory (can be given multiple times)\n");
-	fprintf(stderr, "  -r, --recording-dir=DIR         where to store disk recording\n");
-	fprintf(stderr, "  -v, --va-display=SPEC           VA-API device for H.264 encoding\n");
-	fprintf(stderr, "                                    ($DISPLAY spec or /dev/dri/render* path)\n");
-	fprintf(stderr, "  -m, --map-signal=SIGNAL,CARD    set a default card mapping (can be given multiple times)\n");
-	fprintf(stderr, "  -M, --input-mapping=FILE        start with the given audio input mapping (implies --multichannel)\n");
-	fprintf(stderr, "      --multichannel              start in multichannel audio mapping mode\n");
-	fprintf(stderr, "      --midi-mapping=FILE         start with the given MIDI controller mapping (implies --multichannel)\n");
-	fprintf(stderr, "      --fake-cards-audio          make fake (disconnected) cards output a simple tone\n");
-	fprintf(stderr, "      --http-uncompressed-video   send uncompressed NV12 video to HTTP clients\n");
-	fprintf(stderr, "      --http-x264-video           send x264-compressed video to HTTP clients\n");
-	fprintf(stderr, "      --record-x264-video         store x264-compressed video to disk (implies --http-x264-video,\n");
-	fprintf(stderr, "                                    removes the need for working VA-API encoding)\n");
+	if (program == PROGRAM_NAGERU) {
+		fprintf(stderr, "  -c, --num-cards                 set number of input cards (default 2)\n");
+		fprintf(stderr, "  -o, --output-card=CARD          also output signal to the given card (default none)\n");
+		fprintf(stderr, "  -t, --theme=FILE                choose theme (default theme.lua)\n");
+		fprintf(stderr, "  -I, --theme-dir=DIR             search for theme in this directory (can be given multiple times)\n");
+		fprintf(stderr, "  -r, --recording-dir=DIR         where to store disk recording\n");
+		fprintf(stderr, "  -v, --va-display=SPEC           VA-API device for H.264 encoding\n");
+		fprintf(stderr, "                                    ($DISPLAY spec or /dev/dri/render* path)\n");
+		fprintf(stderr, "  -m, --map-signal=SIGNAL,CARD    set a default card mapping (can be given multiple times)\n");
+		fprintf(stderr, "  -M, --input-mapping=FILE        start with the given audio input mapping (implies --multichannel)\n");
+		fprintf(stderr, "      --multichannel              start in multichannel audio mapping mode\n");
+		fprintf(stderr, "      --midi-mapping=FILE         start with the given MIDI controller mapping (implies --multichannel)\n");
+		fprintf(stderr, "      --fake-cards-audio          make fake (disconnected) cards output a simple tone\n");
+		fprintf(stderr, "      --http-uncompressed-video   send uncompressed NV12 video to HTTP clients\n");
+		fprintf(stderr, "      --http-x264-video           send x264-compressed video to HTTP clients\n");
+		fprintf(stderr, "      --record-x264-video         store x264-compressed video to disk (implies --http-x264-video,\n");
+		fprintf(stderr, "                                    removes the need for working VA-API encoding)\n");
+	}
 	fprintf(stderr, "      --x264-preset               x264 quality preset (default " X264_DEFAULT_PRESET ")\n");
 	fprintf(stderr, "      --x264-tune                 x264 tuning (default " X264_DEFAULT_TUNE ", can be blank)\n");
 	fprintf(stderr, "      --x264-speedcontrol         try to match x264 preset to available CPU speed\n");
@@ -103,45 +109,47 @@ void usage()
 		DEFAULT_AUDIO_OUTPUT_BIT_RATE / 1000);
 	fprintf(stderr, "      --http-coarse-timebase      use less timebase for HTTP (recommended for muxers\n");
 	fprintf(stderr, "                                  that handle large pts poorly, like e.g. MP4)\n");
-	fprintf(stderr, "      --flat-audio                start with most audio processing turned off\n");
-	fprintf(stderr, "                                    (can be overridden by e.g. --enable-limiter)\n");
-	fprintf(stderr, "      --gain-staging=DB           set initial gain staging to the given value\n");
-	fprintf(stderr, "                                    (--disable-gain-staging-auto)\n");
-	fprintf(stderr, "      --disable-locut             turn off locut filter (also --enable)\n");
-	fprintf(stderr, "      --disable-gain-staging-auto  turn off automatic gain staging (also --enable)\n");
-	fprintf(stderr, "      --disable-compressor        turn off regular compressor (also --enable)\n");
-	fprintf(stderr, "      --disable-limiter           turn off limiter (also --enable)\n");
-	fprintf(stderr, "      --disable-makeup-gain-auto  turn off auto-adjustment of final makeup gain (also --enable)\n");
-	fprintf(stderr, "      --disable-alsa-output       disable audio monitoring via ALSA\n");
-	fprintf(stderr, "      --no-flush-pbos             do not explicitly signal texture data uploads\n");
-	fprintf(stderr, "                                    (will give display corruption, but makes it\n");
-	fprintf(stderr, "                                    possible to run with apitrace in real time)\n");
-	fprintf(stderr, "      --print-video-latency       print out measurements of video latency on stdout\n");
-	fprintf(stderr, "      --max-input-queue-frames=FRAMES  never keep more than FRAMES frames for each card\n");
-	fprintf(stderr, "                                    (default 6, minimum 1)\n");
-	fprintf(stderr, "      --audio-queue-length-ms=MS  length of audio resampling queue (default 100.0)\n");
-	fprintf(stderr, "      --output-ycbcr-coefficients={rec601,rec709,auto}\n");
-	fprintf(stderr, "                                  Y'CbCr coefficient standard of output (default auto)\n");
-	fprintf(stderr, "                                    auto is rec601, unless --output-card is used\n");
-	fprintf(stderr, "                                    and a Rec. 709 mode (typically HD modes) is in use\n");
-	fprintf(stderr, "      --output-buffer-frames=NUM  number of frames in output buffer for --output-card,\n");
-	fprintf(stderr, "                                    can be fractional (default 6.0); note also\n");
-	fprintf(stderr, "                                    the audio queue can't be much longer than this\n");
-	fprintf(stderr, "      --output-slop-frames=NUM    if more less than this number of frames behind for\n");
-	fprintf(stderr, "                                    --output-card, try to submit anyway instead of\n");
-	fprintf(stderr, "                                    dropping the frame (default 0.5)\n");
-	fprintf(stderr, "      --timecode-stream           show timestamp and timecode in stream\n");
-	fprintf(stderr, "      --timecode-stdout           show timestamp and timecode on standard output\n");
-	fprintf(stderr, "      --10-bit-input              use 10-bit video input (requires compute shaders)\n");
-	fprintf(stderr, "      --10-bit-output             use 10-bit video output (requires compute shaders,\n");
-	fprintf(stderr, "                                    implies --record-x264-video)\n");
-	fprintf(stderr, "      --input-ycbcr-interpretation=CARD,{rec601,rec709,auto}[,{limited,full}]\n");
-	fprintf(stderr, "                                  Y'CbCr coefficient standard of card CARD (default auto)\n");
-	fprintf(stderr, "                                    auto is rec601 for SD, rec709 for HD, always limited\n");
-	fprintf(stderr, "                                    limited means standard 0-240/0-235 input range (for 8-bit)\n");
+	if (program == PROGRAM_NAGERU) {
+		fprintf(stderr, "      --flat-audio                start with most audio processing turned off\n");
+		fprintf(stderr, "                                    (can be overridden by e.g. --enable-limiter)\n");
+		fprintf(stderr, "      --gain-staging=DB           set initial gain staging to the given value\n");
+		fprintf(stderr, "                                    (--disable-gain-staging-auto)\n");
+		fprintf(stderr, "      --disable-locut             turn off locut filter (also --enable)\n");
+		fprintf(stderr, "      --disable-gain-staging-auto  turn off automatic gain staging (also --enable)\n");
+		fprintf(stderr, "      --disable-compressor        turn off regular compressor (also --enable)\n");
+		fprintf(stderr, "      --disable-limiter           turn off limiter (also --enable)\n");
+		fprintf(stderr, "      --disable-makeup-gain-auto  turn off auto-adjustment of final makeup gain (also --enable)\n");
+		fprintf(stderr, "      --disable-alsa-output       disable audio monitoring via ALSA\n");
+		fprintf(stderr, "      --no-flush-pbos             do not explicitly signal texture data uploads\n");
+		fprintf(stderr, "                                    (will give display corruption, but makes it\n");
+		fprintf(stderr, "                                    possible to run with apitrace in real time)\n");
+		fprintf(stderr, "      --print-video-latency       print out measurements of video latency on stdout\n");
+		fprintf(stderr, "      --max-input-queue-frames=FRAMES  never keep more than FRAMES frames for each card\n");
+		fprintf(stderr, "                                    (default 6, minimum 1)\n");
+		fprintf(stderr, "      --audio-queue-length-ms=MS  length of audio resampling queue (default 100.0)\n");
+		fprintf(stderr, "      --output-ycbcr-coefficients={rec601,rec709,auto}\n");
+		fprintf(stderr, "                                  Y'CbCr coefficient standard of output (default auto)\n");
+		fprintf(stderr, "                                    auto is rec601, unless --output-card is used\n");
+		fprintf(stderr, "                                    and a Rec. 709 mode (typically HD modes) is in use\n");
+		fprintf(stderr, "      --output-buffer-frames=NUM  number of frames in output buffer for --output-card,\n");
+		fprintf(stderr, "                                    can be fractional (default 6.0); note also\n");
+		fprintf(stderr, "                                    the audio queue can't be much longer than this\n");
+		fprintf(stderr, "      --output-slop-frames=NUM    if more less than this number of frames behind for\n");
+		fprintf(stderr, "                                    --output-card, try to submit anyway instead of\n");
+		fprintf(stderr, "                                    dropping the frame (default 0.5)\n");
+		fprintf(stderr, "      --timecode-stream           show timestamp and timecode in stream\n");
+		fprintf(stderr, "      --timecode-stdout           show timestamp and timecode on standard output\n");
+		fprintf(stderr, "      --10-bit-input              use 10-bit video input (requires compute shaders)\n");
+		fprintf(stderr, "      --10-bit-output             use 10-bit video output (requires compute shaders,\n");
+		fprintf(stderr, "                                    implies --record-x264-video)\n");
+		fprintf(stderr, "      --input-ycbcr-interpretation=CARD,{rec601,rec709,auto}[,{limited,full}]\n");
+		fprintf(stderr, "                                  Y'CbCr coefficient standard of card CARD (default auto)\n");
+		fprintf(stderr, "                                    auto is rec601 for SD, rec709 for HD, always limited\n");
+		fprintf(stderr, "                                    limited means standard 0-240/0-235 input range (for 8-bit)\n");
+	}
 }
 
-void parse_flags(int argc, char * const argv[])
+void parse_flags(Program program, int argc, char * const argv[])
 {
 	static const option long_options[] = {
 		{ "help", no_argument, 0, OPTION_HELP },
@@ -444,12 +452,12 @@ void parse_flags(int argc, char * const argv[])
 			break;
 		}
 		case OPTION_HELP:
-			usage();
+			usage(program);
 			exit(0);
 		default:
 			fprintf(stderr, "Unknown option '%s'\n", argv[option_index]);
 			fprintf(stderr, "\n");
-			usage();
+			usage(program);
 			exit(1);
 		}
 	}

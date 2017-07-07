@@ -65,6 +65,11 @@ struct Flags {
 };
 extern Flags global_flags;
 
-void parse_flags(int argc, char * const argv[]);
+enum Program {
+	PROGRAM_NAGERU,
+	PROGRAM_KAERU
+};
+void usage(Program program);
+void parse_flags(Program program, int argc, char * const argv[]);
 
 #endif  // !defined(_FLAGS_H)

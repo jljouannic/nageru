@@ -42,6 +42,7 @@ extern "C" {
 struct AVFormatContext;
 struct AVFrame;
 struct AVRational;
+struct AVPacket;
 
 class FFmpegCapture : public bmusb::CaptureInterface
 {
@@ -101,9 +102,35 @@ public:
 		return audio_frame_allocator;
 	}
 
-	void set_frame_callback(bmusb::frame_callback_t callback) override
+	// FFmpegCapture-specific overload of set_frame_callback that also gives
+	// the raw original pts from the video. Negative pts means a dummy frame.
+	typedef std::function<void(int64_t pts, AVRational timebase, uint16_t timecode,
+	                           bmusb::FrameAllocator::Frame video_frame, size_t video_offset, bmusb::VideoFormat video_format,
+				   bmusb::FrameAllocator::Frame audio_frame, size_t audio_offset, bmusb::AudioFormat audio_format)>
+		frame_callback_t;
+	void set_frame_callback(frame_callback_t callback)
 	{
 		frame_callback = callback;
+	}
+
+	void set_frame_callback(bmusb::frame_callback_t callback) override
+	{
+		frame_callback = std::bind(
+			callback,
+			std::placeholders::_3,
+			std::placeholders::_4,
+			std::placeholders::_5,
+			std::placeholders::_6,
+			std::placeholders::_7,
+			std::placeholders::_8,
+			std::placeholders::_9);
+	}
+
+	// FFmpegCapture-specific callback that gives the raw audio.
+	typedef std::function<void(const AVPacket *pkt, const AVRational timebase)> audio_callback_t;
+	void set_audio_callback(audio_callback_t callback)
+	{
+		audio_callback = callback;
 	}
 
 	// Used to get precise information about the Y'CbCr format used
@@ -135,8 +162,9 @@ public:
 	void set_video_mode(uint32_t video_mode_id) override {}  // Ignore.
 	uint32_t get_current_video_mode() const override { return 0; }
 
+	static constexpr bmusb::PixelFormat PixelFormat_NV12 = static_cast<bmusb::PixelFormat>(100);  // In the private range.
 	std::set<bmusb::PixelFormat> get_available_pixel_formats() const override {
-		return std::set<bmusb::PixelFormat>{ bmusb::PixelFormat_8BitBGRA, bmusb::PixelFormat_8BitYCbCrPlanar };
+		return std::set<bmusb::PixelFormat>{ bmusb::PixelFormat_8BitBGRA, bmusb::PixelFormat_8BitYCbCrPlanar, PixelFormat_NV12 };
 	}
 	void set_pixel_format(bmusb::PixelFormat pixel_format) override {
 		this->pixel_format = pixel_format;
@@ -166,7 +194,7 @@ private:
 	bool process_queued_commands(AVFormatContext *format_ctx, const std::string &pathname, timespec last_modified, bool *rewound);
 
 	// Returns nullptr if no frame was decoded (e.g. EOF).
-	AVFrameWithDeleter decode_frame(AVFormatContext *format_ctx, AVCodecContext *codec_ctx, const std::string &pathname, int video_stream_index, bool *error);
+	AVFrameWithDeleter decode_frame(AVFormatContext *format_ctx, AVCodecContext *codec_ctx, const std::string &pathname, int video_stream_index, int audio_stream_index, bool *error);
 
 	bmusb::VideoFormat construct_video_format(const AVFrame *frame, AVRational video_timebase);
 	bmusb::FrameAllocator::Frame make_video_frame(const AVFrame *frame, const std::string &pathname, bool *error);
@@ -188,7 +216,8 @@ private:
 	bmusb::FrameAllocator *audio_frame_allocator = nullptr;
 	std::unique_ptr<bmusb::FrameAllocator> owned_video_frame_allocator;
 	std::unique_ptr<bmusb::FrameAllocator> owned_audio_frame_allocator;
-	bmusb::frame_callback_t frame_callback = nullptr;
+	frame_callback_t frame_callback = nullptr;
+	audio_callback_t audio_callback = nullptr;
 
 	SwsContextWithDeleter sws_ctx;
 	int sws_last_width = -1, sws_last_height = -1, sws_last_src_format = -1;
