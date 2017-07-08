@@ -18,6 +18,7 @@ extern "C" {
 #include <libavutil/imgutils.h>
 #include <libavutil/mem.h>
 #include <libavutil/pixfmt.h>
+#include <libavutil/opt.h>
 #include <libswscale/swscale.h>
 }
 
@@ -217,6 +218,7 @@ FFmpegCapture::~FFmpegCapture()
 	if (has_dequeue_callbacks) {
 		dequeue_cleanup_callback();
 	}
+	avresample_free(&resampler);
 }
 
 void FFmpegCapture::configure_card()
@@ -356,24 +358,47 @@ bool FFmpegCapture::play_video(const string &pathname)
 
 	int audio_stream_index = find_stream_index(format_ctx.get(), AVMEDIA_TYPE_AUDIO);
 
-	const AVCodecParameters *codecpar = format_ctx->streams[video_stream_index]->codecpar;
+	// Open video decoder.
+	const AVCodecParameters *video_codecpar = format_ctx->streams[video_stream_index]->codecpar;
+	AVCodec *video_codec = avcodec_find_decoder(video_codecpar->codec_id);
 	video_timebase = format_ctx->streams[video_stream_index]->time_base;
-	AVCodecContextWithDeleter codec_ctx = avcodec_alloc_context3_unique(nullptr);
-	if (avcodec_parameters_to_context(codec_ctx.get(), codecpar) < 0) {
-		fprintf(stderr, "%s: Cannot fill codec parameters\n", pathname.c_str());
+	AVCodecContextWithDeleter video_codec_ctx = avcodec_alloc_context3_unique(nullptr);
+	if (avcodec_parameters_to_context(video_codec_ctx.get(), video_codecpar) < 0) {
+		fprintf(stderr, "%s: Cannot fill video codec parameters\n", pathname.c_str());
 		return false;
 	}
-	AVCodec *codec = avcodec_find_decoder(codecpar->codec_id);
-	if (codec == nullptr) {
-		fprintf(stderr, "%s: Cannot find decoder\n", pathname.c_str());
+	if (video_codec == nullptr) {
+		fprintf(stderr, "%s: Cannot find video decoder\n", pathname.c_str());
 		return false;
 	}
-	if (avcodec_open2(codec_ctx.get(), codec, nullptr) < 0) {
-		fprintf(stderr, "%s: Cannot open decoder\n", pathname.c_str());
+	if (avcodec_open2(video_codec_ctx.get(), video_codec, nullptr) < 0) {
+		fprintf(stderr, "%s: Cannot open video decoder\n", pathname.c_str());
 		return false;
 	}
-	unique_ptr<AVCodecContext, decltype(avcodec_close)*> codec_ctx_cleanup(
-		codec_ctx.get(), avcodec_close);
+	unique_ptr<AVCodecContext, decltype(avcodec_close)*> video_codec_ctx_cleanup(
+		video_codec_ctx.get(), avcodec_close);
+
+	// Open audio decoder, if we have audio.
+	AVCodecContextWithDeleter audio_codec_ctx = avcodec_alloc_context3_unique(nullptr);
+	if (audio_stream_index != -1) {
+		const AVCodecParameters *audio_codecpar = format_ctx->streams[audio_stream_index]->codecpar;
+		audio_timebase = format_ctx->streams[audio_stream_index]->time_base;
+		if (avcodec_parameters_to_context(audio_codec_ctx.get(), audio_codecpar) < 0) {
+			fprintf(stderr, "%s: Cannot fill audio codec parameters\n", pathname.c_str());
+			return false;
+		}
+		AVCodec *audio_codec = avcodec_find_decoder(audio_codecpar->codec_id);
+		if (audio_codec == nullptr) {
+			fprintf(stderr, "%s: Cannot find audio decoder\n", pathname.c_str());
+			return false;
+		}
+		if (avcodec_open2(audio_codec_ctx.get(), audio_codec, nullptr) < 0) {
+			fprintf(stderr, "%s: Cannot open audio decoder\n", pathname.c_str());
+			return false;
+		}
+	}
+	unique_ptr<AVCodecContext, decltype(avcodec_close)*> audio_codec_ctx_cleanup(
+		audio_codec_ctx.get(), avcodec_close);
 
 	internal_rewind();
 
@@ -382,9 +407,12 @@ bool FFmpegCapture::play_video(const string &pathname)
 		if (process_queued_commands(format_ctx.get(), pathname, last_modified, /*rewound=*/nullptr)) {
 			return true;
 		}
+		FrameAllocator::Frame audio_frame = audio_frame_allocator->alloc_frame();
+		AudioFormat audio_format;
 
 		bool error;
-		AVFrameWithDeleter frame = decode_frame(format_ctx.get(), codec_ctx.get(), pathname, video_stream_index, audio_stream_index, &error);
+		AVFrameWithDeleter frame = decode_frame(format_ctx.get(), video_codec_ctx.get(), audio_codec_ctx.get(),
+			pathname, video_stream_index, audio_stream_index, &audio_frame, &audio_format, &error);
 		if (error) {
 			return false;
 		}
@@ -410,11 +438,6 @@ bool FFmpegCapture::play_video(const string &pathname)
 		if (error) {
 			return false;
 		}
-
-		FrameAllocator::Frame audio_frame;
-		AudioFormat audio_format;
-                audio_format.bits_per_sample = 32;
-                audio_format.num_channels = 8;
 
 		for ( ;; ) {
 			if (last_pts == 0 && pts_origin == 0) {
@@ -500,13 +523,18 @@ bool FFmpegCapture::process_queued_commands(AVFormatContext *format_ctx, const s
 	return false;
 }
 
-AVFrameWithDeleter FFmpegCapture::decode_frame(AVFormatContext *format_ctx, AVCodecContext *codec_ctx, const std::string &pathname, int video_stream_index, int audio_stream_index, bool *error)
+namespace {
+
+}  // namespace
+
+AVFrameWithDeleter FFmpegCapture::decode_frame(AVFormatContext *format_ctx, AVCodecContext *video_codec_ctx, AVCodecContext *audio_codec_ctx, const std::string &pathname, int video_stream_index, int audio_stream_index, FrameAllocator::Frame *audio_frame, AudioFormat *audio_format, bool *error)
 {
 	*error = false;
 
 	// Read packets until we have a frame or there are none left.
 	bool frame_finished = false;
-	AVFrameWithDeleter frame = av_frame_alloc_unique();
+	AVFrameWithDeleter audio_avframe = av_frame_alloc_unique();
+	AVFrameWithDeleter video_avframe = av_frame_alloc_unique();
 	bool eof = false;
 	do {
 		AVPacket pkt;
@@ -519,34 +547,123 @@ AVFrameWithDeleter FFmpegCapture::decode_frame(AVFormatContext *format_ctx, AVCo
 			if (pkt.stream_index == audio_stream_index && audio_callback != nullptr) {
 				audio_callback(&pkt, format_ctx->streams[audio_stream_index]->time_base);
 			}
-			if (pkt.stream_index != video_stream_index) {
-				// Ignore audio for now.
-				continue;
-			}
-			if (avcodec_send_packet(codec_ctx, &pkt) < 0) {
-				fprintf(stderr, "%s: Cannot send packet to codec.\n", pathname.c_str());
-				*error = true;
-				return AVFrameWithDeleter(nullptr);
+			if (pkt.stream_index == video_stream_index) {
+				if (avcodec_send_packet(video_codec_ctx, &pkt) < 0) {
+					fprintf(stderr, "%s: Cannot send packet to video codec.\n", pathname.c_str());
+					*error = true;
+					return AVFrameWithDeleter(nullptr);
+				}
+			} else if (pkt.stream_index == audio_stream_index) {
+				if (avcodec_send_packet(audio_codec_ctx, &pkt) < 0) {
+					fprintf(stderr, "%s: Cannot send packet to audio codec.\n", pathname.c_str());
+					*error = true;
+					return AVFrameWithDeleter(nullptr);
+				}
 			}
 		} else {
 			eof = true;  // Or error, but ignore that for the time being.
 		}
 
-		int err = avcodec_receive_frame(codec_ctx, frame.get());
+		// Decode audio, if any.
+		int err = avcodec_receive_frame(audio_codec_ctx, audio_avframe.get());
+		if (err == 0) {
+			convert_audio(audio_avframe.get(), audio_frame, audio_format);
+		} else if (err != AVERROR(EAGAIN)) {
+			fprintf(stderr, "%s: Cannot receive frame from audio codec.\n", pathname.c_str());
+			*error = true;
+			return AVFrameWithDeleter(nullptr);
+		}
+
+		// Decode video, if we have a frame.
+		err = avcodec_receive_frame(video_codec_ctx, video_avframe.get());
 		if (err == 0) {
 			frame_finished = true;
 			break;
 		} else if (err != AVERROR(EAGAIN)) {
-			fprintf(stderr, "%s: Cannot receive frame from codec.\n", pathname.c_str());
+			fprintf(stderr, "%s: Cannot receive frame from video codec.\n", pathname.c_str());
 			*error = true;
 			return AVFrameWithDeleter(nullptr);
 		}
 	} while (!eof);
 
 	if (frame_finished)
-		return frame;
+		return video_avframe;
 	else
 		return AVFrameWithDeleter(nullptr);
+}
+
+void FFmpegCapture::convert_audio(const AVFrame *audio_avframe, FrameAllocator::Frame *audio_frame, AudioFormat *audio_format)
+{
+	// Decide on a format. If there already is one in this audio frame,
+	// we're pretty much forced to use it. If not, we try to find an exact match.
+	// If that still doesn't work, we default to 32-bit signed chunked
+	// (float would be nice, but there's really no way to signal that yet).
+	AVSampleFormat dst_format;
+	if (audio_format->bits_per_sample == 0) {
+		switch (audio_avframe->format) {
+		case AV_SAMPLE_FMT_S16:
+		case AV_SAMPLE_FMT_S16P:
+			audio_format->bits_per_sample = 16;
+			dst_format = AV_SAMPLE_FMT_S16;
+			break;
+		case AV_SAMPLE_FMT_S32:
+		case AV_SAMPLE_FMT_S32P:
+		default:
+			audio_format->bits_per_sample = 32;
+			dst_format = AV_SAMPLE_FMT_S32;
+			break;
+		}
+	} else if (audio_format->bits_per_sample == 16) {
+		dst_format = AV_SAMPLE_FMT_S16;
+	} else if (audio_format->bits_per_sample == 32) {
+		dst_format = AV_SAMPLE_FMT_S32;
+	} else {
+		assert(false);
+	}
+	audio_format->num_channels = 2;
+
+	if (resampler == nullptr ||
+	    audio_avframe->format != last_src_format ||
+	    dst_format != last_dst_format ||
+	    av_frame_get_channel_layout(audio_avframe) != last_channel_layout ||
+	    av_frame_get_sample_rate(audio_avframe) != last_sample_rate) {
+		avresample_free(&resampler);
+		resampler = avresample_alloc_context();
+		if (resampler == nullptr) {
+			fprintf(stderr, "Allocating resampler failed.\n");
+			exit(1);
+		}
+
+		av_opt_set_int(resampler, "in_channel_layout",  av_frame_get_channel_layout(audio_avframe), 0);
+		av_opt_set_int(resampler, "out_channel_layout", AV_CH_LAYOUT_STEREO,                        0);
+		av_opt_set_int(resampler, "in_sample_rate",     av_frame_get_sample_rate(audio_avframe),    0);
+		av_opt_set_int(resampler, "out_sample_rate",    OUTPUT_FREQUENCY,                           0);
+		av_opt_set_int(resampler, "in_sample_fmt",      audio_avframe->format,                      0);
+		av_opt_set_int(resampler, "out_sample_fmt",     dst_format,                                 0);
+
+		if (avresample_open(resampler) < 0) {
+			fprintf(stderr, "Could not open resample context.\n");
+			exit(1);
+		}
+
+		last_src_format = AVSampleFormat(audio_avframe->format);
+		last_dst_format = dst_format;
+		last_channel_layout = av_frame_get_channel_layout(audio_avframe);
+		last_sample_rate = av_frame_get_sample_rate(audio_avframe);
+	}
+
+	size_t bytes_per_sample = (audio_format->bits_per_sample / 8) * 2;
+	size_t num_samples_room = (audio_frame->size - audio_frame->len) / bytes_per_sample;
+
+	uint8_t *data = audio_frame->data + audio_frame->len;
+	int out_samples = avresample_convert(resampler, &data, 0, num_samples_room,
+		audio_avframe->data, audio_avframe->linesize[0], audio_avframe->nb_samples);
+	if (out_samples < 0) {
+                fprintf(stderr, "Audio conversion failed.\n");
+                exit(1);
+        }
+
+	audio_frame->len += out_samples * bytes_per_sample;
 }
 
 VideoFormat FFmpegCapture::construct_video_format(const AVFrame *frame, AVRational video_timebase)

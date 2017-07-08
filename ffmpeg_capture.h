@@ -16,7 +16,8 @@
 // but it would require some more plumbing, and it would also fail if the file
 // changes parameters midway, which is allowed in some formats.
 //
-// There is currently no audio support.
+// You can get out the audio either as decoded or in raw form (Kaeru uses this).
+// However, the rest of Nageru can't really use the audio for anything yet.
 
 #include <assert.h>
 #include <stdint.h>
@@ -31,6 +32,7 @@
 #include <movit/ycbcr.h>
 
 extern "C" {
+#include <libavresample/avresample.h>
 #include <libavutil/pixfmt.h>
 #include <libavutil/rational.h>
 }
@@ -194,7 +196,10 @@ private:
 	bool process_queued_commands(AVFormatContext *format_ctx, const std::string &pathname, timespec last_modified, bool *rewound);
 
 	// Returns nullptr if no frame was decoded (e.g. EOF).
-	AVFrameWithDeleter decode_frame(AVFormatContext *format_ctx, AVCodecContext *codec_ctx, const std::string &pathname, int video_stream_index, int audio_stream_index, bool *error);
+	AVFrameWithDeleter decode_frame(AVFormatContext *format_ctx, AVCodecContext *video_codec_ctx, AVCodecContext *audio_codec_ctx,
+	                                const std::string &pathname, int video_stream_index, int audio_stream_index,
+	                                bmusb::FrameAllocator::Frame *audio_frame, bmusb::AudioFormat *audio_format, bool *error);
+	void convert_audio(const AVFrame *audio_avframe, bmusb::FrameAllocator::Frame *audio_frame, bmusb::AudioFormat *audio_format);
 
 	bmusb::VideoFormat construct_video_format(const AVFrame *frame, AVRational video_timebase);
 	bmusb::FrameAllocator::Frame make_video_frame(const AVFrame *frame, const std::string &pathname, bool *error);
@@ -222,7 +227,7 @@ private:
 	SwsContextWithDeleter sws_ctx;
 	int sws_last_width = -1, sws_last_height = -1, sws_last_src_format = -1;
 	AVPixelFormat sws_dst_format = AVPixelFormat(-1);  // In practice, always initialized.
-	AVRational video_timebase;
+	AVRational video_timebase, audio_timebase;
 
 	QuittableSleeper producer_thread_should_quit;
 	std::thread producer_thread;
@@ -236,6 +241,13 @@ private:
 		double new_rate;  // For CHANGE_RATE.
 	};
 	std::vector<QueuedCommand> command_queue;  // Protected by <queue_mu>.
+
+	// Audio resampler.
+	AVAudioResampleContext *resampler = nullptr;
+	AVSampleFormat last_src_format, last_dst_format;
+	int64_t last_channel_layout;
+	int last_sample_rate;
+
 };
 
 #endif  // !defined(_FFMPEG_CAPTURE_H)
