@@ -1,3 +1,24 @@
+Nageru 1.6.1, July 9th, 2017
+
+  - Add native export of Prometheus metrics.
+
+  - Rework the frame queue drop algorithm. The new one should handle tricky
+    situations much better, especially when a card is drifting very slowly
+    against the master timer.
+
+  - Add Kaeru, an experimental transcoding tool based on Nageru code.
+    Kaeru can run headless on a server without a GPU to transcode a
+    Nageru stream into a lower-bitrate one, replacing VLC.
+
+  - Work around a bug in some versions of NVIDIA's OpenGL drivers that would
+    crash Nageru after about three hours (fix in cooperation with Movit).
+
+  - Fix a crash with i965-va-driver 1.8.x.
+
+  - Reduce mutex contention in certain critical places, causing lower tail
+    latency in the mixer.
+
+
 Nageru 1.6.0, May 29th, 2017
 
   - Add support for having videos (from file or from URL) as a separate
