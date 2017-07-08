@@ -57,7 +57,7 @@ BM_OBJS = benchmark_audio_mixer.o $(AUDIO_MIXER_OBJS) flags.o metrics.o
 %.moc.cpp: %.h
 	moc $< -o $@
 
-all: nageru benchmark_audio_mixer
+all: nageru kaeru benchmark_audio_mixer
 
 nageru: $(OBJS)
 	$(CXX) -o $@ $^ $(LDFLAGS) $(LDLIBS)
