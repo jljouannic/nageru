@@ -59,6 +59,7 @@ struct Flags {
 	bool ten_bit_input = false;
 	bool ten_bit_output = false;  // Implies x264_video_to_disk == true and x264_bit_depth == 10.
 	YCbCrInterpretation ycbcr_interpretation[MAX_VIDEO_CARDS];
+	bool transcode_audio = true;  // Kaeru only.
 	int x264_bit_depth = 8;  // Not user-settable.
 	bool use_zerocopy = false;  // Not user-settable.
 	bool can_disable_srgb_decoder = false;  // Not user-settable.

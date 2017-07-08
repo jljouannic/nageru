@@ -64,15 +64,45 @@ unique_ptr<Mux> create_mux(HTTPD *httpd, AVOutputFormat *oformat, X264Encoder *x
 	return mux;
 }
 
-void video_frame_callback(FFmpegCapture *video, X264Encoder *x264_encoder, int64_t pts, AVRational timebase, uint16_t timecode,
+void video_frame_callback(FFmpegCapture *video, X264Encoder *x264_encoder, AudioEncoder *audio_encoder,
+                          int64_t video_pts, AVRational video_timebase,
+                          int64_t audio_pts, AVRational audio_timebase,
+                          uint16_t timecode,
 	                  FrameAllocator::Frame video_frame, size_t video_offset, VideoFormat video_format,
 	                  FrameAllocator::Frame audio_frame, size_t audio_offset, AudioFormat audio_format)
 {
-	if (pts >= 0 && video_frame.len > 0) {
-		pts = av_rescale_q(pts, timebase, AVRational{ 1, TIMEBASE });
+	if (video_pts >= 0 && video_frame.len > 0) {
+		video_pts = av_rescale_q(video_pts, video_timebase, AVRational{ 1, TIMEBASE });
 		int64_t frame_duration = TIMEBASE * video_format.frame_rate_nom / video_format.frame_rate_den;
-		x264_encoder->add_frame(pts, frame_duration, video->get_current_frame_ycbcr_format().luma_coefficients, video_frame.data + video_offset, ReceivedTimestamps());
+		x264_encoder->add_frame(video_pts, frame_duration, video->get_current_frame_ycbcr_format().luma_coefficients, video_frame.data + video_offset, ReceivedTimestamps());
 	}
+	if (audio_frame.len > 0) {
+		// FFmpegCapture takes care of this for us.
+		assert(audio_format.num_channels == 2);
+		assert(audio_format.sample_rate == OUTPUT_FREQUENCY);
+
+		// TODO: Reduce some duplication against AudioMixer here.
+		size_t num_samples = audio_frame.len / (audio_format.bits_per_sample / 8);
+		vector<float> float_samples;
+		float_samples.resize(num_samples);
+		if (audio_format.bits_per_sample == 16) {
+			const int16_t *src = (const int16_t *)audio_frame.data;
+			float *dst = &float_samples[0];
+			for (size_t i = 0; i < num_samples; ++i) {
+				*dst++ = le16toh(*src++) * (1.0f / 32768.0f);
+			}
+		} else if (audio_format.bits_per_sample == 32) {
+			const int32_t *src = (const int32_t *)audio_frame.data;
+			float *dst = &float_samples[0];
+			for (size_t i = 0; i < num_samples; ++i) {
+				*dst++ = le32toh(*src++) * (1.0f / 2147483648.0f);
+			}
+		} else {
+			assert(false);
+		}
+		audio_pts = av_rescale_q(audio_pts, audio_timebase, AVRational{ 1, TIMEBASE });
+		audio_encoder->encode_audio(float_samples, audio_pts);
+        }
 
 	if (video_frame.owner) {
 		video_frame.owner->release_frame(video_frame);
@@ -104,20 +134,27 @@ int main(int argc, char *argv[])
 	assert(oformat != nullptr);
 
 	unique_ptr<AudioEncoder> audio_encoder;
-	if (global_flags.stream_audio_codec_name.empty()) {
-		audio_encoder.reset(new AudioEncoder(AUDIO_OUTPUT_CODEC_NAME, DEFAULT_AUDIO_OUTPUT_BIT_RATE, oformat));
-	} else {
-		audio_encoder.reset(new AudioEncoder(global_flags.stream_audio_codec_name, global_flags.stream_audio_codec_bitrate, oformat));
+	if (global_flags.transcode_audio) {
+		if (global_flags.stream_audio_codec_name.empty()) {
+			audio_encoder.reset(new AudioEncoder(AUDIO_OUTPUT_CODEC_NAME, DEFAULT_AUDIO_OUTPUT_BIT_RATE, oformat));
+		} else {
+			audio_encoder.reset(new AudioEncoder(global_flags.stream_audio_codec_name, global_flags.stream_audio_codec_bitrate, oformat));
+		}
 	}
 
 	X264Encoder x264_encoder(oformat);
 	unique_ptr<Mux> http_mux = create_mux(&httpd, oformat, &x264_encoder, audio_encoder.get());
+	if (global_flags.transcode_audio) {
+		audio_encoder->add_mux(http_mux.get());
+	}
 	x264_encoder.add_mux(http_mux.get());
 
 	FFmpegCapture video(argv[optind], global_flags.width, global_flags.height);
 	video.set_pixel_format(FFmpegCapture::PixelFormat_NV12);
-	video.set_frame_callback(bind(video_frame_callback, &video, &x264_encoder, _1, _2, _3, _4, _5, _6, _7, _8, _9));
-	video.set_audio_callback(bind(audio_frame_callback, http_mux.get(), _1, _2));
+	video.set_frame_callback(bind(video_frame_callback, &video, &x264_encoder, audio_encoder.get(), _1, _2, _3, _4, _5, _6, _7, _8, _9, _10, _11));
+	if (!global_flags.transcode_audio) {
+		video.set_audio_callback(bind(audio_frame_callback, http_mux.get(), _1, _2));
+	}
 	video.configure_card();
 	video.start_bm_capture();
 	video.change_rate(2.0);  // Be sure never to really fall behind, but also don't dump huge amounts of stuff onto x264.

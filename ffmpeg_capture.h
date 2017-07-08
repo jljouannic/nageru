@@ -106,7 +106,8 @@ public:
 
 	// FFmpegCapture-specific overload of set_frame_callback that also gives
 	// the raw original pts from the video. Negative pts means a dummy frame.
-	typedef std::function<void(int64_t pts, AVRational timebase, uint16_t timecode,
+	typedef std::function<void(int64_t video_pts, AVRational video_timebase, int64_t audio_pts, AVRational audio_timebase,
+	                           uint16_t timecode,
 	                           bmusb::FrameAllocator::Frame video_frame, size_t video_offset, bmusb::VideoFormat video_format,
 				   bmusb::FrameAllocator::Frame audio_frame, size_t audio_offset, bmusb::AudioFormat audio_format)>
 		frame_callback_t;
@@ -119,13 +120,13 @@ public:
 	{
 		frame_callback = std::bind(
 			callback,
-			std::placeholders::_3,
-			std::placeholders::_4,
 			std::placeholders::_5,
 			std::placeholders::_6,
 			std::placeholders::_7,
 			std::placeholders::_8,
-			std::placeholders::_9);
+			std::placeholders::_9,
+			std::placeholders::_10,
+			std::placeholders::_11);
 	}
 
 	// FFmpegCapture-specific callback that gives the raw audio.
@@ -198,7 +199,7 @@ private:
 	// Returns nullptr if no frame was decoded (e.g. EOF).
 	AVFrameWithDeleter decode_frame(AVFormatContext *format_ctx, AVCodecContext *video_codec_ctx, AVCodecContext *audio_codec_ctx,
 	                                const std::string &pathname, int video_stream_index, int audio_stream_index,
-	                                bmusb::FrameAllocator::Frame *audio_frame, bmusb::AudioFormat *audio_format, bool *error);
+	                                bmusb::FrameAllocator::Frame *audio_frame, bmusb::AudioFormat *audio_format, int64_t *audio_pts, bool *error);
 	void convert_audio(const AVFrame *audio_avframe, bmusb::FrameAllocator::Frame *audio_frame, bmusb::AudioFormat *audio_format);
 
 	bmusb::VideoFormat construct_video_format(const AVFrame *frame, AVRational video_timebase);

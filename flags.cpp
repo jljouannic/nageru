@@ -33,6 +33,7 @@ enum LongOption {
 	OPTION_HTTP_COARSE_TIMEBASE,
 	OPTION_HTTP_AUDIO_CODEC,
 	OPTION_HTTP_AUDIO_BITRATE,
+	OPTION_NO_TRANSCODE_AUDIO,
 	OPTION_FLAT_AUDIO,
 	OPTION_GAIN_STAGING,
 	OPTION_DISABLE_LOCUT,
@@ -107,6 +108,10 @@ void usage(Program program)
 	fprintf(stderr, "      --http-audio-bitrate=KBITS  audio codec bit rate to use for HTTP streams\n");
 	fprintf(stderr, "                                  (default is %d, ignored unless --http-audio-codec is set)\n",
 		DEFAULT_AUDIO_OUTPUT_BIT_RATE / 1000);
+	if (program == PROGRAM_KAERU) {
+		fprintf(stderr, "      --no-transcode-audio        copy encoded audio raw from the source stream\n");
+		fprintf(stderr, "                                    (requires --http-audio-codec= to be set)\n");
+	}
 	fprintf(stderr, "      --http-coarse-timebase      use less timebase for HTTP (recommended for muxers\n");
 	fprintf(stderr, "                                  that handle large pts poorly, like e.g. MP4)\n");
 	if (program == PROGRAM_NAGERU) {
@@ -182,6 +187,7 @@ void parse_flags(Program program, int argc, char * const argv[])
 		{ "http-coarse-timebase", no_argument, 0, OPTION_HTTP_COARSE_TIMEBASE },
 		{ "http-audio-codec", required_argument, 0, OPTION_HTTP_AUDIO_CODEC },
 		{ "http-audio-bitrate", required_argument, 0, OPTION_HTTP_AUDIO_BITRATE },
+		{ "no-transcode-audio", no_argument, 0, OPTION_NO_TRANSCODE_AUDIO },
 		{ "flat-audio", no_argument, 0, OPTION_FLAT_AUDIO },
 		{ "gain-staging", required_argument, 0, OPTION_GAIN_STAGING },
 		{ "disable-locut", no_argument, 0, OPTION_DISABLE_LOCUT },
@@ -287,6 +293,9 @@ void parse_flags(Program program, int argc, char * const argv[])
 			break;
 		case OPTION_HTTP_AUDIO_BITRATE:
 			global_flags.stream_audio_codec_bitrate = atoi(optarg) * 1000;
+			break;
+		case OPTION_NO_TRANSCODE_AUDIO:
+			global_flags.transcode_audio = false;
 			break;
 		case OPTION_HTTP_X264_VIDEO:
 			global_flags.x264_video_to_http = true;
@@ -474,6 +483,11 @@ void parse_flags(Program program, int argc, char * const argv[])
 	if (global_flags.output_card < -1 ||
 	    global_flags.output_card >= global_flags.num_cards) {
 		fprintf(stderr, "ERROR: --output-card points to a nonexistant card\n");
+		exit(1);
+	}
+	if (!global_flags.transcode_audio && global_flags.stream_audio_codec_name.empty()) {
+		fprintf(stderr, "ERROR: If not transcoding audio, you must specify ahead-of-time what audio codec is in use\n");
+		fprintf(stderr, "       (using --http-audio-codec).\n");
 		exit(1);
 	}
 	if (global_flags.x264_speedcontrol) {

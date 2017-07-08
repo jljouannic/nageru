@@ -228,7 +228,8 @@ void FFmpegCapture::configure_card()
 		set_video_frame_allocator(owned_video_frame_allocator.get());
 	}
 	if (audio_frame_allocator == nullptr) {
-		owned_audio_frame_allocator.reset(new MallocFrameAllocator(65536, NUM_QUEUED_AUDIO_FRAMES));
+		// Audio can come out in pretty large chunks, so increase from the default 1 MB.
+		owned_audio_frame_allocator.reset(new MallocFrameAllocator(1 << 20, NUM_QUEUED_AUDIO_FRAMES));
 		set_audio_frame_allocator(owned_audio_frame_allocator.get());
 	}
 }
@@ -319,7 +320,7 @@ void FFmpegCapture::send_disconnected_frame()
 		video_frame.len = width * height * 4;
 		memset(video_frame.data, 0, video_frame.len);
 
-		frame_callback(-1, AVRational{1, TIMEBASE}, timecode++,
+		frame_callback(-1, AVRational{1, TIMEBASE}, -1, AVRational{1, TIMEBASE}, timecode++,
 			video_frame, /*video_offset=*/0, video_format,
 			FrameAllocator::Frame(), /*audio_offset=*/0, AudioFormat());
 	}
@@ -410,9 +411,10 @@ bool FFmpegCapture::play_video(const string &pathname)
 		FrameAllocator::Frame audio_frame = audio_frame_allocator->alloc_frame();
 		AudioFormat audio_format;
 
+		int64_t audio_pts;
 		bool error;
 		AVFrameWithDeleter frame = decode_frame(format_ctx.get(), video_codec_ctx.get(), audio_codec_ctx.get(),
-			pathname, video_stream_index, audio_stream_index, &audio_frame, &audio_format, &error);
+			pathname, video_stream_index, audio_stream_index, &audio_frame, &audio_format, &audio_pts, &error);
 		if (error) {
 			return false;
 		}
@@ -447,7 +449,10 @@ bool FFmpegCapture::play_video(const string &pathname)
 			video_frame.received_timestamp = next_frame_start;
 			bool finished_wakeup = producer_thread_should_quit.sleep_until(next_frame_start);
 			if (finished_wakeup) {
-				frame_callback(frame->pts, video_timebase, timecode++,
+				if (audio_frame.len > 0) {
+					assert(audio_pts != -1);
+				}
+				frame_callback(frame->pts, video_timebase, audio_pts, audio_timebase, timecode++,
 					video_frame, 0, video_format,
 					audio_frame, 0, audio_format);
 				break;
@@ -527,7 +532,9 @@ namespace {
 
 }  // namespace
 
-AVFrameWithDeleter FFmpegCapture::decode_frame(AVFormatContext *format_ctx, AVCodecContext *video_codec_ctx, AVCodecContext *audio_codec_ctx, const std::string &pathname, int video_stream_index, int audio_stream_index, FrameAllocator::Frame *audio_frame, AudioFormat *audio_format, bool *error)
+AVFrameWithDeleter FFmpegCapture::decode_frame(AVFormatContext *format_ctx, AVCodecContext *video_codec_ctx, AVCodecContext *audio_codec_ctx,
+	const std::string &pathname, int video_stream_index, int audio_stream_index,
+	FrameAllocator::Frame *audio_frame, AudioFormat *audio_format, int64_t *audio_pts, bool *error)
 {
 	*error = false;
 
@@ -536,6 +543,7 @@ AVFrameWithDeleter FFmpegCapture::decode_frame(AVFormatContext *format_ctx, AVCo
 	AVFrameWithDeleter audio_avframe = av_frame_alloc_unique();
 	AVFrameWithDeleter video_avframe = av_frame_alloc_unique();
 	bool eof = false;
+	*audio_pts = -1;
 	do {
 		AVPacket pkt;
 		unique_ptr<AVPacket, decltype(av_packet_unref)*> pkt_cleanup(
@@ -554,6 +562,9 @@ AVFrameWithDeleter FFmpegCapture::decode_frame(AVFormatContext *format_ctx, AVCo
 					return AVFrameWithDeleter(nullptr);
 				}
 			} else if (pkt.stream_index == audio_stream_index) {
+				if (*audio_pts == -1) {
+					*audio_pts = pkt.pts;
+				}
 				if (avcodec_send_packet(audio_codec_ctx, &pkt) < 0) {
 					fprintf(stderr, "%s: Cannot send packet to audio codec.\n", pathname.c_str());
 					*error = true;
@@ -565,17 +576,23 @@ AVFrameWithDeleter FFmpegCapture::decode_frame(AVFormatContext *format_ctx, AVCo
 		}
 
 		// Decode audio, if any.
-		int err = avcodec_receive_frame(audio_codec_ctx, audio_avframe.get());
-		if (err == 0) {
-			convert_audio(audio_avframe.get(), audio_frame, audio_format);
-		} else if (err != AVERROR(EAGAIN)) {
-			fprintf(stderr, "%s: Cannot receive frame from audio codec.\n", pathname.c_str());
-			*error = true;
-			return AVFrameWithDeleter(nullptr);
+		if (*audio_pts != -1) {
+			for ( ;; ) {
+				int err = avcodec_receive_frame(audio_codec_ctx, audio_avframe.get());
+				if (err == 0) {
+					convert_audio(audio_avframe.get(), audio_frame, audio_format);
+				} else if (err == AVERROR(EAGAIN)) {
+					break;
+				} else {
+					fprintf(stderr, "%s: Cannot receive frame from audio codec.\n", pathname.c_str());
+					*error = true;
+					return AVFrameWithDeleter(nullptr);
+				}
+			}
 		}
 
 		// Decode video, if we have a frame.
-		err = avcodec_receive_frame(video_codec_ctx, video_avframe.get());
+		int err = avcodec_receive_frame(video_codec_ctx, video_avframe.get());
 		if (err == 0) {
 			frame_finished = true;
 			break;
