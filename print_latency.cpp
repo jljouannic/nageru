@@ -81,17 +81,28 @@ void print_latency(const string &header, const ReceivedTimestamps &received_ts, 
 
 	const steady_clock::time_point now = steady_clock::now();
 
-	unsigned num_cards = global_mixer->get_num_cards();
-	assert(received_ts.ts.size() == num_cards * FRAME_HISTORY_LENGTH);
-	for (unsigned card_index = 0; card_index < num_cards; ++card_index) {
-		for (unsigned frame_index = 0; frame_index < FRAME_HISTORY_LENGTH; ++frame_index) {
-			steady_clock::time_point ts = received_ts.ts[card_index * FRAME_HISTORY_LENGTH + frame_index];
-			if (ts == steady_clock::time_point::min()) {
-				continue;
-			}
+	if (global_mixer == nullptr) {
+		// Kaeru.
+		assert(received_ts.ts.size() == 1);
+		steady_clock::time_point ts = received_ts.ts[0];
+		if (ts != steady_clock::time_point::min()) {
 			duration<double> latency = now - ts;
-			histogram->summaries[card_index][frame_index][is_b_frame].count_event(latency.count());
-			histogram->summaries[card_index][frame_index][2].count_event(latency.count());
+			histogram->summaries[0][0][is_b_frame].count_event(latency.count());
+			histogram->summaries[0][0][2].count_event(latency.count());
+		}
+	} else {
+		unsigned num_cards = global_mixer->get_num_cards();
+		assert(received_ts.ts.size() == num_cards * FRAME_HISTORY_LENGTH);
+		for (unsigned card_index = 0; card_index < num_cards; ++card_index) {
+			for (unsigned frame_index = 0; frame_index < FRAME_HISTORY_LENGTH; ++frame_index) {
+				steady_clock::time_point ts = received_ts.ts[card_index * FRAME_HISTORY_LENGTH + frame_index];
+				if (ts == steady_clock::time_point::min()) {
+					continue;
+				}
+				duration<double> latency = now - ts;
+				histogram->summaries[card_index][frame_index][is_b_frame].count_event(latency.count());
+				histogram->summaries[card_index][frame_index][2].count_event(latency.count());
+			}
 		}
 	}
 
