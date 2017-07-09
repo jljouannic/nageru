@@ -1,4 +1,4 @@
-// Kaeru (変える), a simple transcoder intended for use with Nageru.
+// Kaeru (換える), a simple transcoder intended for use with Nageru.
 // This is experimental code, not yet supported.
 
 #include "audio_encoder.h"
