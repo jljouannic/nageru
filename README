@@ -8,7 +8,8 @@ Features:
 
  - High output quality; Lanczos3 scaling, subpixel precision everywhere,
    white balance adjustment, mix of 16- and 32-bit floating point
-   for intermediate calculations, dithered output.
+   for intermediate calculations, dithered output, optional 10-bit input
+   and output support.
 
  - Proper sound support: Syncing of multiple unrelated sources through
    high-quality resampling, multichannel mixing with separate effects
@@ -20,6 +21,8 @@ Features:
    event; Lua code is responsible for setting up the pixel processing
    pipelines, running transitions etc., so that the visual look is
    consistent between operators.
+
+ - Comprehensive monitoring through Prometheus metrics.
 
 [1] For reference, that is: Core i7 4600U (dualcore 2.10GHz, clocks down
 to 800 MHz after 30 seconds due to thermal constraints), Intel HD Graphics
