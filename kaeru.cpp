@@ -23,6 +23,7 @@ using namespace std::placeholders;
 
 Mixer *global_mixer = nullptr;
 X264Encoder *global_x264_encoder = nullptr;
+MuxMetrics stream_mux_metrics;
 
 int write_packet(void *opaque, uint8_t *buf, int buf_size, AVIODataMarkerType type, int64_t time)
 {
@@ -62,7 +63,8 @@ unique_ptr<Mux> create_mux(HTTPD *httpd, AVOutputFormat *oformat, X264Encoder *x
 	unique_ptr<Mux> mux;
 	int time_base = global_flags.stream_coarse_timebase ? COARSE_TIMEBASE : TIMEBASE;
 	mux.reset(new Mux(avctx, global_flags.width, global_flags.height, Mux::CODEC_H264, video_extradata, audio_encoder->get_codec_parameters().get(), time_base,
-	        /*write_callback=*/nullptr, Mux::WRITE_FOREGROUND, {}));
+	        /*write_callback=*/nullptr, Mux::WRITE_FOREGROUND, { &stream_mux_metrics }));
+	stream_mux_metrics.init({{ "destination", "http" }});
 	return mux;
 }
 
