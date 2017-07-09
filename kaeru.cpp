@@ -12,6 +12,7 @@
 
 #include <assert.h>
 #include <fcntl.h>
+#include <signal.h>
 #include <unistd.h>
 #include <string>
 
@@ -21,6 +22,7 @@ using namespace std;
 using namespace std::placeholders;
 
 Mixer *global_mixer = nullptr;
+X264Encoder *global_x264_encoder = nullptr;
 
 int write_packet(void *opaque, uint8_t *buf, int buf_size, AVIODataMarkerType type, int64_t time)
 {
@@ -117,6 +119,32 @@ void audio_frame_callback(Mux *mux, const AVPacket *pkt, AVRational timebase)
 	mux->add_packet(*pkt, pkt->pts, pkt->dts == AV_NOPTS_VALUE ? pkt->pts : pkt->dts, timebase);
 }
 
+void adjust_bitrate(int signal)
+{
+	int new_bitrate = global_flags.x264_bitrate;
+	if (signal == SIGUSR1) {
+		new_bitrate += 100;
+		if (new_bitrate > 100000) {
+			fprintf(stderr, "Ignoring SIGUSR1, can't increase bitrate below 100000 kbit/sec (currently at %d kbit/sec)\n",
+				global_flags.x264_bitrate);
+		} else {
+			fprintf(stderr, "Increasing bitrate to %d kbit/sec due to SIGUSR1.\n", new_bitrate);
+			global_flags.x264_bitrate = new_bitrate;
+			global_x264_encoder->change_bitrate(new_bitrate);
+		}
+	} else if (signal == SIGUSR2) {
+		new_bitrate -= 100;
+		if (new_bitrate < 100) {
+			fprintf(stderr, "Ignoring SIGUSR1, can't decrease bitrate below 100 kbit/sec (currently at %d kbit/sec)\n",
+				global_flags.x264_bitrate);
+		} else {
+			fprintf(stderr, "Decreasing bitrate to %d kbit/sec due to SIGUSR1.\n", new_bitrate);
+			global_flags.x264_bitrate = new_bitrate;
+			global_x264_encoder->change_bitrate(new_bitrate);
+		}
+	}
+}
+
 int main(int argc, char *argv[])
 {
 	parse_flags(PROGRAM_KAERU, argc, argv);
@@ -148,6 +176,7 @@ int main(int argc, char *argv[])
 		audio_encoder->add_mux(http_mux.get());
 	}
 	x264_encoder.add_mux(http_mux.get());
+	global_x264_encoder = &x264_encoder;
 
 	FFmpegCapture video(argv[optind], global_flags.width, global_flags.height);
 	video.set_pixel_format(FFmpegCapture::PixelFormat_NV12);
@@ -160,6 +189,9 @@ int main(int argc, char *argv[])
 	video.change_rate(2.0);  // Be sure never to really fall behind, but also don't dump huge amounts of stuff onto x264.
 
 	httpd.start(9095);
+
+	signal(SIGUSR1, adjust_bitrate);
+	signal(SIGUSR2, adjust_bitrate);
 
 	for ( ;; ) {
 		sleep(3600);
