@@ -8,6 +8,7 @@
 #include "ffmpeg_capture.h"
 #include "mixer.h"
 #include "mux.h"
+#include "quittable_sleeper.h"
 #include "timebase.h"
 #include "x264_encoder.h"
 
@@ -28,6 +29,7 @@ Mixer *global_mixer = nullptr;
 X264Encoder *global_x264_encoder = nullptr;
 int frame_num = 0;
 BasicStats *global_basic_stats = nullptr;
+QuittableSleeper should_quit;
 MuxMetrics stream_mux_metrics;
 
 int write_packet(void *opaque, uint8_t *buf, int buf_size, AVIODataMarkerType type, int64_t time)
@@ -62,6 +64,7 @@ unique_ptr<Mux> create_mux(HTTPD *httpd, AVOutputFormat *oformat, X264Encoder *x
 	avctx->pb = avio_alloc_context(buf, MUX_BUFFER_SIZE, 1, httpd, nullptr, nullptr, nullptr);
 	avctx->pb->write_data_type = &write_packet;
 	avctx->pb->ignore_boundary_point = 1;
+	avctx->flags = AVFMT_FLAG_CUSTOM_IO;
 
 	string video_extradata = x264_encoder->get_global_headers();
 
@@ -156,6 +159,11 @@ void adjust_bitrate(int signal)
 	}
 }
 
+void request_quit(int signal)
+{
+	should_quit.quit();
+}
+
 int main(int argc, char *argv[])
 {
 	parse_flags(PROGRAM_KAERU, argc, argv);
@@ -182,17 +190,17 @@ int main(int argc, char *argv[])
 		}
 	}
 
-	X264Encoder x264_encoder(oformat);
-	unique_ptr<Mux> http_mux = create_mux(&httpd, oformat, &x264_encoder, audio_encoder.get());
+	unique_ptr<X264Encoder> x264_encoder(new X264Encoder(oformat));
+	unique_ptr<Mux> http_mux = create_mux(&httpd, oformat, x264_encoder.get(), audio_encoder.get());
 	if (global_flags.transcode_audio) {
 		audio_encoder->add_mux(http_mux.get());
 	}
-	x264_encoder.add_mux(http_mux.get());
-	global_x264_encoder = &x264_encoder;
+	x264_encoder->add_mux(http_mux.get());
+	global_x264_encoder = x264_encoder.get();
 
 	FFmpegCapture video(argv[optind], global_flags.width, global_flags.height);
 	video.set_pixel_format(FFmpegCapture::PixelFormat_NV12);
-	video.set_frame_callback(bind(video_frame_callback, &video, &x264_encoder, audio_encoder.get(), _1, _2, _3, _4, _5, _6, _7, _8, _9, _10, _11));
+	video.set_frame_callback(bind(video_frame_callback, &video, x264_encoder.get(), audio_encoder.get(), _1, _2, _3, _4, _5, _6, _7, _8, _9, _10, _11));
 	if (!global_flags.transcode_audio) {
 		video.set_audio_callback(bind(audio_frame_callback, http_mux.get(), _1, _2));
 	}
@@ -206,8 +214,14 @@ int main(int argc, char *argv[])
 
 	signal(SIGUSR1, adjust_bitrate);
 	signal(SIGUSR2, adjust_bitrate);
+	signal(SIGINT, request_quit);
 
-	for ( ;; ) {
-		sleep(3600);
+	while (!should_quit.should_quit()) {
+		should_quit.sleep_for(hours(1000));
 	}
+
+	video.stop_dequeue_thread();
+	// Stop the x264 encoder before killing the mux it's writing to.
+	x264_encoder.reset();
+	return 0;
 }
