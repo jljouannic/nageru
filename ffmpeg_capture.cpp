@@ -32,6 +32,7 @@ extern "C" {
 #include "ffmpeg_util.h"
 #include "flags.h"
 #include "image_input.h"
+#include "ref_counted_frame.h"
 #include "timebase.h"
 
 #define FRAME_SIZE (8 << 20)  // 8 MB.
@@ -408,13 +409,13 @@ bool FFmpegCapture::play_video(const string &pathname)
 		if (process_queued_commands(format_ctx.get(), pathname, last_modified, /*rewound=*/nullptr)) {
 			return true;
 		}
-		FrameAllocator::Frame audio_frame = audio_frame_allocator->alloc_frame();
+		UniqueFrame audio_frame = audio_frame_allocator->alloc_frame();
 		AudioFormat audio_format;
 
 		int64_t audio_pts;
 		bool error;
 		AVFrameWithDeleter frame = decode_frame(format_ctx.get(), video_codec_ctx.get(), audio_codec_ctx.get(),
-			pathname, video_stream_index, audio_stream_index, &audio_frame, &audio_format, &audio_pts, &error);
+			pathname, video_stream_index, audio_stream_index, audio_frame.get(), &audio_format, &audio_pts, &error);
 		if (error) {
 			return false;
 		}
@@ -436,7 +437,7 @@ bool FFmpegCapture::play_video(const string &pathname)
 		}
 
 		VideoFormat video_format = construct_video_format(frame.get(), video_timebase);
-		FrameAllocator::Frame video_frame = make_video_frame(frame.get(), pathname, &error);
+		UniqueFrame video_frame = make_video_frame(frame.get(), pathname, &error);
 		if (error) {
 			return false;
 		}
@@ -446,15 +447,15 @@ bool FFmpegCapture::play_video(const string &pathname)
 				pts_origin = frame->pts;	
 			}
 			next_frame_start = compute_frame_start(frame->pts, pts_origin, video_timebase, start, rate);
-			video_frame.received_timestamp = next_frame_start;
+			video_frame->received_timestamp = next_frame_start;
 			bool finished_wakeup = producer_thread_should_quit.sleep_until(next_frame_start);
 			if (finished_wakeup) {
-				if (audio_frame.len > 0) {
+				if (audio_frame->len > 0) {
 					assert(audio_pts != -1);
 				}
 				frame_callback(frame->pts, video_timebase, audio_pts, audio_timebase, timecode++,
-					video_frame, 0, video_format,
-					audio_frame, 0, audio_format);
+					video_frame.get_and_release(), 0, video_format,
+					audio_frame.get_and_release(), 0, audio_format);
 				break;
 			} else {
 				if (producer_thread_should_quit.should_quit()) break;
@@ -465,7 +466,6 @@ bool FFmpegCapture::play_video(const string &pathname)
 				}
 				// If we just rewound, drop this frame on the floor and be done.
 				if (rewound) {
-					video_frame_allocator->release_frame(video_frame);
 					break;
 				}
 				// OK, we didn't, so probably a rate change. Recalculate next_frame_start,
@@ -708,12 +708,12 @@ VideoFormat FFmpegCapture::construct_video_format(const AVFrame *frame, AVRation
 	return video_format;
 }
 
-FrameAllocator::Frame FFmpegCapture::make_video_frame(const AVFrame *frame, const string &pathname, bool *error)
+UniqueFrame FFmpegCapture::make_video_frame(const AVFrame *frame, const string &pathname, bool *error)
 {
 	*error = false;
 
-	FrameAllocator::Frame video_frame = video_frame_allocator->alloc_frame();
-	if (video_frame.data == nullptr) {
+	UniqueFrame video_frame(video_frame_allocator->alloc_frame());
+	if (video_frame->data == nullptr) {
 		return video_frame;
 	}
 
@@ -739,17 +739,17 @@ FrameAllocator::Frame FFmpegCapture::make_video_frame(const AVFrame *frame, cons
 	uint8_t *pic_data[4] = { nullptr, nullptr, nullptr, nullptr };
 	int linesizes[4] = { 0, 0, 0, 0 };
 	if (pixel_format == bmusb::PixelFormat_8BitBGRA) {
-		pic_data[0] = video_frame.data;
+		pic_data[0] = video_frame->data;
 		linesizes[0] = width * 4;
-		video_frame.len = (width * 4) * height;
+		video_frame->len = (width * 4) * height;
 	} else if (pixel_format == PixelFormat_NV12) {
-		pic_data[0] = video_frame.data;
+		pic_data[0] = video_frame->data;
 		linesizes[0] = width;
 
 		pic_data[1] = pic_data[0] + width * height;
 		linesizes[1] = width;
 
-		video_frame.len = (width * 2) * height;
+		video_frame->len = (width * 2) * height;
 
 		const AVPixFmtDescriptor *desc = av_pix_fmt_desc_get(sws_dst_format);
 		current_frame_ycbcr_format = decode_ycbcr_format(desc, frame);
@@ -760,7 +760,7 @@ FrameAllocator::Frame FFmpegCapture::make_video_frame(const AVFrame *frame, cons
 		int chroma_width = AV_CEIL_RSHIFT(int(width), desc->log2_chroma_w);
 		int chroma_height = AV_CEIL_RSHIFT(int(height), desc->log2_chroma_h);
 
-		pic_data[0] = video_frame.data;
+		pic_data[0] = video_frame->data;
 		linesizes[0] = width;
 
 		pic_data[1] = pic_data[0] + width * height;
@@ -769,7 +769,7 @@ FrameAllocator::Frame FFmpegCapture::make_video_frame(const AVFrame *frame, cons
 		pic_data[2] = pic_data[1] + chroma_width * chroma_height;
 		linesizes[2] = chroma_width;
 
-		video_frame.len = width * height + 2 * chroma_width * chroma_height;
+		video_frame->len = width * height + 2 * chroma_width * chroma_height;
 
 		current_frame_ycbcr_format = decode_ycbcr_format(desc, frame);
 	}

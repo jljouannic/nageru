@@ -39,6 +39,7 @@ extern "C" {
 
 #include "bmusb/bmusb.h"
 #include "ffmpeg_raii.h"
+#include "ref_counted_frame.h"
 #include "quittable_sleeper.h"
 
 struct AVFormatContext;
@@ -203,7 +204,7 @@ private:
 	void convert_audio(const AVFrame *audio_avframe, bmusb::FrameAllocator::Frame *audio_frame, bmusb::AudioFormat *audio_format);
 
 	bmusb::VideoFormat construct_video_format(const AVFrame *frame, AVRational video_timebase);
-	bmusb::FrameAllocator::Frame make_video_frame(const AVFrame *frame, const std::string &pathname, bool *error);
+	UniqueFrame make_video_frame(const AVFrame *frame, const std::string &pathname, bool *error);
 
 	std::string description, filename;
 	uint16_t timecode = 0;

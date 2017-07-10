@@ -30,7 +30,7 @@ OBJS += quicksync_encoder.o x264_encoder.o x264_dynamic.o x264_speed_control.o v
 # DeckLink
 OBJS += decklink_capture.o decklink_util.o decklink_output.o decklink/DeckLinkAPIDispatch.o
 
-KAERU_OBJS = kaeru.o x264_encoder.o mux.o basic_stats.o metrics.o flags.o audio_encoder.o x264_speed_control.o print_latency.o x264_dynamic.o ffmpeg_raii.o ffmpeg_capture.o ffmpeg_util.o httpd.o metacube2.o
+KAERU_OBJS = kaeru.o x264_encoder.o mux.o basic_stats.o metrics.o flags.o audio_encoder.o x264_speed_control.o print_latency.o x264_dynamic.o ffmpeg_raii.o ref_counted_frame.o ffmpeg_capture.o ffmpeg_util.o httpd.o metacube2.o
 
 # bmusb
 ifeq ($(EMBEDDED_BMUSB),yes)
