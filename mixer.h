@@ -592,16 +592,8 @@ private:
 	std::vector<uint32_t> mode_scanlist[MAX_VIDEO_CARDS];
 	unsigned mode_scanlist_index[MAX_VIDEO_CARDS]{ 0 };
 	std::chrono::steady_clock::time_point last_mode_scan_change[MAX_VIDEO_CARDS];
-
-	// Metrics.
-	std::atomic<int64_t> metric_frames_output_total{0};
-	std::atomic<int64_t> metric_frames_output_dropped{0};
-	std::atomic<double> metric_start_time_seconds{0.0 / 0.0};
-	std::atomic<int64_t> metrics_memory_used_bytes{0};
-	std::atomic<double> metrics_memory_locked_limit_bytes{0.0 / 0.0};
 };
 
 extern Mixer *global_mixer;
-extern bool uses_mlock;
 
 #endif  // !defined(_MIXER_H)

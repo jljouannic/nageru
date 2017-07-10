@@ -2,6 +2,7 @@
 // This is experimental code, not yet supported.
 
 #include "audio_encoder.h"
+#include "basic_stats.h"
 #include "defs.h"
 #include "flags.h"
 #include "ffmpeg_capture.h"
@@ -25,6 +26,8 @@ using namespace std::placeholders;
 
 Mixer *global_mixer = nullptr;
 X264Encoder *global_x264_encoder = nullptr;
+int frame_num = 0;
+BasicStats *global_basic_stats = nullptr;
 MuxMetrics stream_mux_metrics;
 
 int write_packet(void *opaque, uint8_t *buf, int buf_size, AVIODataMarkerType type, int64_t time)
@@ -84,6 +87,7 @@ void video_frame_callback(FFmpegCapture *video, X264Encoder *x264_encoder, Audio
 		video_pts = av_rescale_q(video_pts, video_timebase, AVRational{ 1, TIMEBASE });
 		int64_t frame_duration = TIMEBASE * video_format.frame_rate_den / video_format.frame_rate_nom;
 		x264_encoder->add_frame(video_pts, frame_duration, video->get_current_frame_ycbcr_format().luma_coefficients, video_frame.data + video_offset, ts);
+		global_basic_stats->update(frame_num++, /*dropped_frames=*/0);
 	}
 	if (audio_frame.len > 0) {
 		// FFmpegCapture takes care of this for us.
@@ -196,6 +200,8 @@ int main(int argc, char *argv[])
 	video.start_bm_capture();
 	video.change_rate(2.0);  // Be sure never to really fall behind, but also don't dump huge amounts of stuff onto x264.
 
+	BasicStats basic_stats(/*verbose=*/false);
+	global_basic_stats = &basic_stats;
 	httpd.start(9095);
 
 	signal(SIGUSR1, adjust_bitrate);

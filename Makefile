@@ -22,7 +22,7 @@ OBJS += midi_mapper.o midi_mapping.pb.o
 
 # Mixer objects
 AUDIO_MIXER_OBJS = audio_mixer.o alsa_input.o alsa_pool.o ebu_r128_proc.o stereocompressor.o resampling_queue.o flags.o correlation_measurer.o filter.o input_mapping.o state.pb.o
-OBJS += chroma_subsampler.o v210_converter.o mixer.o metrics.o pbo_frame_allocator.o context.o ref_counted_frame.o theme.o httpd.o flags.o image_input.o alsa_output.o disk_space_estimator.o print_latency.o timecode_renderer.o tweaked_inputs.o $(AUDIO_MIXER_OBJS)
+OBJS += chroma_subsampler.o v210_converter.o mixer.o basic_stats.o metrics.o pbo_frame_allocator.o context.o ref_counted_frame.o theme.o httpd.o flags.o image_input.o alsa_output.o disk_space_estimator.o print_latency.o timecode_renderer.o tweaked_inputs.o $(AUDIO_MIXER_OBJS)
 
 # Streaming and encoding objects
 OBJS += quicksync_encoder.o x264_encoder.o x264_dynamic.o x264_speed_control.o video_encoder.o metacube2.o mux.o audio_encoder.o ffmpeg_raii.o ffmpeg_util.o
@@ -30,7 +30,7 @@ OBJS += quicksync_encoder.o x264_encoder.o x264_dynamic.o x264_speed_control.o v
 # DeckLink
 OBJS += decklink_capture.o decklink_util.o decklink_output.o decklink/DeckLinkAPIDispatch.o
 
-KAERU_OBJS = kaeru.o x264_encoder.o mux.o metrics.o flags.o audio_encoder.o x264_speed_control.o print_latency.o x264_dynamic.o ffmpeg_raii.o ffmpeg_capture.o ffmpeg_util.o httpd.o metacube2.o
+KAERU_OBJS = kaeru.o x264_encoder.o mux.o basic_stats.o metrics.o flags.o audio_encoder.o x264_speed_control.o print_latency.o x264_dynamic.o ffmpeg_raii.o ffmpeg_capture.o ffmpeg_util.o httpd.o metacube2.o
 
 # bmusb
 ifeq ($(EMBEDDED_BMUSB),yes)

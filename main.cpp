@@ -13,6 +13,7 @@ extern "C" {
 #include <QSurfaceFormat>
 #include <string>
 
+#include "basic_stats.h"
 #include "context.h"
 #include "flags.h"
 #include "image_input.h"

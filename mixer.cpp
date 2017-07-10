@@ -14,7 +14,6 @@
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
-#include <sys/resource.h>
 #include <algorithm>
 #include <chrono>
 #include <condition_variable>
@@ -31,6 +30,7 @@
 #include "DeckLinkAPI.h"
 #include "LinuxCOM.h"
 #include "alsa_output.h"
+#include "basic_stats.h"
 #include "bmusb/bmusb.h"
 #include "bmusb/fake_capture.h"
 #include "chroma_subsampler.h"
@@ -61,7 +61,6 @@ using namespace std::placeholders;
 using namespace bmusb;
 
 Mixer *global_mixer = nullptr;
-bool uses_mlock = false;
 
 namespace {
 
@@ -460,14 +459,7 @@ Mixer::Mixer(const QSurfaceFormat &format, unsigned num_cards)
 		set_output_card_internal(global_flags.output_card);
 	}
 
-	metric_start_time_seconds = get_timestamp_for_metrics();
-
 	output_jitter_history.register_metrics({{ "card", "output" }});
-	global_metrics.add("frames_output_total", &metric_frames_output_total);
-	global_metrics.add("frames_output_dropped", &metric_frames_output_dropped);
-	global_metrics.add("start_time_seconds", &metric_start_time_seconds, Metrics::TYPE_GAUGE);
-	global_metrics.add("memory_used_bytes", &metrics_memory_used_bytes);
-	global_metrics.add("memory_locked_limit_bytes", &metrics_memory_locked_limit_bytes);
 }
 
 Mixer::~Mixer()
@@ -947,9 +939,7 @@ void Mixer::thread_func()
 		}
 	}
 
-	steady_clock::time_point start, now;
-	start = steady_clock::now();
-
+	BasicStats basic_stats(/*verbose=*/true);
 	int stats_dropped_frames = 0;
 
 	while (!should_quit) {
@@ -1026,54 +1016,8 @@ void Mixer::thread_func()
 		++frame_num;
 		pts_int += frame_duration;
 
-		now = steady_clock::now();
-		double elapsed = duration<double>(now - start).count();
-
-		metric_frames_output_total = frame_num;
-		metric_frames_output_dropped = stats_dropped_frames;
-
-		if (frame_num % 100 == 0) {
-			printf("%d frames (%d dropped) in %.3f seconds = %.1f fps (%.1f ms/frame)",
-				frame_num, stats_dropped_frames, elapsed, frame_num / elapsed,
-				1e3 * elapsed / frame_num);
-		//	chain->print_phase_timing();
-
-			// Check our memory usage, to see if we are close to our mlockall()
-			// limit (if at all set).
-			rusage used;
-			if (getrusage(RUSAGE_SELF, &used) == -1) {
-				perror("getrusage(RUSAGE_SELF)");
-				assert(false);
-			}
-
-			if (uses_mlock) {
-				rlimit limit;
-				if (getrlimit(RLIMIT_MEMLOCK, &limit) == -1) {
-					perror("getrlimit(RLIMIT_MEMLOCK)");
-					assert(false);
-				}
-
-				if (limit.rlim_cur == 0) {
-					printf(", using %ld MB memory (locked)",
-						long(used.ru_maxrss / 1024));
-				} else {
-					printf(", using %ld / %ld MB lockable memory (%.1f%%)",
-						long(used.ru_maxrss / 1024),
-						long(limit.rlim_cur / 1048576),
-						float(100.0 * (used.ru_maxrss * 1024.0) / limit.rlim_cur));
-				}
-				metrics_memory_locked_limit_bytes = limit.rlim_cur;
-			} else {
-				printf(", using %ld MB memory (not locked)",
-					long(used.ru_maxrss / 1024));
-				metrics_memory_locked_limit_bytes = 0.0 / 0.0;
-			}
-
-			printf("\n");
-
-			metrics_memory_used_bytes = used.ru_maxrss * 1024;
-		}
-
+		basic_stats.update(frame_num, stats_dropped_frames);
+		// if (frame_num % 100 == 0) chain->print_phase_timing();
 
 		if (should_cut.exchange(false)) {  // Test and clear.
 			video_encoder->do_cut(frame_num);
