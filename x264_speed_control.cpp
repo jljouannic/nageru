@@ -299,6 +299,7 @@ void X264SpeedControl::set_buffer_size(int new_buffer_size)
 	buffer_size = new_buffer_size * uspf;
 	cplx_decay = 1 - 1./new_buffer_size;
 	compensation_period = buffer_size/4;
+	metric_x264_speedcontrol_buffer_size_seconds = buffer_size * 1e-6;
 }
 
 int X264SpeedControl::dither_preset(float f)
