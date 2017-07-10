@@ -182,12 +182,10 @@ int main(int argc, char *argv[])
 	assert(oformat != nullptr);
 
 	unique_ptr<AudioEncoder> audio_encoder;
-	if (global_flags.transcode_audio) {
-		if (global_flags.stream_audio_codec_name.empty()) {
-			audio_encoder.reset(new AudioEncoder(AUDIO_OUTPUT_CODEC_NAME, DEFAULT_AUDIO_OUTPUT_BIT_RATE, oformat));
-		} else {
-			audio_encoder.reset(new AudioEncoder(global_flags.stream_audio_codec_name, global_flags.stream_audio_codec_bitrate, oformat));
-		}
+	if (global_flags.stream_audio_codec_name.empty()) {
+		audio_encoder.reset(new AudioEncoder(AUDIO_OUTPUT_CODEC_NAME, DEFAULT_AUDIO_OUTPUT_BIT_RATE, oformat));
+	} else {
+		audio_encoder.reset(new AudioEncoder(global_flags.stream_audio_codec_name, global_flags.stream_audio_codec_bitrate, oformat));
 	}
 
 	unique_ptr<X264Encoder> x264_encoder(new X264Encoder(oformat));
