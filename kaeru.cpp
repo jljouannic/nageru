@@ -149,10 +149,10 @@ void adjust_bitrate(int signal)
 	} else if (signal == SIGUSR2) {
 		new_bitrate -= 100;
 		if (new_bitrate < 100) {
-			fprintf(stderr, "Ignoring SIGUSR1, can't decrease bitrate below 100 kbit/sec (currently at %d kbit/sec)\n",
+			fprintf(stderr, "Ignoring SIGUSR2, can't decrease bitrate below 100 kbit/sec (currently at %d kbit/sec)\n",
 				global_flags.x264_bitrate);
 		} else {
-			fprintf(stderr, "Decreasing bitrate to %d kbit/sec due to SIGUSR1.\n", new_bitrate);
+			fprintf(stderr, "Decreasing bitrate to %d kbit/sec due to SIGUSR2.\n", new_bitrate);
 			global_flags.x264_bitrate = new_bitrate;
 			global_x264_encoder->change_bitrate(new_bitrate);
 		}
