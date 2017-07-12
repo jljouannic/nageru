@@ -425,6 +425,12 @@ bool FFmpegCapture::play_video(const string &pathname)
 				fprintf(stderr, "%s: Rewind failed, not looping.\n", pathname.c_str());
 				return true;
 			}
+			if (video_codec_ctx != nullptr) {
+				avcodec_flush_buffers(video_codec_ctx.get());
+			}
+			if (audio_codec_ctx != nullptr) {
+				avcodec_flush_buffers(audio_codec_ctx.get());
+			}
 			// If the file has changed since last time, return to get it reloaded.
 			// Note that depending on how you move the file into place, you might
 			// end up corrupting the one you're already playing, so this path
