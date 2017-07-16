@@ -101,6 +101,7 @@ bool ALSAInput::open_device()
 	default:
 		assert(false);
 	}
+	audio_format.sample_rate = sample_rate;
 	//printf("num_periods=%u period_size=%u buffer_frames=%u sample_rate=%u bits_per_sample=%d\n",
 	//	num_periods, unsigned(period_size), unsigned(buffer_frames), sample_rate, audio_format.bits_per_sample);
 
