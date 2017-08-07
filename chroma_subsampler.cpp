@@ -237,7 +237,7 @@ void main()
 		check_error();
 		if (success == GL_FALSE) {
 			GLchar error_log[1024] = {0};
-			glGetProgramInfoLog(v210_program_num, 1024, NULL, error_log);
+			glGetProgramInfoLog(v210_program_num, 1024, nullptr, error_log);
 			fprintf(stderr, "Error linking program: %s\n", error_log);
 			exit(1);
 		}

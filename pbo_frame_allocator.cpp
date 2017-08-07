@@ -36,7 +36,7 @@ PBOFrameAllocator::PBOFrameAllocator(bmusb::PixelFormat pixel_format, size_t fra
 		check_error();
 		glBindBuffer(buffer, pbo);
 		check_error();
-		glBufferStorage(buffer, frame_size, NULL, permissions | GL_MAP_PERSISTENT_BIT);
+		glBufferStorage(buffer, frame_size, nullptr, permissions | GL_MAP_PERSISTENT_BIT);
 		check_error();
 
 		Frame frame;
@@ -117,7 +117,7 @@ PBOFrameAllocator::PBOFrameAllocator(bmusb::PixelFormat pixel_format, size_t fra
 				check_error();
 				if (field == 0) {
 					userdata[i].last_v210_width[0] = v210_width;
-					glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB10_A2, v210_width, height, 0, GL_RGBA, GL_UNSIGNED_INT_2_10_10_10_REV, NULL);
+					glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB10_A2, v210_width, height, 0, GL_RGBA, GL_UNSIGNED_INT_2_10_10_10_REV, nullptr);
 					check_error();
 				}
 
@@ -125,7 +125,7 @@ PBOFrameAllocator::PBOFrameAllocator(bmusb::PixelFormat pixel_format, size_t fra
 				check_error();
 				set_clamp_to_edge();
 				if (field == 0) {
-					glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB10_A2, width, height, 0, GL_RGBA, GL_UNSIGNED_INT_2_10_10_10_REV, NULL);
+					glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB10_A2, width, height, 0, GL_RGBA, GL_UNSIGNED_INT_2_10_10_10_REV, nullptr);
 					check_error();
 				}
 				break;
@@ -135,7 +135,7 @@ PBOFrameAllocator::PBOFrameAllocator(bmusb::PixelFormat pixel_format, size_t fra
 				check_error();
 				set_clamp_to_edge();
 				if (field == 0) {
-					glTexImage2D(GL_TEXTURE_2D, 0, GL_R8, width, height, 0, GL_RED, GL_UNSIGNED_BYTE, NULL);
+					glTexImage2D(GL_TEXTURE_2D, 0, GL_R8, width, height, 0, GL_RED, GL_UNSIGNED_BYTE, nullptr);
 					check_error();
 				}
 
@@ -143,7 +143,7 @@ PBOFrameAllocator::PBOFrameAllocator(bmusb::PixelFormat pixel_format, size_t fra
 				check_error();
 				set_clamp_to_edge();
 				if (field == 0) {
-					glTexImage2D(GL_TEXTURE_2D, 0, GL_RG8, width / 2, height, 0, GL_RG, GL_UNSIGNED_BYTE, NULL);
+					glTexImage2D(GL_TEXTURE_2D, 0, GL_RG8, width / 2, height, 0, GL_RG, GL_UNSIGNED_BYTE, nullptr);
 					check_error();
 				}
 				break;
@@ -153,9 +153,9 @@ PBOFrameAllocator::PBOFrameAllocator(bmusb::PixelFormat pixel_format, size_t fra
 				set_clamp_to_edge();
 				if (field == 0) {
 					if (global_flags.can_disable_srgb_decoder) {  // See the comments in tweaked_inputs.h.
-						glTexImage2D(GL_TEXTURE_2D, 0, GL_SRGB8_ALPHA8, width, height, 0, GL_BGRA, GL_UNSIGNED_INT_8_8_8_8_REV, NULL);
+						glTexImage2D(GL_TEXTURE_2D, 0, GL_SRGB8_ALPHA8, width, height, 0, GL_BGRA, GL_UNSIGNED_INT_8_8_8_8_REV, nullptr);
 					} else {
-						glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, width, height, 0, GL_BGRA, GL_UNSIGNED_INT_8_8_8_8_REV, NULL);
+						glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, width, height, 0, GL_BGRA, GL_UNSIGNED_INT_8_8_8_8_REV, nullptr);
 					}
 					check_error();
 				}
@@ -165,7 +165,7 @@ PBOFrameAllocator::PBOFrameAllocator(bmusb::PixelFormat pixel_format, size_t fra
 				check_error();
 				set_clamp_to_edge();
 				if (field == 0) {
-					glTexImage2D(GL_TEXTURE_2D, 0, GL_R8, width, height, 0, GL_RED, GL_UNSIGNED_BYTE, NULL);
+					glTexImage2D(GL_TEXTURE_2D, 0, GL_R8, width, height, 0, GL_RED, GL_UNSIGNED_BYTE, nullptr);
 					check_error();
 				}
 
@@ -173,7 +173,7 @@ PBOFrameAllocator::PBOFrameAllocator(bmusb::PixelFormat pixel_format, size_t fra
 				check_error();
 				set_clamp_to_edge();
 				if (field == 0) {
-					glTexImage2D(GL_TEXTURE_2D, 0, GL_R8, width / 2, height, 0, GL_RED, GL_UNSIGNED_BYTE, NULL);
+					glTexImage2D(GL_TEXTURE_2D, 0, GL_R8, width / 2, height, 0, GL_RED, GL_UNSIGNED_BYTE, nullptr);
 					check_error();
 				}
 
@@ -181,7 +181,7 @@ PBOFrameAllocator::PBOFrameAllocator(bmusb::PixelFormat pixel_format, size_t fra
 				check_error();
 				set_clamp_to_edge();
 				if (field == 0) {
-					glTexImage2D(GL_TEXTURE_2D, 0, GL_R8, width / 2, height, 0, GL_RED, GL_UNSIGNED_BYTE, NULL);
+					glTexImage2D(GL_TEXTURE_2D, 0, GL_R8, width / 2, height, 0, GL_RED, GL_UNSIGNED_BYTE, nullptr);
 					check_error();
 				}
 				break;
@@ -280,7 +280,7 @@ void PBOFrameAllocator::release_frame(Frame frame)
 		check_error();
 		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
 		check_error();
-		glTexImage2D(GL_TEXTURE_2D, 0, GL_R8, userdata->last_width[field], userdata->last_height[field], 0, GL_RED, GL_UNSIGNED_BYTE, NULL);
+		glTexImage2D(GL_TEXTURE_2D, 0, GL_R8, userdata->last_width[field], userdata->last_height[field], 0, GL_RED, GL_UNSIGNED_BYTE, nullptr);
 		check_error();
 
 		glBindTexture(GL_TEXTURE_2D, userdata->tex_cbcr[field]);
@@ -291,7 +291,7 @@ void PBOFrameAllocator::release_frame(Frame frame)
 		check_error();
 		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
 		check_error();
-		glTexImage2D(GL_TEXTURE_2D, 0, GL_RG8, userdata->last_width[field] / 2, userdata->last_height[field], 0, GL_RED, GL_UNSIGNED_BYTE, NULL);
+		glTexImage2D(GL_TEXTURE_2D, 0, GL_RG8, userdata->last_width[field] / 2, userdata->last_height[field], 0, GL_RED, GL_UNSIGNED_BYTE, nullptr);
 		check_error();
 	}
 #endif

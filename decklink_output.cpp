@@ -524,7 +524,7 @@ unique_ptr<DeckLinkOutput::Frame> DeckLinkOutput::get_frame()
 	check_error();
 	glBindBuffer(GL_PIXEL_PACK_BUFFER, frame->pbo);
 	check_error();
-	glBufferStorage(GL_PIXEL_PACK_BUFFER, stride * height, NULL, GL_MAP_READ_BIT | GL_MAP_PERSISTENT_BIT);
+	glBufferStorage(GL_PIXEL_PACK_BUFFER, stride * height, nullptr, GL_MAP_READ_BIT | GL_MAP_PERSISTENT_BIT);
 	check_error();
 	frame->uyvy_ptr = (uint8_t *)glMapBufferRange(GL_PIXEL_PACK_BUFFER, 0, stride * height, GL_MAP_READ_BIT | GL_MAP_PERSISTENT_BIT);
 	check_error();
