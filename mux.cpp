@@ -75,7 +75,7 @@ Mux::Mux(AVFormatContext *avctx, int width, int height, Codec video_codec, const
 	// Note that there's no way to change this per-frame as the H.264 stream
 	// would like to be able to.
 	avstream_video->codecpar->color_primaries = AVCOL_PRI_BT709;  // RGB colorspace (inout_format.color_space).
-	avstream_video->codecpar->color_trc = AVCOL_TRC_UNSPECIFIED;  // Gamma curve (inout_format.gamma_curve).
+	avstream_video->codecpar->color_trc = AVCOL_TRC_IEC61966_2_1;  // Gamma curve (inout_format.gamma_curve).
 	// YUV colorspace (output_ycbcr_format.luma_coefficients).
 	if (global_flags.ycbcr_rec709_coefficients) {
 		avstream_video->codecpar->color_space = AVCOL_SPC_BT709;

@@ -336,7 +336,7 @@ void QuickSyncEncoderImpl::sps_rbsp(YCbCrLumaCoefficients ycbcr_coefficients, bi
             bitstream_put_ui(bs, 1, 1);  /* colour_description_present_flag */
             {
                 bitstream_put_ui(bs, 1, 8);  /* colour_primaries (1 = BT.709) */
-                bitstream_put_ui(bs, 2, 8);  /* transfer_characteristics (2 = unspecified, since we use sRGB) */
+                bitstream_put_ui(bs, 13, 8);  /* transfer_characteristics (13 = sRGB) */
                 if (ycbcr_coefficients == YCBCR_REC_709) {
                     bitstream_put_ui(bs, 1, 8);  /* matrix_coefficients (1 = BT.709) */
                 } else {
