@@ -499,7 +499,7 @@ void MainWindow::setup_audio_expanded_view()
 		update_eq_label(bus_index, EQ_BAND_MID, global_audio_mixer->get_eq(bus_index, EQ_BAND_MID));
 		update_eq_label(bus_index, EQ_BAND_BASS, global_audio_mixer->get_eq(bus_index, EQ_BAND_BASS));
 		ui_audio_expanded_view->fader->setDbValue(global_audio_mixer->get_fader_volume(bus_index));
-		ui_audio_expanded_view->mute_button->setChecked(global_audio_mixer->get_mute(bus_index) ? Qt::Checked : Qt::Unchecked);
+		ui_audio_expanded_view->mute_button->setChecked(global_audio_mixer->get_mute(bus_index));
 		connect(ui_audio_expanded_view->mute_button, &QPushButton::toggled,
 			bind(&MainWindow::mute_button_toggled, this, bus_index, _1));
 		ui->buses->addWidget(channel);
