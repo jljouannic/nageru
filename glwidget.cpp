@@ -90,6 +90,8 @@ void GLWidget::initializeGL()
 
 void GLWidget::resizeGL(int width, int height)
 {
+	current_width = width;
+	current_height = height;
 	glViewport(0, 0, width, height);
 }
 
@@ -111,7 +113,7 @@ void GLWidget::paintGL()
 	check_error();
 	glDisable(GL_FRAMEBUFFER_SRGB);
 	check_error();
-	frame.chain->render_to_screen();
+	frame.chain->render_to_fbo(0, current_width, current_height);
 	check_error();
 
 	if (resource_pool == nullptr) {

@@ -62,6 +62,7 @@ private:
 	GLuint vao, program_num;
 	GLuint position_vbo, texcoord_vbo;
 	movit::ResourcePool *resource_pool = nullptr;
+	int current_width = 1, current_height = 1;
 };
 
 #endif
