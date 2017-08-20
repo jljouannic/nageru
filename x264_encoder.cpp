@@ -153,7 +153,7 @@ void X264Encoder::init_x264()
 	param.vui.i_vidformat = 5;  // Unspecified.
 	param.vui.b_fullrange = 0;
 	param.vui.i_colorprim = 1;  // BT.709.
-	param.vui.i_transfer = 2;  // Unspecified (since we use sRGB).
+	param.vui.i_transfer = 13;  // sRGB.
 	if (global_flags.ycbcr_rec709_coefficients) {
 		param.vui.i_colmatrix = 1;  // BT.709.
 	} else {
