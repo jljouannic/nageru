@@ -1656,8 +1656,8 @@ bool QuickSyncEncoderImpl::begin_frame(int64_t pts, int64_t duration, YCbCrLumaC
 			// Create CbCr image.
 			surf->cbcr_egl_image = EGL_NO_IMAGE_KHR;
 			EGLint cbcr_attribs[] = {
-				EGL_WIDTH, frame_width,
-				EGL_HEIGHT, frame_height,
+				EGL_WIDTH, frame_width / 2,
+				EGL_HEIGHT, frame_height / 2,
 				EGL_LINUX_DRM_FOURCC_EXT, fourcc_code('G', 'R', '8', '8'),
 				EGL_DMA_BUF_PLANE0_FD_EXT, EGLint(buf_info.handle),
 				EGL_DMA_BUF_PLANE0_OFFSET_EXT, EGLint(surf->surface_image.offsets[1]),
