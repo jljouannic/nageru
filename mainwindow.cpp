@@ -282,6 +282,7 @@ void MainWindow::mixer_created(Mixer *mixer)
 	// Make the previews.
 	unsigned num_previews = mixer->get_num_channels();
 
+	const char qwerty[] = "QWERTYUIOP";
 	for (unsigned i = 0; i < num_previews; ++i) {
 		Mixer::Output output = Mixer::Output(Mixer::OUTPUT_INPUT0 + i);
 
@@ -303,6 +304,12 @@ void MainWindow::mixer_created(Mixer *mixer)
 		// Hook up the keyboard key.
 		QShortcut *shortcut = new QShortcut(QKeySequence(Qt::Key_1 + i), this);
 		connect(shortcut, &QShortcut::activated, bind(&MainWindow::channel_clicked, this, i));
+
+		// Hook up the quick-cut key.
+		if (i < strlen(qwerty)) {
+			QShortcut *shortcut = new QShortcut(QKeySequence(qwerty[i]), this);
+			connect(shortcut, &QShortcut::activated, bind(&MainWindow::quick_cut_activated, this, i));
+		}
 
 		// Hook up the white balance button (irrelevant if invisible).
 		ui_display->wb_button->setVisible(mixer->get_supports_set_wb(output));
@@ -1279,6 +1286,12 @@ void MainWindow::channel_clicked(int channel_number)
 	} else {
 		global_mixer->channel_clicked(channel_number);
 	}
+}
+
+void MainWindow::quick_cut_activated(int channel_number)
+{
+	global_mixer->channel_clicked(channel_number);
+	global_mixer->transition_clicked(0);
 }
 
 void MainWindow::wb_button_clicked(int channel_number)

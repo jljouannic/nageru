@@ -57,6 +57,7 @@ public slots:
 	void timecode_stdout_triggered();
 	void transition_clicked(int transition_number);
 	void channel_clicked(int channel_number);
+	void quick_cut_activated(int channel_number);
 	void wb_button_clicked(int channel_number);
 	void set_transition_names(std::vector<std::string> transition_names);
 	void update_channel_name(Mixer::Output output, const std::string &name);
