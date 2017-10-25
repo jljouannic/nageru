@@ -645,10 +645,15 @@ void FFmpegCapture::convert_audio(const AVFrame *audio_avframe, FrameAllocator::
 	}
 	audio_format->num_channels = 2;
 
+	int64_t channel_layout = audio_avframe->channel_layout;
+	if (channel_layout == 0) {
+		channel_layout = av_get_default_channel_layout(audio_avframe->channels);
+	}
+
 	if (resampler == nullptr ||
 	    audio_avframe->format != last_src_format ||
 	    dst_format != last_dst_format ||
-	    av_frame_get_channel_layout(audio_avframe) != last_channel_layout ||
+	    channel_layout != last_channel_layout ||
 	    av_frame_get_sample_rate(audio_avframe) != last_sample_rate) {
 		avresample_free(&resampler);
 		resampler = avresample_alloc_context();
@@ -657,7 +662,7 @@ void FFmpegCapture::convert_audio(const AVFrame *audio_avframe, FrameAllocator::
 			exit(1);
 		}
 
-		av_opt_set_int(resampler, "in_channel_layout",  av_frame_get_channel_layout(audio_avframe), 0);
+		av_opt_set_int(resampler, "in_channel_layout",  channel_layout,                             0);
 		av_opt_set_int(resampler, "out_channel_layout", AV_CH_LAYOUT_STEREO,                        0);
 		av_opt_set_int(resampler, "in_sample_rate",     av_frame_get_sample_rate(audio_avframe),    0);
 		av_opt_set_int(resampler, "out_sample_rate",    OUTPUT_FREQUENCY,                           0);
@@ -671,7 +676,7 @@ void FFmpegCapture::convert_audio(const AVFrame *audio_avframe, FrameAllocator::
 
 		last_src_format = AVSampleFormat(audio_avframe->format);
 		last_dst_format = dst_format;
-		last_channel_layout = av_frame_get_channel_layout(audio_avframe);
+		last_channel_layout = channel_layout;
 		last_sample_rate = av_frame_get_sample_rate(audio_avframe);
 	}
 
