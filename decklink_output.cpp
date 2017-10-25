@@ -82,17 +82,17 @@ DeckLinkOutput::DeckLinkOutput(ResourcePool *resource_pool, QSurface *surface, u
 	});
 }
 
-void DeckLinkOutput::set_device(IDeckLink *decklink)
+bool DeckLinkOutput::set_device(IDeckLink *decklink)
 {
 	if (decklink->QueryInterface(IID_IDeckLinkOutput, (void**)&output) != S_OK) {
-		fprintf(stderr, "Card %u has no outputs\n", card_index);
-		exit(1);
+		fprintf(stderr, "Warning: Card %u has no outputs\n", card_index);
+		return false;
 	}
 
 	IDeckLinkDisplayModeIterator *mode_it;
 	if (output->GetDisplayModeIterator(&mode_it) != S_OK) {
-		fprintf(stderr, "Failed to enumerate output display modes for card %u\n", card_index);
-		exit(1);
+		fprintf(stderr, "Warning: Failed to enumerate output display modes for card %u\n", card_index);
+		return false;
 	}
 
 	video_modes.clear();
@@ -118,6 +118,7 @@ void DeckLinkOutput::set_device(IDeckLink *decklink)
 	// if they exist. We're not very likely to need analog outputs, so we don't need a way
 	// to change beyond that.
 	video_connection = pick_default_video_connection(decklink, BMDDeckLinkVideoOutputConnections, card_index);
+	return true;
 }
 
 void DeckLinkOutput::start_output(uint32_t mode, int64_t base_pts)

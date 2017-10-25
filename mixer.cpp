@@ -371,7 +371,10 @@ Mixer::Mixer(const QSurfaceFormat &format, unsigned num_cards)
 
 				DeckLinkCapture *capture = new DeckLinkCapture(decklink, card_index);
 				DeckLinkOutput *output = new DeckLinkOutput(resource_pool.get(), decklink_output_surface, global_flags.width, global_flags.height, card_index);
-				output->set_device(decklink);
+				if (!output->set_device(decklink)) {
+					delete output;
+					output = nullptr;
+				}
 				configure_card(card_index, capture, CardType::LIVE_CARD, output);
 				++num_pci_devices;
 			}

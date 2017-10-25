@@ -38,7 +38,7 @@ class DeckLinkOutput : public IDeckLinkVideoOutputCallback {
 public:
 	DeckLinkOutput(movit::ResourcePool *resource_pool, QSurface *surface, unsigned width, unsigned height, unsigned card_index);
 
-	void set_device(IDeckLink *output);
+	bool set_device(IDeckLink *output);
 	void start_output(uint32_t mode, int64_t base_pts);  // Mode comes from get_available_video_modes().
 	void end_output();
 
