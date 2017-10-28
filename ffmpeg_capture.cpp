@@ -685,7 +685,7 @@ void FFmpegCapture::convert_audio(const AVFrame *audio_avframe, FrameAllocator::
 
 	uint8_t *data = audio_frame->data + audio_frame->len;
 	int out_samples = avresample_convert(resampler, &data, 0, num_samples_room,
-		audio_avframe->data, audio_avframe->linesize[0], audio_avframe->nb_samples);
+		const_cast<uint8_t **>(audio_avframe->data), audio_avframe->linesize[0], audio_avframe->nb_samples);
 	if (out_samples < 0) {
                 fprintf(stderr, "Audio conversion failed.\n");
                 exit(1);
