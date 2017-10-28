@@ -33,6 +33,7 @@ enum LongOption {
 	OPTION_HTTP_COARSE_TIMEBASE,
 	OPTION_HTTP_AUDIO_CODEC,
 	OPTION_HTTP_AUDIO_BITRATE,
+	OPTION_HTTP_PORT,
 	OPTION_NO_TRANSCODE_AUDIO,
 	OPTION_FLAT_AUDIO,
 	OPTION_GAIN_STAGING,
@@ -108,6 +109,8 @@ void usage(Program program)
 	fprintf(stderr, "      --http-audio-bitrate=KBITS  audio codec bit rate to use for HTTP streams\n");
 	fprintf(stderr, "                                  (default is %d, ignored unless --http-audio-codec is set)\n",
 		DEFAULT_AUDIO_OUTPUT_BIT_RATE / 1000);
+	fprintf(stderr, "      --http-port=PORT            which port to use for the built-in HTTP server\n");
+	fprintf(stderr, "                                  (default is %d)\n", DEFAULT_HTTPD_PORT);
 	if (program == PROGRAM_KAERU) {
 		fprintf(stderr, "      --no-transcode-audio        copy encoded audio raw from the source stream\n");
 		fprintf(stderr, "                                    (requires --http-audio-codec= to be set)\n");
@@ -187,6 +190,7 @@ void parse_flags(Program program, int argc, char * const argv[])
 		{ "http-coarse-timebase", no_argument, 0, OPTION_HTTP_COARSE_TIMEBASE },
 		{ "http-audio-codec", required_argument, 0, OPTION_HTTP_AUDIO_CODEC },
 		{ "http-audio-bitrate", required_argument, 0, OPTION_HTTP_AUDIO_BITRATE },
+		{ "http-port", required_argument, 0, OPTION_HTTP_PORT },
 		{ "no-transcode-audio", no_argument, 0, OPTION_NO_TRANSCODE_AUDIO },
 		{ "flat-audio", no_argument, 0, OPTION_FLAT_AUDIO },
 		{ "gain-staging", required_argument, 0, OPTION_GAIN_STAGING },
@@ -293,6 +297,9 @@ void parse_flags(Program program, int argc, char * const argv[])
 			break;
 		case OPTION_HTTP_AUDIO_BITRATE:
 			global_flags.stream_audio_codec_bitrate = atoi(optarg) * 1000;
+			break;
+		case OPTION_HTTP_PORT:
+			global_flags.http_port = atoi(optarg);
 			break;
 		case OPTION_NO_TRANSCODE_AUDIO:
 			global_flags.transcode_audio = false;

@@ -18,6 +18,7 @@
 #define LOCAL_DUMP_PREFIX "record-"
 #define LOCAL_DUMP_SUFFIX ".nut"
 #define DEFAULT_STREAM_MUX_NAME "nut"  // Only for HTTP. Local dump guesses from LOCAL_DUMP_SUFFIX.
+#define DEFAULT_HTTPD_PORT 9095
 #define MUX_OPTS { \
 	/* Make seekable .mov files. */ \
 	{ "movflags", "empty_moov+frag_keyframe+default_base_moof" }, \

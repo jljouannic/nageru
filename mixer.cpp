@@ -353,7 +353,7 @@ Mixer::Mixer(const QSurfaceFormat &format, unsigned num_cards)
 	theme.reset(new Theme(global_flags.theme_filename, global_flags.theme_dirs, resource_pool.get(), num_cards));
 
 	// Start listening for clients only once VideoEncoder has written its header, if any.
-	httpd.start(9095);
+	httpd.start(global_flags.http_port);
 
 	// First try initializing the then PCI devices, then USB, then
 	// fill up with fake cards until we have the desired number of cards.

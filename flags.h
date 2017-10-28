@@ -54,6 +54,7 @@ struct Flags {
 	double output_buffer_frames = 6.0;
 	double output_slop_frames = 0.5;
 	int max_input_queue_frames = 6;
+	int http_port = DEFAULT_HTTPD_PORT;
 	bool display_timecode_in_stream = false;
 	bool display_timecode_on_stdout = false;
 	bool ten_bit_input = false;

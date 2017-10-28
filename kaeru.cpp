@@ -208,7 +208,7 @@ int main(int argc, char *argv[])
 
 	BasicStats basic_stats(/*verbose=*/false);
 	global_basic_stats = &basic_stats;
-	httpd.start(9095);
+	httpd.start(global_flags.http_port);
 
 	signal(SIGUSR1, adjust_bitrate);
 	signal(SIGUSR2, adjust_bitrate);
