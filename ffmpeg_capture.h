@@ -35,6 +35,7 @@ extern "C" {
 #include <libavresample/avresample.h>
 #include <libavutil/pixfmt.h>
 #include <libavutil/rational.h>
+#include <libavutil/samplefmt.h>
 }
 
 #include "bmusb/bmusb.h"
