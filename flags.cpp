@@ -57,6 +57,7 @@ enum LongOption {
 	OPTION_OUTPUT_SLOP_FRAMES,
 	OPTION_TIMECODE_STREAM,
 	OPTION_TIMECODE_STDOUT,
+	OPTION_QUICK_CUT_KEYS,
 	OPTION_10_BIT_INPUT,
 	OPTION_10_BIT_OUTPUT,
 	OPTION_INPUT_YCBCR_INTERPRETATION,
@@ -147,6 +148,7 @@ void usage(Program program)
 		fprintf(stderr, "                                    dropping the frame (default 0.5)\n");
 		fprintf(stderr, "      --timecode-stream           show timestamp and timecode in stream\n");
 		fprintf(stderr, "      --timecode-stdout           show timestamp and timecode on standard output\n");
+		fprintf(stderr, "      --quick-cut-keys            enable direct cutting by Q, W, E, ... keys\n");
 		fprintf(stderr, "      --10-bit-input              use 10-bit video input (requires compute shaders)\n");
 		fprintf(stderr, "      --10-bit-output             use 10-bit video output (requires compute shaders,\n");
 		fprintf(stderr, "                                    implies --record-x264-video)\n");
@@ -214,6 +216,7 @@ void parse_flags(Program program, int argc, char * const argv[])
 		{ "output-slop-frames", required_argument, 0, OPTION_OUTPUT_SLOP_FRAMES },
 		{ "timecode-stream", no_argument, 0, OPTION_TIMECODE_STREAM },
 		{ "timecode-stdout", no_argument, 0, OPTION_TIMECODE_STDOUT },
+		{ "quick-cut-keys", no_argument, 0, OPTION_QUICK_CUT_KEYS },
 		{ "10-bit-input", no_argument, 0, OPTION_10_BIT_INPUT },
 		{ "10-bit-output", no_argument, 0, OPTION_10_BIT_OUTPUT },
 		{ "input-ycbcr-interpretation", required_argument, 0, OPTION_INPUT_YCBCR_INTERPRETATION },
@@ -409,6 +412,9 @@ void parse_flags(Program program, int argc, char * const argv[])
 			break;
 		case OPTION_TIMECODE_STDOUT:
 			global_flags.display_timecode_on_stdout = true;
+			break;
+		case OPTION_QUICK_CUT_KEYS:
+			global_flags.enable_quick_cut_keys = true;
 			break;
 		case OPTION_10_BIT_INPUT:
 			global_flags.ten_bit_input = true;

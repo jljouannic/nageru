@@ -640,8 +640,8 @@
                 <rect>
                  <x>0</x>
                  <y>0</y>
-                 <width>505</width>
-                 <height>238</height>
+                 <width>497</width>
+                 <height>235</height>
                 </rect>
                </property>
                <layout class="QHBoxLayout" name="horizontalLayout_4">
@@ -1130,8 +1130,8 @@
                 <rect>
                  <x>0</x>
                  <y>0</y>
-                 <width>46</width>
-                 <height>20</height>
+                 <width>100</width>
+                 <height>30</height>
                 </rect>
                </property>
                <layout class="QHBoxLayout" name="horizontalLayout_5">
@@ -1390,7 +1390,7 @@
      <x>0</x>
      <y>0</y>
      <width>1089</width>
-     <height>20</height>
+     <height>22</height>
     </rect>
    </property>
    <widget class="QMenu" name="video_menu">
@@ -1422,6 +1422,7 @@
     <addaction name="hdmi_sdi_output_device_menu"/>
     <addaction name="hdmi_sdi_output_resolution_menu"/>
     <addaction name="display_timecode_menu"/>
+    <addaction name="quick_cut_enable_action"/>
     <addaction name="exit_action"/>
    </widget>
    <widget class="QMenu" name="menu_Help">
@@ -1518,6 +1519,14 @@
   <action name="open_analyzer_action">
    <property name="text">
     <string>Open frame &amp;analyzer…</string>
+   </property>
+  </action>
+  <action name="quick_cut_enable_action">
+   <property name="checkable">
+    <bool>true</bool>
+   </property>
+   <property name="text">
+    <string>Enable &amp;quick-cut keys (Q, W, E, etc.)</string>
    </property>
   </action>
  </widget>

@@ -253,6 +253,13 @@ MainWindow::MainWindow()
 	connect(new QShortcut(QKeySequence::MoveToNextPage, this), &QShortcut::activated, switch_page);
 	connect(new QShortcut(QKeySequence::MoveToPreviousPage, this), &QShortcut::activated, switch_page);
 
+	if (global_flags.enable_quick_cut_keys) {
+		ui->quick_cut_enable_action->setChecked(true);
+	}
+	connect(ui->quick_cut_enable_action, &QAction::changed, [this](){
+		global_flags.enable_quick_cut_keys = ui->quick_cut_enable_action->isChecked();
+	});
+
 	last_audio_level_callback = steady_clock::now() - seconds(1);
 
 	if (!global_flags.midi_mapping_filename.empty()) {
@@ -1290,6 +1297,9 @@ void MainWindow::channel_clicked(int channel_number)
 
 void MainWindow::quick_cut_activated(int channel_number)
 {
+	if (!global_flags.enable_quick_cut_keys) {
+		return;
+	}
 	global_mixer->channel_clicked(channel_number);
 	global_mixer->transition_clicked(0);
 }

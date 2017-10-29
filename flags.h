@@ -57,6 +57,7 @@ struct Flags {
 	int http_port = DEFAULT_HTTPD_PORT;
 	bool display_timecode_in_stream = false;
 	bool display_timecode_on_stdout = false;
+	bool enable_quick_cut_keys = false;
 	bool ten_bit_input = false;
 	bool ten_bit_output = false;  // Implies x264_video_to_disk == true and x264_bit_depth == 10.
 	YCbCrInterpretation ycbcr_interpretation[MAX_VIDEO_CARDS];
