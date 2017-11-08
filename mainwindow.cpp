@@ -1330,6 +1330,16 @@ bool MainWindow::eventFilter(QObject *watched, QEvent *event)
 
 void MainWindow::closeEvent(QCloseEvent *event)
 {
+	if (global_mixer->get_num_connected_clients() > 0) {
+		QMessageBox::StandardButton reply =
+			QMessageBox::question(this, "Nageru", "There are clients connected. Do you really want to quit?",
+				QMessageBox::Yes | QMessageBox::No);
+		if (reply != QMessageBox::Yes) {
+			event->ignore();
+			return;
+		}
+	}
+
 	analyzer->hide();
 	event->accept();
 }

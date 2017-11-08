@@ -399,6 +399,10 @@ public:
 		display_timecode_on_stdout = enable;
 	}
 
+	int64_t get_num_connected_clients() const {
+		return httpd.get_num_connected_clients();
+	}
+
 private:
 	struct CaptureCard;
 

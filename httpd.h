@@ -28,6 +28,9 @@ public:
 
 	void start(int port);
 	void add_data(const char *buf, size_t size, bool keyframe);
+	int64_t get_num_connected_clients() const {
+		return metric_num_connected_clients.load();
+	}
 
 private:
 	static int answer_to_connection_thunk(void *cls, MHD_Connection *connection,
