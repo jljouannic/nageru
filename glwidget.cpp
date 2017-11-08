@@ -135,7 +135,9 @@ void GLWidget::show_context_menu(const QPoint &pos)
 	}
 	if (output >= Mixer::OUTPUT_INPUT0) {
 		int signal_num = global_mixer->get_channel_signal(output);
-		show_preview_context_menu(signal_num, pos);
+		if (signal_num != -1) {
+			show_preview_context_menu(signal_num, pos);
+		}
 	}
 }
 
