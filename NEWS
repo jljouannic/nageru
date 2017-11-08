@@ -1,3 +1,19 @@
+Nageru 1.6.3, November 8th, 2017
+
+  - Add quick-cut keys (Q, W, E, etc.) below the preview keys.
+    Since it's easy to hit these by accident and put up a signal
+    you didn't want, they are disabled by default (they can be
+    enabled in the video menu, or with the command line flag
+    --quick-cut-keys).
+
+  - Rework the x264 speedcontrol presets to better match newer
+    x264 versions.
+
+  - Add an option for changing the HTTP port (--http-port).
+
+  - Various smaller bug and integration fixes.
+
+
 Nageru 1.6.2, July 16th, 2017
 
   - Various smaller Kaeru fixes, mostly around metrics. Also,
