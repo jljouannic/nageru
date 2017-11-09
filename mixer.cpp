@@ -1396,10 +1396,10 @@ void Mixer::render_one_frame(int64_t duration)
 	for (int i = 1; i < theme->get_num_channels() + 2; ++i) {
 		DisplayFrame display_frame;
 		Theme::Chain chain = theme->get_chain(i, pts(), global_flags.width, global_flags.height, input_state);  // FIXME: dimensions
-		display_frame.chain = chain.chain;
-		display_frame.setup_chain = chain.setup_chain;
+		display_frame.chain = move(chain.chain);
+		display_frame.setup_chain = move(chain.setup_chain);
 		display_frame.ready_fence = fence;
-		display_frame.input_frames = chain.input_frames;
+		display_frame.input_frames = move(chain.input_frames);
 		display_frame.temp_textures = {};
 		output_channel[i].output_frame(display_frame);
 	}
@@ -1530,7 +1530,7 @@ void Mixer::OutputChannel::output_frame(DisplayFrame frame)
 		if (has_ready_frame) {
 			parent->release_display_frame(&ready_frame);
 		}
-		ready_frame = frame;
+		ready_frame = move(frame);
 		has_ready_frame = true;
 
 		// Call the callbacks under the mutex (they should be short),
@@ -1593,7 +1593,7 @@ bool Mixer::OutputChannel::get_display_frame(DisplayFrame *frame)
 	}
 	if (has_ready_frame) {
 		assert(!has_current_frame);
-		current_frame = ready_frame;
+		current_frame = move(ready_frame);
 		ready_frame.ready_fence.reset();  // Drop the refcount.
 		ready_frame.input_frames.clear();  // Drop the refcounts.
 		has_current_frame = true;

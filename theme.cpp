@@ -1043,6 +1043,7 @@ Theme::Chain Theme::get_chain(unsigned num, float t, unsigned width, unsigned he
 
 	// TODO: Can we do better, e.g. by running setup_chain() and seeing what it references?
 	// Actually, setup_chain does maybe hold all the references we need now anyway?
+	chain.input_frames.reserve(num_cards * FRAME_HISTORY_LENGTH);
 	for (unsigned card_index = 0; card_index < num_cards; ++card_index) {
 		for (unsigned frame_num = 0; frame_num < FRAME_HISTORY_LENGTH; ++frame_num) {
 			chain.input_frames.push_back(input_state.buffered_frames[card_index][frame_num].frame);

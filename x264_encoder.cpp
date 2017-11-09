@@ -9,6 +9,7 @@
 #include <x264.h>
 #include <atomic>
 #include <cstdint>
+#include <functional>
 #include <mutex>
 
 #include "defs.h"
@@ -28,6 +29,7 @@ extern "C" {
 using namespace movit;
 using namespace std;
 using namespace std::chrono;
+using namespace std::placeholders;
 
 namespace {
 
@@ -330,38 +332,13 @@ void X264Encoder::encode_frame(X264Encoder::QueuedFrame qf)
 		frames_being_encoded[qf.pts] = qf.received_ts;
 	}
 
-	// See if we have a new bitrate to change to.
-	unsigned new_rate = new_bitrate_kbit.exchange(0);  // Read and clear.
-	if (new_rate != 0) {
-		bitrate_override_func = [new_rate](x264_param_t *param) {
-			param->rc.i_bitrate = new_rate;
-			update_vbv_settings(param);
-		};
-	}
-
-	auto ycbcr_coefficients_override_func = [qf](x264_param_t *param) {
-		if (qf.ycbcr_coefficients == YCBCR_REC_709) {
-			param->vui.i_colmatrix = 1;  // BT.709.
-		} else {
-			assert(qf.ycbcr_coefficients == YCBCR_REC_601);
-			param->vui.i_colmatrix = 6;  // BT.601/SMPTE 170M.
-		}
-	};
-
+	unsigned new_rate = new_bitrate_kbit.load();  // Can be 0 for no change.
 	if (speed_control) {
-		speed_control->set_config_override_function([this, ycbcr_coefficients_override_func](x264_param_t *param) {
-			if (bitrate_override_func) {
-				bitrate_override_func(param);
-			}
-			ycbcr_coefficients_override_func(param);
-		});
+		speed_control->set_config_override_function(bind(&speed_control_override_func, new_rate, qf.ycbcr_coefficients, _1));
 	} else {
 		x264_param_t param;
 		dyn.x264_encoder_parameters(x264, &param);
-		if (bitrate_override_func) {
-			bitrate_override_func(&param);
-		}
-		ycbcr_coefficients_override_func(&param);
+		speed_control_override_func(new_rate, qf.ycbcr_coefficients, &param);
 		dyn.x264_encoder_reconfig(x264, &param);
 	}
 
@@ -432,5 +409,20 @@ void X264Encoder::encode_frame(X264Encoder::QueuedFrame qf)
 
 	for (Mux *mux : muxes) {
 		mux->add_packet(pkt, pic.i_pts, pic.i_dts);
+	}
+}
+
+void X264Encoder::speed_control_override_func(unsigned bitrate_kbit, movit::YCbCrLumaCoefficients ycbcr_coefficients, x264_param_t *param)
+{
+	if (bitrate_kbit != 0) {
+		param->rc.i_bitrate = bitrate_kbit;
+		update_vbv_settings(param);
+	}
+
+	if (ycbcr_coefficients == YCBCR_REC_709) {
+		param->vui.i_colmatrix = 1;  // BT.709.
+	} else {
+		assert(ycbcr_coefficients == YCBCR_REC_601);
+		param->vui.i_colmatrix = 6;  // BT.601/SMPTE 170M.
 	}
 }

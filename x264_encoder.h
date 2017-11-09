@@ -77,6 +77,9 @@ private:
 	void init_x264();
 	void encode_frame(QueuedFrame qf);
 
+	// bitrate_kbit can be 0 for no change.
+	static void speed_control_override_func(unsigned bitrate_kbit, movit::YCbCrLumaCoefficients coefficients, x264_param_t *param);
+
 	// One big memory chunk of all 50 (or whatever) frames, allocated in
 	// the constructor. All data functions just use pointers into this
 	// pool.
@@ -94,8 +97,6 @@ private:
 	X264Dynamic dyn;
 	x264_t *x264;
 	std::unique_ptr<X264SpeedControl> speed_control;
-
-	std::function<void(x264_param_t *)> bitrate_override_func;
 
 	std::atomic<unsigned> new_bitrate_kbit{0};  // 0 for no change.
 
