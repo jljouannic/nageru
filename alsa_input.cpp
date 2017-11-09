@@ -184,7 +184,9 @@ void ALSAInput::capture_thread_func()
 
 	if (should_quit.should_quit()) {
 		// Don't call free_card(); that would be a deadlock.
-		WARN_ON_ERROR("snd_pcm_close()", snd_pcm_close(pcm_handle));
+		if (pcm_handle) {
+			WARN_ON_ERROR("snd_pcm_close()", snd_pcm_close(pcm_handle));
+		}
 		pcm_handle = nullptr;
 		return;
 	}
