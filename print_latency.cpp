@@ -74,7 +74,7 @@ void LatencyHistogram::init(const string &measuring_point)
 	}
 }
 
-void print_latency(const string &header, const ReceivedTimestamps &received_ts, bool is_b_frame, int *frameno, LatencyHistogram *histogram)
+void print_latency(const char *header, const ReceivedTimestamps &received_ts, bool is_b_frame, int *frameno, LatencyHistogram *histogram)
 {
 	if (received_ts.ts.empty())
 		return;
@@ -120,7 +120,7 @@ void print_latency(const string &header, const ReceivedTimestamps &received_ts, 
 		duration<double> highest_latency = now - min_ts;
 
 		printf("%-60s %4.0f ms (lowest-latency input), %4.0f ms (highest-latency input)",
-			header.c_str(), 1e3 * lowest_latency.count(), 1e3 * highest_latency.count());
+			header, 1e3 * lowest_latency.count(), 1e3 * highest_latency.count());
 
 		if (is_b_frame) {
 			printf("  [on B-frame; potential extra latency]\n");

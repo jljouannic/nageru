@@ -27,6 +27,6 @@ struct LatencyHistogram {
 
 ReceivedTimestamps find_received_timestamp(const std::vector<RefCountedFrame> &input_frames);
 
-void print_latency(const std::string &header, const ReceivedTimestamps &received_ts, bool is_b_frame, int *frameno, LatencyHistogram *histogram);
+void print_latency(const char *header, const ReceivedTimestamps &received_ts, bool is_b_frame, int *frameno, LatencyHistogram *histogram);
 
 #endif  // !defined(_PRINT_LATENCY_H)
