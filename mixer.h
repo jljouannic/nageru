@@ -548,7 +548,7 @@ private:
 	class OutputChannel {
 	public:
 		~OutputChannel();
-		void output_frame(DisplayFrame frame);
+		void output_frame(DisplayFrame &&frame);
 		bool get_display_frame(DisplayFrame *frame);
 		void add_frame_ready_callback(void *key, new_frame_ready_callback_t callback);
 		void remove_frame_ready_callback(void *key);

@@ -1390,7 +1390,7 @@ void Mixer::render_one_frame(int64_t duration)
 	live_frame.ready_fence = fence;
 	live_frame.input_frames = {};
 	live_frame.temp_textures = { y_display_tex, cbcr_display_tex };
-	output_channel[OUTPUT_LIVE].output_frame(live_frame);
+	output_channel[OUTPUT_LIVE].output_frame(move(live_frame));
 
 	// Set up preview and any additional channels.
 	for (int i = 1; i < theme->get_num_channels() + 2; ++i) {
@@ -1401,7 +1401,7 @@ void Mixer::render_one_frame(int64_t duration)
 		display_frame.ready_fence = fence;
 		display_frame.input_frames = move(chain.input_frames);
 		display_frame.temp_textures = {};
-		output_channel[i].output_frame(display_frame);
+		output_channel[i].output_frame(move(display_frame));
 	}
 }
 
@@ -1521,7 +1521,7 @@ Mixer::OutputChannel::~OutputChannel()
 	}
 }
 
-void Mixer::OutputChannel::output_frame(DisplayFrame frame)
+void Mixer::OutputChannel::output_frame(DisplayFrame &&frame)
 {
 	// Store this frame for display. Remove the ready frame if any
 	// (it was seemingly never used).
