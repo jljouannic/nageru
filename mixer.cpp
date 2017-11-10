@@ -239,7 +239,7 @@ double JitterHistory::estimate_max_jitter() const
 	if (percentile <= 0.5) {
 		return *next(orders.begin(), elem_idx) * multiplier;
 	} else {
-		return *prev(orders.end(), elem_idx + 1) * multiplier;
+		return *prev(orders.end(), orders.size() - elem_idx) * multiplier;
 	}
 }
 
