@@ -43,7 +43,7 @@ AudioEncoder::AudioEncoder(const string &codec_name, int bit_rate, const AVOutpu
 	ctx->channel_layout = AV_CH_LAYOUT_STEREO;
 	ctx->time_base = AVRational{1, TIMEBASE};
 	if (oformat->flags & AVFMT_GLOBALHEADER) {
-		ctx->flags |= CODEC_FLAG_GLOBAL_HEADER;
+		ctx->flags |= AV_CODEC_FLAG_GLOBAL_HEADER;
 	}
 	if (avcodec_open2(ctx, codec, NULL) < 0) {
 		fprintf(stderr, "Could not open codec '%s'\n", codec_name.c_str());
