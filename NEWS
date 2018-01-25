@@ -1,3 +1,12 @@
+Nageru 1.6.4, January 25th, 2018
+
+  - Fix compilation with the upcoming FFmpeg 3.5.
+
+  - Switch to LuaJIT for the theme engine, which is faster.
+
+  - Various bugfixes and smaller optimizations.
+
+
 Nageru 1.6.3, November 8th, 2017
 
   - Add quick-cut keys (Q, W, E, etc.) below the preview keys.
