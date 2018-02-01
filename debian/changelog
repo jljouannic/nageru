@@ -1,0 +1,126 @@
+nageru (1.6.4-2build2) bionic; urgency=medium
+
+  * No.change rebuild for movit soname change.
+
+ -- Matthias Klose <doko@ubuntu.com>  Thu, 01 Feb 2018 10:36:08 +0100
+
+nageru (1.6.4-2build1) bionic; urgency=medium
+
+  * No.change rebuild for x264 soname change.
+
+ -- Matthias Klose <doko@ubuntu.com>  Tue, 30 Jan 2018 11:17:30 +0100
+
+nageru (1.6.4-2) unstable; urgency=medium
+
+  * Drop s390x from the architecture list. (Closes: #888778)
+
+ -- Steinar H. Gunderson <sesse@debian.org>  Mon, 29 Jan 2018 23:38:02 +0100
+
+nageru (1.6.4-1) unstable; urgency=medium
+
+  * New upstream release.
+    * Updates for FFmpeg 3.5. (Closes: #888379)
+    * Build-Depend on LuaJIT instead of Lua.
+
+ -- Steinar H. Gunderson <sesse@debian.org>  Thu, 25 Jan 2018 18:25:35 +0100
+
+nageru (1.6.3-1) unstable; urgency=medium
+
+  * New upstream release.
+  * Add a workaround for platforms that require -latomic for std::atomic.
+    Patch by Adrian Bunk. (Closes: #880997)
+
+ -- Steinar H. Gunderson <sesse@debian.org>  Wed, 08 Nov 2017 18:51:01 +0100
+
+nageru (1.6.2-1) unstable; urgency=medium
+
+  * New upstream release.
+    * Fixes SIGFPE with newer i965-va-driver. (Closes: #866512)
+    * Bump dependency on libmovit-dev, as per upstream.
+
+ -- Steinar H. Gunderson <sesse@debian.org>  Sun, 16 Jul 2017 03:36:49 +0200
+
+nageru (1.6.0-2) unstable; urgency=medium
+
+  * Upload to unstable.
+    * Adds support for newer bmusb. (Closes: #865435)
+  * Add missing build dependency on libqcustomplot-dev.
+
+ -- Steinar H. Gunderson <sesse@debian.org>  Mon, 19 Jun 2017 00:15:35 +0200
+
+nageru (1.6.0-1) experimental; urgency=medium
+
+  * New upstream release.
+    * Update versioned Build-Depends on libmovit-dev and libbmusb-dev.
+    * Unfuzz patches.
+
+ -- Steinar H. Gunderson <sesse@debian.org>  Tue, 30 May 2017 20:01:05 +0200
+
+nageru (1.5.0-1) experimental; urgency=medium
+
+  * New upstream release.
+    * Obsoletes friendlier-opengl-error.diff (incorporated in upstream).
+    * Add versioned Build-Depends on libmovit-dev and libbmusb-dev
+      (both are available from experimental).
+
+ -- Steinar H. Gunderson <sesse@debian.org>  Wed, 05 Apr 2017 23:30:01 +0200
+
+nageru (1.4.2-2) unstable; urgency=high
+
+  * friendlier-opengl-error.diff: New patch from upstream git, adds a
+    friendlier error message if OpenGL initialization fails.
+    (Closes: #859217)
+
+ -- Steinar H. Gunderson <sesse@debian.org>  Sat, 01 Apr 2017 20:31:56 +0200
+
+nageru (1.4.2-1) unstable; urgency=medium
+
+  * New upstream release.
+
+ -- Steinar H. Gunderson <sesse@debian.org>  Thu, 24 Nov 2016 18:15:46 +0100
+
+nageru (1.4.1-1) unstable; urgency=medium
+
+  * New upstream release.
+    * Add libpci-dev as build-dependency.
+
+ -- Steinar H. Gunderson <sesse@debian.org>  Sun, 06 Nov 2016 23:27:58 +0100
+
+nageru (1.4.0-1) unstable; urgency=medium
+
+  * New upstream release.
+    * Add libprotobuf-dev and protobuf-compiler as build-dependencies.
+
+ -- Steinar H. Gunderson <sesse@debian.org>  Tue, 25 Oct 2016 09:43:10 +0200
+
+nageru (1.3.4-2) unstable; urgency=medium
+
+  * Add missing epoch to libavformat-dev build-dependency; makes FTBFS on
+    some platforms/distributions turn into B-D-Uninstallable, presumably
+    prompting a rebuild once updated libavformat-dev hits that architecture.
+
+ -- Steinar H. Gunderson <sesse@debian.org>  Fri, 12 Aug 2016 21:12:32 +0200
+
+nageru (1.3.4-1) unstable; urgency=medium
+
+  * New upstream release.
+    - Fixes FTBFS. (Closes: #833304)
+    - Obsoletes fix-compilation-for-systems-without-sse.diff.
+    - Adds support for big-endian systems; changed Architecture list to
+      linux-any.
+
+ -- Steinar H. Gunderson <sesse@debian.org>  Tue, 02 Aug 2016 22:48:00 +0200
+
+nageru (1.3.3-2) unstable; urgency=medium
+
+  * fix-compilation-for-systems-without-sse.diff: New patch from upstream,
+    fixes compilation issues of filter.cpp for systems without SSE
+    (ie., all systems except amd64). (Closes: #832773)
+
+ -- Steinar H. Gunderson <sesse@debian.org>  Thu, 28 Jul 2016 17:05:00 +0200
+
+nageru (1.3.3-1) unstable; urgency=medium
+
+  * Initial release.
+
+ -- Steinar H. Gunderson <sesse@debian.org>  Wed, 27 Jul 2016 20:44:29 +0200

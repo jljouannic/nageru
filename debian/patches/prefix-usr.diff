@@ -1,0 +1,16 @@
+Description: Change PREFIX to /usr
+Author: Steinar H. Gunderson <sesse@debian.org>
+
+Index: nageru-1.6.1/Makefile
+===================================================================
+--- nageru-1.6.1.orig/Makefile
++++ nageru-1.6.1/Makefile
+@@ -84,7 +84,7 @@ DEPS=$(OBJS:.o=.d) $(BM_OBJS:.o=.d) $(KA
+ clean:
+ 	$(RM) $(OBJS) $(BM_OBJS) $(KAERU_OBJS) $(DEPS) nageru benchmark_audio_mixer ui_aboutdialog.h ui_analyzer.h ui_mainwindow.h ui_display.h ui_about.h ui_audio_miniview.h ui_audio_expanded_view.h ui_input_mapping.h ui_midi_mapping.h chain-*.frag *.dot *.pb.cc *.pb.h $(OBJS_WITH_MOC:.o=.moc.cpp) ellipsis_label.moc.cpp clickable_label.moc.cpp
+ 
+-PREFIX=/usr/local
++PREFIX=/usr
+ install:
+ 	$(INSTALL) -m 755 -o root -g root -d $(DESTDIR)$(PREFIX)/bin $(DESTDIR)$(PREFIX)/share/nageru
+ 	$(INSTALL) -m 755 -o root -g root nageru $(DESTDIR)$(PREFIX)/bin/nageru
