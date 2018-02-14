@@ -258,7 +258,7 @@ DeckLinkCapture::DeckLinkCapture(IDeckLink *card, int card_index)
 	video_modes = summarize_video_modes(mode_it, card_index);
 	mode_it->Release();
 
-	set_video_mode_no_restart(bmdModeHD720p5994);
+	set_video_mode_no_restart(bmdModeHD720p50);
 
 	input->SetCallback(this);
 }
