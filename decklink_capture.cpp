@@ -261,6 +261,10 @@ DeckLinkCapture::DeckLinkCapture(IDeckLink *card, int card_index)
 	set_video_mode_no_restart(bmdModeHD720p50);
 
 	input->SetCallback(this);
+
+	if (global_flags.card_delay.count(card_index) > 0) {
+		input_delay = global_flags.card_delay[card_index];
+	}
 }
 
 DeckLinkCapture::~DeckLinkCapture()
@@ -333,7 +337,7 @@ HRESULT STDMETHODCALLTYPE DeckLinkCapture::VideoInputFrameArrived(
 		done_init = true;
 	}
 
-	steady_clock::time_point now = steady_clock::now();
+	steady_clock::time_point now = steady_clock::now() - milliseconds(input_delay);
 
 	FrameAllocator::Frame current_video_frame, current_audio_frame;
 	VideoFormat video_format;

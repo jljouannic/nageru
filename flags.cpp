@@ -76,6 +76,7 @@ void usage(Program program)
 	fprintf(stderr, "  -h, --height                    output height in pixels (default 720)\n");
 	if (program == PROGRAM_NAGERU) {
 		fprintf(stderr, "  -c, --num-cards                 set number of input cards (default 2)\n");
+		fprintf(stderr, "  -d, --card-delay=CARD,DEPLAY    set input delay in milliseconds for the given card (can be given multiple times)\n");
 		fprintf(stderr, "  -o, --output-card=CARD          also output signal to the given card (default none)\n");
 		fprintf(stderr, "  -t, --theme=FILE                choose theme (default theme.lua)\n");
 		fprintf(stderr, "  -I, --theme-dir=DIR             search for theme in this directory (can be given multiple times)\n");
@@ -166,6 +167,7 @@ void parse_flags(Program program, int argc, char * const argv[])
 		{ "width", required_argument, 0, 'w' },
 		{ "height", required_argument, 0, 'h' },
 		{ "num-cards", required_argument, 0, 'c' },
+		{ "card-delay", required_argument, 0, 'd' },
 		{ "output-card", required_argument, 0, 'o' },
 		{ "theme", required_argument, 0, 't' },
 		{ "theme-dir", required_argument, 0, 'I' },
@@ -241,6 +243,22 @@ void parse_flags(Program program, int argc, char * const argv[])
 		case 'c':
 			global_flags.num_cards = atoi(optarg);
 			break;
+		case 'd': {
+			char *ptr = strchr(optarg, ',');
+			if (ptr == nullptr) {
+				fprintf(stderr, "ERROR: Invalid argument '%s' to --card-delay (needs a card number and a delay in milliseconds, separated by comma)\n", optarg);
+				exit(1);
+			}
+			*ptr = '\0';
+			const int card_num = atoi(optarg);
+			const int delay = atoi(ptr + 1);
+			if (global_flags.card_delay.count(card_num)) {
+				fprintf(stderr, "ERROR: Delay already defined for card %d\n", card_num);
+				exit(1);
+			}
+			global_flags.card_delay[card_num] = delay;
+			break;
+		}
 		case 'o':
 			global_flags.output_card = atoi(optarg);
 			break;

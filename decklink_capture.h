@@ -118,6 +118,7 @@ private:
 	std::string description;
 	uint16_t timecode = 0;
 	int card_index;
+	int input_delay = 0;
 
 	bool has_dequeue_callbacks = false;
 	std::function<void()> dequeue_init_callback = nullptr;
