@@ -201,8 +201,8 @@ private:
 	// Static quality settings.
 	static constexpr unsigned int frame_bitrate = 15000000 / 60;  // Doesn't really matter; only initial_qp does.
 	static constexpr unsigned int num_ref_frames = 2;
-	static constexpr int initial_qp = 15;
-	static constexpr int minimal_qp = 0;
+	static constexpr int initial_qp = 20;
+	static constexpr int minimal_qp = 18;
 	static constexpr int intra_period = 30;
 	static constexpr int intra_idr_period = MAX_FPS;  // About a second; more at lower frame rates. Not ideal.
 
