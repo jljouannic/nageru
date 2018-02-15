@@ -25,12 +25,12 @@ AUDIO_MIXER_OBJS = audio_mixer.o alsa_input.o alsa_pool.o ebu_r128_proc.o stereo
 OBJS += chroma_subsampler.o v210_converter.o mixer.o basic_stats.o metrics.o pbo_frame_allocator.o context.o ref_counted_frame.o theme.o httpd.o flags.o image_input.o alsa_output.o disk_space_estimator.o print_latency.o timecode_renderer.o tweaked_inputs.o $(AUDIO_MIXER_OBJS)
 
 # Streaming and encoding objects
-OBJS += quicksync_encoder.o x264_encoder.o x264_dynamic.o x264_speed_control.o video_encoder.o metacube2.o mux.o audio_encoder.o ffmpeg_raii.o ffmpeg_util.o
+OBJS += quicksync_encoder.o x264_encoder.o x264_dynamic.o x264_speed_control.o video_encoder.o metacube2.o mux.o audio_encoder.o ffmpeg_raii.o ffmpeg_util.o json.pb.o
 
 # DeckLink
 OBJS += decklink_capture.o decklink_util.o decklink_output.o decklink/DeckLinkAPIDispatch.o
 
-KAERU_OBJS = kaeru.o x264_encoder.o mux.o basic_stats.o metrics.o flags.o audio_encoder.o x264_speed_control.o print_latency.o x264_dynamic.o ffmpeg_raii.o ref_counted_frame.o ffmpeg_capture.o ffmpeg_util.o httpd.o metacube2.o
+KAERU_OBJS = kaeru.o x264_encoder.o mux.o basic_stats.o metrics.o flags.o audio_encoder.o x264_speed_control.o print_latency.o x264_dynamic.o ffmpeg_raii.o ref_counted_frame.o ffmpeg_capture.o ffmpeg_util.o httpd.o json.pb.o metacube2.o
 
 # bmusb
 ifeq ($(EMBEDDED_BMUSB),yes)
@@ -77,6 +77,7 @@ mainwindow.o: ui_mainwindow.h ui_display.h ui_audio_miniview.h ui_audio_expanded
 mainwindow.o: midi_mapping.pb.h
 midi_mapper.o: midi_mapping.pb.h
 midi_mapping_dialog.o: ui_midi_mapping.h midi_mapping.pb.h
+httpd.o: json.pb.h
 
 DEPS=$(OBJS:.o=.d) $(BM_OBJS:.o=.d) $(KAERU_OBJS:.o=.d)
 -include $(DEPS)

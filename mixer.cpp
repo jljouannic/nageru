@@ -51,6 +51,10 @@
 #include "v210_converter.h"
 #include "video_encoder.h"
 
+#undef Status
+#include <google/protobuf/util/json_util.h>
+#include "json.pb.h"
+
 class IDeckLink;
 class QOpenGLContext;
 
@@ -351,6 +355,13 @@ Mixer::Mixer(const QSurfaceFormat &format, unsigned num_cards)
 
 	// Must be instantiated after VideoEncoder has initialized global_flags.use_zerocopy.
 	theme.reset(new Theme(global_flags.theme_filename, global_flags.theme_dirs, resource_pool.get(), num_cards));
+
+	httpd.add_endpoint("/channels", bind(&Mixer::get_channels_json, this));
+	for (int channel_idx = 2; channel_idx < theme->get_num_channels(); ++channel_idx) {
+		char url[256];
+		snprintf(url, sizeof(url), "/channels/%d/color", channel_idx);
+		httpd.add_endpoint(url, bind(&Mixer::get_channel_color_http, this, unsigned(channel_idx)));
+	}
 
 	// Start listening for clients only once VideoEncoder has written its header, if any.
 	httpd.start(global_flags.http_port);
@@ -1096,6 +1107,24 @@ void Mixer::trim_queue(CaptureCard *card, size_t safe_queue_length)
 #endif
 }
 
+pair<string, string> Mixer::get_channels_json()
+{
+	Channels ret;
+	for (int channel_idx = 2; channel_idx < theme->get_num_channels(); ++channel_idx) {
+		Channel *channel = ret.add_channel();
+		channel->set_index(channel_idx);
+		channel->set_name(theme->get_channel_name(channel_idx));
+		channel->set_color(theme->get_channel_color(channel_idx));
+	}
+	string contents;
+	google::protobuf::util::MessageToJsonString(ret, &contents);  // Ignore any errors.
+	return make_pair(contents, "text/json");
+}
+
+pair<string, string> Mixer::get_channel_color_http(unsigned channel_idx)
+{
+	return make_pair(theme->get_channel_color(channel_idx), "text/plain");
+}
 
 Mixer::OutputFrameInfo Mixer::get_one_frame_from_each_card(unsigned master_card_index, bool master_card_is_output, CaptureCard::NewFrame new_frames[MAX_VIDEO_CARDS], bool has_new_frame[MAX_VIDEO_CARDS])
 {

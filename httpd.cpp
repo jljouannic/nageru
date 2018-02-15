@@ -88,6 +88,15 @@ int HTTPD::answer_to_connection(MHD_Connection *connection,
 		MHD_destroy_response(response);  // Only decreases the refcount; actual free is after the request is done.
 		return ret;
 	}
+	if (endpoints.count(url)) {
+		pair<string, string> contents_and_type = endpoints[url]();
+		MHD_Response *response = MHD_create_response_from_buffer(
+			contents_and_type.first.size(), &contents_and_type.first[0], MHD_RESPMEM_MUST_COPY);
+		MHD_add_response_header(response, "Content-type", contents_and_type.second.c_str());
+		int ret = MHD_queue_response(connection, MHD_HTTP_OK, response);
+		MHD_destroy_response(response);  // Only decreases the refcount; actual free is after the request is done.
+		return ret;
+	}
 
 	HTTPD::Stream *stream = new HTTPD::Stream(this, framing);
 	stream->add_data(header.data(), header.size(), Stream::DATA_TYPE_HEADER);

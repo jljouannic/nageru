@@ -9,21 +9,32 @@
 #include <atomic>
 #include <condition_variable>
 #include <deque>
+#include <functional>
 #include <mutex>
 #include <set>
 #include <string>
+#include <unordered_map>
+#include <utility>
 
 struct MHD_Connection;
 struct MHD_Daemon;
 
 class HTTPD {
 public:
+	// Returns a pair of content and content-type.
+	using EndpointCallback = std::function<std::pair<std::string, std::string>()>;
+
 	HTTPD();
 	~HTTPD();
 
 	// Should be called before start().
 	void set_header(const std::string &data) {
 		header = data;
+	}
+
+	// Should be called before start() (due to threading issues).
+	void add_endpoint(const std::string &url, const EndpointCallback &callback) {
+		endpoints[url] = callback;
 	}
 
 	void start(int port);
@@ -81,6 +92,7 @@ private:
 	MHD_Daemon *mhd = nullptr;
 	std::mutex streams_mutex;
 	std::set<Stream *> streams;  // Not owned.
+	std::unordered_map<std::string, EndpointCallback> endpoints;
 	std::string header;
 
 	// Metrics.

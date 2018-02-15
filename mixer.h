@@ -428,6 +428,8 @@ private:
 	void release_display_frame(DisplayFrame *frame);
 	double pts() { return double(pts_int) / TIMEBASE; }
 	void trim_queue(CaptureCard *card, size_t safe_queue_length);
+	std::pair<std::string, std::string> get_channels_json();
+	std::pair<std::string, std::string> get_channel_color_http(unsigned channel_idx);
 
 	HTTPD httpd;
 	unsigned num_cards, num_video_inputs;
