@@ -89,10 +89,13 @@ int HTTPD::answer_to_connection(MHD_Connection *connection,
 		return ret;
 	}
 	if (endpoints.count(url)) {
-		pair<string, string> contents_and_type = endpoints[url]();
+		pair<string, string> contents_and_type = endpoints[url].callback();
 		MHD_Response *response = MHD_create_response_from_buffer(
 			contents_and_type.first.size(), &contents_and_type.first[0], MHD_RESPMEM_MUST_COPY);
 		MHD_add_response_header(response, "Content-type", contents_and_type.second.c_str());
+		if (endpoints[url].cors_policy == ALLOW_ALL_ORIGINS) {
+			MHD_add_response_header(response, "Access-Control-Allow-Origin", "*");
+		}
 		int ret = MHD_queue_response(connection, MHD_HTTP_OK, response);
 		MHD_destroy_response(response);  // Only decreases the refcount; actual free is after the request is done.
 		return ret;

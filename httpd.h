@@ -33,8 +33,12 @@ public:
 	}
 
 	// Should be called before start() (due to threading issues).
-	void add_endpoint(const std::string &url, const EndpointCallback &callback) {
-		endpoints[url] = callback;
+	enum CORSPolicy {
+		NO_CORS_POLICY,
+		ALLOW_ALL_ORIGINS
+	};
+	void add_endpoint(const std::string &url, const EndpointCallback &callback, CORSPolicy cors_policy) {
+		endpoints[url] = Endpoint{ callback, cors_policy };
 	}
 
 	void start(int port);
@@ -92,7 +96,11 @@ private:
 	MHD_Daemon *mhd = nullptr;
 	std::mutex streams_mutex;
 	std::set<Stream *> streams;  // Not owned.
-	std::unordered_map<std::string, EndpointCallback> endpoints;
+	struct Endpoint {
+		EndpointCallback callback;
+		CORSPolicy cors_policy;
+	};
+	std::unordered_map<std::string, Endpoint> endpoints;
 	std::string header;
 
 	// Metrics.

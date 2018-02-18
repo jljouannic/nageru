@@ -356,11 +356,11 @@ Mixer::Mixer(const QSurfaceFormat &format, unsigned num_cards)
 	// Must be instantiated after VideoEncoder has initialized global_flags.use_zerocopy.
 	theme.reset(new Theme(global_flags.theme_filename, global_flags.theme_dirs, resource_pool.get(), num_cards));
 
-	httpd.add_endpoint("/channels", bind(&Mixer::get_channels_json, this));
+	httpd.add_endpoint("/channels", bind(&Mixer::get_channels_json, this), HTTPD::ALLOW_ALL_ORIGINS);
 	for (int channel_idx = 2; channel_idx < theme->get_num_channels(); ++channel_idx) {
 		char url[256];
 		snprintf(url, sizeof(url), "/channels/%d/color", channel_idx);
-		httpd.add_endpoint(url, bind(&Mixer::get_channel_color_http, this, unsigned(channel_idx)));
+		httpd.add_endpoint(url, bind(&Mixer::get_channel_color_http, this, unsigned(channel_idx)), HTTPD::ALLOW_ALL_ORIGINS);
 	}
 
 	// Start listening for clients only once VideoEncoder has written its header, if any.
