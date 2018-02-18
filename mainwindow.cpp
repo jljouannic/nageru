@@ -239,24 +239,28 @@ MainWindow::MainWindow()
 	qRegisterMetaType<Mixer::Output>("Mixer::Output");
 
 	// Hook up the prev/next buttons on the audio views.
-	connect(ui->compact_prev_page, &QAbstractButton::clicked, bind(&QStackedWidget::setCurrentIndex, ui->audio_views, 2));
-	connect(ui->compact_next_page, &QAbstractButton::clicked, bind(&QStackedWidget::setCurrentIndex, ui->audio_views, 1));
-	connect(ui->full_prev_page, &QAbstractButton::clicked, bind(&QStackedWidget::setCurrentIndex, ui->audio_views, 0));
-	connect(ui->full_next_page, &QAbstractButton::clicked, bind(&QStackedWidget::setCurrentIndex, ui->audio_views, 2));
-	connect(ui->video_grid_prev_page, &QAbstractButton::clicked, bind(&QStackedWidget::setCurrentIndex, ui->audio_views, 1));
-	connect(ui->video_grid_next_page, &QAbstractButton::clicked, bind(&QStackedWidget::setCurrentIndex, ui->audio_views, 0));
-
-	// And bind the same to PgUp/PgDown.
 	auto prev_page = [this]{
 		if (global_audio_mixer->get_mapping_mode() == AudioMixer::MappingMode::MULTICHANNEL) {
 			ui->audio_views->setCurrentIndex((ui->audio_views->currentIndex() + 2) % 3);
+		} else {
+			ui->audio_views->setCurrentIndex(2 - ui->audio_views->currentIndex());  // Switch between 0 and 2.
 		}
 	};
 	auto next_page = [this]{
 		if (global_audio_mixer->get_mapping_mode() == AudioMixer::MappingMode::MULTICHANNEL) {
 			ui->audio_views->setCurrentIndex((ui->audio_views->currentIndex() + 1) % 3);
+		} else {
+			ui->audio_views->setCurrentIndex(2 - ui->audio_views->currentIndex());  // Switch between 0 and 2.
 		}
 	};
+	connect(ui->compact_prev_page, &QAbstractButton::clicked, prev_page);
+	connect(ui->compact_next_page, &QAbstractButton::clicked, next_page);
+	connect(ui->full_prev_page, &QAbstractButton::clicked, prev_page);
+	connect(ui->full_next_page, &QAbstractButton::clicked, next_page);
+	connect(ui->video_grid_prev_page, &QAbstractButton::clicked, prev_page);
+	connect(ui->video_grid_next_page, &QAbstractButton::clicked, next_page);
+
+	// And bind the same to PgUp/PgDown.
 	connect(new QShortcut(QKeySequence::MoveToNextPage, this), &QShortcut::activated, next_page);
 	connect(new QShortcut(QKeySequence::MoveToPreviousPage, this), &QShortcut::activated, prev_page);
 
@@ -447,9 +451,17 @@ void MainWindow::reset_audio_mapping_ui()
 	setup_audio_expanded_view();
 
 	if (simple) {
-		ui->audio_views->setCurrentIndex(0);
+		ui->compact_label->setText("Compact audio view (1/2)  ");
+		ui->video_grid_label->setText("Video grid display (2/2)  ");
+		if (ui->audio_views->currentIndex() == 1) {
+			// Full audio view is not available in simple mode.
+			ui->audio_views->setCurrentIndex(0);
+		}
+	} else {
+		ui->compact_label->setText("Compact audio view (1/3)  ");
+		ui->full_label->setText("Full audio view (2/3)  ");
+		ui->video_grid_label->setText("Video grid display (3/3)  ");
 	}
-	ui->compact_header->setVisible(!simple);
 
 	midi_mapper.refresh_highlights();
 	midi_mapper.refresh_lights();
