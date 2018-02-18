@@ -239,19 +239,29 @@ MainWindow::MainWindow()
 	qRegisterMetaType<Mixer::Output>("Mixer::Output");
 
 	// Hook up the prev/next buttons on the audio views.
-	connect(ui->compact_prev_page, &QAbstractButton::clicked, bind(&QStackedWidget::setCurrentIndex, ui->audio_views, 1));
+	connect(ui->compact_prev_page, &QAbstractButton::clicked, bind(&QStackedWidget::setCurrentIndex, ui->audio_views, 2));
 	connect(ui->compact_next_page, &QAbstractButton::clicked, bind(&QStackedWidget::setCurrentIndex, ui->audio_views, 1));
 	connect(ui->full_prev_page, &QAbstractButton::clicked, bind(&QStackedWidget::setCurrentIndex, ui->audio_views, 0));
-	connect(ui->full_next_page, &QAbstractButton::clicked, bind(&QStackedWidget::setCurrentIndex, ui->audio_views, 0));
+	connect(ui->full_next_page, &QAbstractButton::clicked, bind(&QStackedWidget::setCurrentIndex, ui->audio_views, 2));
+	connect(ui->video_grid_prev_page, &QAbstractButton::clicked, bind(&QStackedWidget::setCurrentIndex, ui->audio_views, 1));
+	connect(ui->video_grid_next_page, &QAbstractButton::clicked, bind(&QStackedWidget::setCurrentIndex, ui->audio_views, 0));
 
 	// And bind the same to PgUp/PgDown.
-	auto switch_page = [this]{
+	auto prev_page = [this]{
 		if (global_audio_mixer->get_mapping_mode() == AudioMixer::MappingMode::MULTICHANNEL) {
-			ui->audio_views->setCurrentIndex(1 - ui->audio_views->currentIndex());
+			ui->audio_views->setCurrentIndex((ui->audio_views->currentIndex() + 2) % 3);
 		}
 	};
-	connect(new QShortcut(QKeySequence::MoveToNextPage, this), &QShortcut::activated, switch_page);
-	connect(new QShortcut(QKeySequence::MoveToPreviousPage, this), &QShortcut::activated, switch_page);
+	auto next_page = [this]{
+		if (global_audio_mixer->get_mapping_mode() == AudioMixer::MappingMode::MULTICHANNEL) {
+			ui->audio_views->setCurrentIndex((ui->audio_views->currentIndex() + 1) % 3);
+		}
+	};
+	connect(new QShortcut(QKeySequence::MoveToNextPage, this), &QShortcut::activated, next_page);
+	connect(new QShortcut(QKeySequence::MoveToPreviousPage, this), &QShortcut::activated, prev_page);
+
+	// When the audio view changes, move the previews.
+	connect(ui->audio_views, &QStackedWidget::currentChanged, bind(&MainWindow::audio_view_changed, this, _1));
 
 	if (global_flags.enable_quick_cut_keys) {
 		ui->quick_cut_enable_action->setChecked(true);
@@ -293,12 +303,11 @@ void MainWindow::mixer_created(Mixer *mixer)
 	for (unsigned i = 0; i < num_previews; ++i) {
 		Mixer::Output output = Mixer::Output(Mixer::OUTPUT_INPUT0 + i);
 
-		QWidget *preview = new QWidget(this);
+		QWidget *preview = new QWidget(this);  // Will be connected to a layout immediately after the loop.
 		Ui::Display *ui_display = new Ui::Display;
 		ui_display->setupUi(preview);
 		ui_display->label->setText(mixer->get_channel_name(output).c_str());
 		ui_display->display->set_output(output);
-		ui->preview_displays->insertWidget(previews.size(), preview, 1);
 		previews.push_back(ui_display);
 
 		// Hook up the click.
@@ -322,6 +331,9 @@ void MainWindow::mixer_created(Mixer *mixer)
 		ui_display->wb_button->setVisible(mixer->get_supports_set_wb(output));
 		connect(ui_display->wb_button, &QPushButton::clicked, bind(&MainWindow::wb_button_clicked, this, i));
 	}
+
+	// Connect the previews to the correct layout.
+	audio_view_changed(ui->audio_views->currentIndex());
 
 	global_audio_mixer->set_state_changed_callback(bind(&MainWindow::audio_state_changed, this));
 
@@ -909,6 +921,10 @@ void MainWindow::audio_level_callback(float level_lufs, float peak_db, vector<Au
 void MainWindow::relayout()
 {
 	int height = ui->vertical_layout->geometry().height();
+	if (height <= 0) {
+		// Seemingly this can happen and must be ignored.
+		return;
+	}
 
 	double remaining_height = height;
 
@@ -932,7 +948,7 @@ void MainWindow::relayout()
 	remaining_height -= compact_label_height;
 
 	// The previews will be constrained by the remaining height, and the width.
-	double preview_label_height = previews[0]->title_bar->geometry().height() +
+	double preview_label_height = previews[0]->label->minimumSize().height() +
 		previews[0]->main_vertical_layout->spacing();
 	int preview_total_width = ui->preview_displays->geometry().width() - (previews.size() - 1) * ui->preview_displays->spacing();
 	double preview_height = min(remaining_height - preview_label_height, (preview_total_width / double(previews.size())) * double(global_flags.height) / double(global_flags.width));
@@ -948,15 +964,64 @@ void MainWindow::relayout()
 	ui->compact_audio_layout->setStretch(1, lrintf(remaining_height));  // Audio strip.
 	ui->compact_audio_layout->setStretch(2, lrintf(preview_height + preview_label_height));
 
-	// Set the widths for the previews.
-	double preview_width = preview_height * double(global_flags.width) / double(global_flags.height);
-	for (unsigned i = 0; i < previews.size(); ++i) {
-		ui->preview_displays->setStretch(i, lrintf(preview_width));
-	}
+	if (current_audio_view == 0) {  // Compact audio view.
+		// Set the widths for the previews.
+		double preview_width = preview_height * double(global_flags.width) / double(global_flags.height);
+		for (unsigned i = 0; i < previews.size(); ++i) {
+			ui->preview_displays->setStretch(i, lrintf(preview_width));
+		}
 
-	// The preview horizontal spacer.
-	double remaining_preview_width = preview_total_width - previews.size() * preview_width;
-	ui->preview_displays->setStretch(previews.size(), lrintf(remaining_preview_width));
+		// The preview horizontal spacer.
+		double remaining_preview_width = preview_total_width - previews.size() * preview_width;
+		ui->preview_displays->setStretch(previews.size(), lrintf(remaining_preview_width));
+	} else if (current_audio_view == 2) {  // Video grid view.
+		// QGridLayout doesn't do it for us, since we need to be able to remove rows
+		// or columns as the grid changes, and it won't do that. Thus, position everything
+		// by hand.
+		constexpr int spacing = 6;
+		int grid_width = ui->preview_displays_grid->geometry().width();
+		int grid_height = ui->preview_displays_grid->geometry().height();
+		int best_preview_width = 0;
+		unsigned best_num_rows = 1, best_num_cols = 1;
+		for (unsigned num_rows = 1; num_rows <= previews.size(); ++num_rows) {
+			int num_cols = (previews.size() + num_rows - 1) / num_rows;
+
+			int max_preview_height = (grid_height - spacing * (num_rows - 1)) / num_rows - preview_label_height;
+			int max_preview_width = (grid_width - spacing * (num_cols - 1)) / num_cols;
+			int preview_width = std::min<int>(max_preview_width, max_preview_height * double(global_flags.width) / double(global_flags.height));
+
+			if (preview_width > best_preview_width) {
+				best_preview_width = preview_width;
+				best_num_rows = num_rows;
+				best_num_cols = num_cols;
+			}
+		}
+
+		double cell_height = lrintf(best_preview_width * double(global_flags.height) / double(global_flags.width)) + preview_label_height;
+		remaining_height = grid_height - best_num_rows * cell_height - (best_num_rows - 1) * spacing;
+		int cell_width = best_preview_width;
+		int remaining_width = grid_width - best_num_cols * cell_width - (best_num_cols - 1) * spacing;
+
+		for (unsigned i = 0; i < previews.size(); ++i) {
+			int col_idx = i % best_num_cols;
+			int row_idx = i / best_num_cols;
+
+			double top = remaining_height * 0.5f + row_idx * (cell_height + spacing);
+			double bottom = top + cell_height;
+			double left = remaining_width * 0.5f + col_idx * (cell_width + spacing);
+			double right = left + cell_width;
+
+			QRect rect;
+			rect.setTop(lrintf(top));
+			rect.setBottom(lrintf(bottom));
+			rect.setLeft(lrintf(left));
+			rect.setRight(lrintf(right));
+
+			QWidget *display = static_cast<QWidget *>(previews[i]->frame->parent());
+			display->setGeometry(rect);
+			display->show();
+		}
+	}
 }
 
 void MainWindow::set_locut(float value)
@@ -1308,6 +1373,34 @@ void MainWindow::wb_button_clicked(int channel_number)
 {
 	current_wb_pick_display = channel_number;
 	QApplication::setOverrideCursor(Qt::CrossCursor);
+}
+
+void MainWindow::audio_view_changed(int audio_view)
+{
+	if (audio_view == current_audio_view) {
+		return;
+	}
+
+	if (audio_view == 0) {
+		// Compact audio view. (1, full audio view, has no video previews.)
+		for (unsigned i = 0; i < previews.size(); ++i) {
+			QWidget *display = static_cast<QWidget *>(previews[i]->frame->parent());
+			ui->preview_displays->insertWidget(i, display, 1);
+		}
+	} else if (audio_view == 2) {
+		// Video grid display.
+		for (unsigned i = 0; i < previews.size(); ++i) {
+			QWidget *display = static_cast<QWidget *>(previews[i]->frame->parent());
+			display->setParent(ui->preview_displays_grid);
+			display->show();
+		}
+	}
+
+	current_audio_view = audio_view;
+
+	// Ask for a relayout, but only after the event loop is done doing relayout
+	// on everything else.
+	QMetaObject::invokeMethod(this, "relayout", Qt::QueuedConnection);
 }
 
 bool MainWindow::eventFilter(QObject *watched, QEvent *event)
