@@ -396,6 +396,11 @@ void MIDIMapper::subscribe_to_port_lock_held(snd_seq_t *seq, const snd_seq_addr_
 		return;
 	}
 
+	// Don't listen to ourselves.
+	if (addr.client == snd_seq_client_id(seq)) {
+		return;
+	}
+
 	int err = snd_seq_connect_from(seq, 0, addr.client, addr.port);
 	if (err < 0) {
 		// Just print out a warning (i.e., don't die); it could
