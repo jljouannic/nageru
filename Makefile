@@ -77,7 +77,7 @@ mainwindow.o: ui_mainwindow.h ui_display.h ui_audio_miniview.h ui_audio_expanded
 mainwindow.o: midi_mapping.pb.h
 midi_mapper.o: midi_mapping.pb.h
 midi_mapping_dialog.o: ui_midi_mapping.h midi_mapping.pb.h
-httpd.o: json.pb.h
+mixer.o: json.pb.h
 
 DEPS=$(OBJS:.o=.d) $(BM_OBJS:.o=.d) $(KAERU_OBJS:.o=.d)
 -include $(DEPS)
