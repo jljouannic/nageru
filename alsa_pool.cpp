@@ -199,7 +199,7 @@ ALSAPool::ProbeResult ALSAPool::probe_device_once(unsigned card_index, unsigned 
 	}
 	if (err < 0) {
 		// Not available for capture.
-		printf("%s: Not available for capture. %d\n", address, err);
+		printf("%s: Not available for capture.\n", address);
 		return ALSAPool::ProbeResult::DEFER;
 	}
 
