@@ -1,0 +1,29 @@
+From: Yoann Dubreuil <yoann.dubreuil@gmail.com>
+Date: Fri, 23 Feb 2018 21:06:38 +0100
+Subject: Default output to 720x50p
+
+---
+ mixer.h | 3 ++-
+ 1 file changed, 2 insertions(+), 1 deletion(-)
+
+diff --git a/mixer.h b/mixer.h
+index 1d2e200..67dab6c 100644
+--- a/mixer.h
++++ b/mixer.h
+@@ -25,6 +25,7 @@
+ 
+ #include <movit/image_format.h>
+ 
++#include "DeckLinkAPI.h"
+ #include "audio_mixer.h"
+ #include "bmusb/bmusb.h"
+ #include "defs.h"
+@@ -438,7 +439,7 @@ private:
+ 	std::atomic<unsigned> audio_source_channel{0};
+ 	std::atomic<int> master_clock_channel{0};  // Gets overridden by <output_card_index> if set.
+ 	int output_card_index = -1;  // -1 for none.
+-	uint32_t output_video_mode = -1;
++	uint32_t output_video_mode = bmdModeHD720p50;
+ 
+ 	// The mechanics of changing the output card and modes are so intricately connected
+ 	// with the work the mixer thread is doing. Thus, we don't change it directly,

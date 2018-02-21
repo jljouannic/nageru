@@ -1,0 +1,81 @@
+From: Yoann Dubreuil <yoann.dubreuil@gmail.com>
+Date: Fri, 23 Feb 2018 21:06:17 +0100
+Subject: Flag for ALSA delay
+
+---
+ alsa_input.cpp | 3 ++-
+ flags.cpp      | 6 ++++++
+ flags.h        | 1 +
+ 3 files changed, 9 insertions(+), 1 deletion(-)
+
+diff --git a/alsa_input.cpp b/alsa_input.cpp
+index 7230abe..5b7f0c1 100644
+--- a/alsa_input.cpp
++++ b/alsa_input.cpp
+@@ -10,6 +10,7 @@
+ #include "alsa_pool.h"
+ #include "bmusb/bmusb.h"
+ #include "timebase.h"
++#include "flags.h"
+ 
+ using namespace std;
+ using namespace std::chrono;
+@@ -247,7 +248,7 @@ ALSAInput::CaptureEndReason ALSAInput::do_capture()
+ 
+ 		const int64_t prev_pts = frames_to_pts(num_frames_output);
+ 		const int64_t pts = frames_to_pts(num_frames_output + frames);
+-		const steady_clock::time_point now = steady_clock::now();
++		const steady_clock::time_point now = steady_clock::now() + milliseconds(global_flags.alsa_delay);
+ 		bool success;
+ 		do {
+ 			if (should_quit.should_quit()) return CaptureEndReason::REQUESTED_QUIT;
+diff --git a/flags.cpp b/flags.cpp
+index 9086937..1acd42c 100644
+--- a/flags.cpp
++++ b/flags.cpp
+@@ -61,6 +61,7 @@ enum LongOption {
+ 	OPTION_10_BIT_INPUT,
+ 	OPTION_10_BIT_OUTPUT,
+ 	OPTION_INPUT_YCBCR_INTERPRETATION,
++        OPTION_ALSA_DELAY,
+ };
+ 
+ void usage(Program program)
+@@ -77,6 +78,7 @@ void usage(Program program)
+ 	if (program == PROGRAM_NAGERU) {
+ 		fprintf(stderr, "  -c, --num-cards                 set number of input cards (default 2)\n");
+ 		fprintf(stderr, "  -d, --card-delay=CARD,DEPLAY    set input delay in milliseconds for the given card (can be given multiple times)\n");
++		fprintf(stderr, "      --alsa-delay=DELAY          set input delay in milliseconds for all ALSA input\n");
+ 		fprintf(stderr, "  -o, --output-card=CARD          also output signal to the given card (default none)\n");
+ 		fprintf(stderr, "  -t, --theme=FILE                choose theme (default theme.lua)\n");
+ 		fprintf(stderr, "  -I, --theme-dir=DIR             search for theme in this directory (can be given multiple times)\n");
+@@ -168,6 +170,7 @@ void parse_flags(Program program, int argc, char * const argv[])
+ 		{ "height", required_argument, 0, 'h' },
+ 		{ "num-cards", required_argument, 0, 'c' },
+ 		{ "card-delay", required_argument, 0, 'd' },
++		{ "alsa-delay", required_argument, 0, OPTION_ALSA_DELAY },
+ 		{ "output-card", required_argument, 0, 'o' },
+ 		{ "theme", required_argument, 0, 't' },
+ 		{ "theme-dir", required_argument, 0, 'I' },
+@@ -491,6 +494,9 @@ void parse_flags(Program program, int argc, char * const argv[])
+ 			global_flags.ycbcr_interpretation[card_num] = interpretation;
+ 			break;
+ 		}
++		case OPTION_ALSA_DELAY:
++			global_flags.alsa_delay = atoi(optarg);
++			break;
+ 		case OPTION_HELP:
+ 			usage(program);
+ 			exit(0);
+diff --git a/flags.h b/flags.h
+index 6dbdf5a..e1e7bf3 100644
+--- a/flags.h
++++ b/flags.h
+@@ -14,6 +14,7 @@ struct Flags {
+ 	int width = 1280, height = 720;
+ 	int num_cards = 2;
+ 	std::map<int, int> card_delay;
++        int alsa_delay;
+ 	std::string va_display;
+ 	bool fake_cards_audio = false;
+ 	bool uncompressed_video_to_http = false;
