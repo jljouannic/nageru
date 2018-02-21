@@ -3,8 +3,9 @@ Date: Wed, 21 Feb 2018 11:26:07 +0100
 Subject: Fix build in artful
 
 ---
- Makefile | 2 +-
- 1 file changed, 1 insertion(+), 1 deletion(-)
+ Makefile       | 2 +-
+ debian/control | 2 +-
+ 2 files changed, 2 insertions(+), 2 deletions(-)
 
 diff --git a/Makefile b/Makefile
 index b681a52..a446029 100644
@@ -18,4 +19,17 @@ index b681a52..a446029 100644
 +PKG_MODULES := Qt5Core Qt5Gui Qt5Widgets Qt5OpenGLExtensions Qt5OpenGL Qt5PrintSupport libusb-1.0 movit lua52 libmicrohttpd epoxy x264 protobuf libpci
  CXXFLAGS ?= -O2 -g -Wall  # Will be overridden by environment.
  CXXFLAGS += -std=gnu++11 -fPIC $(shell pkg-config --cflags $(PKG_MODULES)) -pthread -DMOVIT_SHADER_DIR=\"$(shell pkg-config --variable=shaderdir movit)\" -Idecklink/
+ 
+diff --git a/debian/control b/debian/control
+index 9877ca6..96166a3 100644
+--- a/debian/control
++++ b/debian/control
+@@ -2,7 +2,7 @@ Source: nageru
+ Section: video
+ Priority: optional
+ Maintainer: Steinar H. Gunderson <sesse@debian.org>
+-Build-Depends: debhelper (>= 9), qtbase5-dev, libqt5opengl5-dev, pkg-config, libusb-1.0-0-dev, libmovit-dev (>= 1.5.2), libmicrohttpd-dev, libx264-dev, libavcodec-dev, libavformat-dev (>= 7:3.1), libswscale-dev, libva-dev, libavresample-dev, libegl1-mesa-dev, libasound2-dev, libzita-resampler-dev, libluajit-5.1-dev, libbmusb-dev (>= 0.7.0), protobuf-compiler, libprotobuf-dev, libpci-dev, libqcustomplot-dev
++Build-Depends: debhelper (>= 9), qtbase5-dev, libqt5opengl5-dev, pkg-config, libusb-1.0-0-dev, libmovit-dev (>= 1.5.2), libmicrohttpd-dev, libx264-dev, libavcodec-dev, libavformat-dev (>= 7:3.1), libswscale-dev, libva-dev, libavresample-dev, libegl1-mesa-dev, libasound2-dev, libzita-resampler-dev, liblua5.2-dev, libbmusb-dev (>= 0.7.0), protobuf-compiler, libprotobuf-dev, libpci-dev, libqcustomplot-dev
+ Standards-Version: 3.9.8
+ Homepage: https://nageru.sesse.net/
  
