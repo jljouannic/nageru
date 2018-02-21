@@ -1,0 +1,37 @@
+From: Yoann Dubreuil <yoann.dubreuil@gmail.com>
+Date: Wed, 14 Feb 2018 22:02:15 +0100
+Subject: Default to 50p frame rate
+
+---
+ decklink_capture.cpp | 2 +-
+ decklink_output.cpp  | 4 ++--
+ 2 files changed, 3 insertions(+), 3 deletions(-)
+
+diff --git a/decklink_capture.cpp b/decklink_capture.cpp
+index 6dba068..0dd808e 100644
+--- a/decklink_capture.cpp
++++ b/decklink_capture.cpp
+@@ -258,7 +258,7 @@ DeckLinkCapture::DeckLinkCapture(IDeckLink *card, int card_index)
+ 	video_modes = summarize_video_modes(mode_it, card_index);
+ 	mode_it->Release();
+ 
+-	set_video_mode_no_restart(bmdModeHD720p5994);
++	set_video_mode_no_restart(bmdModeHD720p50);
+ 
+ 	input->SetCallback(this);
+ }
+diff --git a/decklink_output.cpp b/decklink_output.cpp
+index a3d220b..8603bad 100644
+--- a/decklink_output.cpp
++++ b/decklink_output.cpp
+@@ -415,8 +415,8 @@ uint32_t DeckLinkOutput::pick_video_mode(uint32_t mode) const
+ 		return mode;
+ 	}
+ 
+-	// Prioritize 59.94 > 60 > 29.97. If none of those are found, then pick the highest one.
+-	for (const pair<int, int> &desired : vector<pair<int, int>>{ { 60000, 1001 }, { 60, 0 }, { 30000, 1001 } }) {
++	// Prioritize 50 > 59.94 > 60 > 29.97. If none of those are found, then pick the highest one.
++	for (const pair<int, int> &desired : vector<pair<int, int>>{ { 50, 0 }, { 60000, 1001 }, { 60, 0 }, { 30000, 1001 } }) {
+ 		for (const auto &it : video_modes) {
+ 			if (it.second.frame_rate_num * desired.second == desired.first * it.second.frame_rate_den) {
+ 				return it.first;
