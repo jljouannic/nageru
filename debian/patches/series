@@ -1,5 +1,5 @@
-0010-Default-to-50p-frame-rate.patch
-0011-Option-to-specify-input-delay-per-card.patch
-0012-Reduce-QuickSync-encoding-bitrate.patch
-prefix-usr.diff
-0015-Fix-build-in-artful.patch
+0001-prefix-usr.diff
+0002-Default-to-50p-frame-rate.patch
+0003-Option-to-specify-input-delay-per-card.patch
+0004-Reduce-QuickSync-encoding-bitrate.patch
+0005-Fix-build-in-artful.patch
