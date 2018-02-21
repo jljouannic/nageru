@@ -1,0 +1,21 @@
+From: Yoann Dubreuil <yoann.dubreuil@gmail.com>
+Date: Wed, 14 Feb 2018 22:02:15 +0100
+Subject: Change default frame rate for cards without valid signal
+
+---
+ decklink_capture.cpp | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/decklink_capture.cpp b/decklink_capture.cpp
+index 6dba068..0dd808e 100644
+--- a/decklink_capture.cpp
++++ b/decklink_capture.cpp
+@@ -258,7 +258,7 @@ DeckLinkCapture::DeckLinkCapture(IDeckLink *card, int card_index)
+ 	video_modes = summarize_video_modes(mode_it, card_index);
+ 	mode_it->Release();
+ 
+-	set_video_mode_no_restart(bmdModeHD720p5994);
++	set_video_mode_no_restart(bmdModeHD720p50);
+ 
+ 	input->SetCallback(this);
+ }

@@ -1,0 +1,24 @@
+From: Yoann Dubreuil <yoann.dubreuil@gmail.com>
+Date: Thu, 15 Feb 2018 22:48:33 +0100
+Subject: Reduce QuickSync encoding bitrate
+
+Would have been better to add flags, but it's too late for tonight
+---
+ quicksync_encoder_impl.h | 4 ++--
+ 1 file changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/quicksync_encoder_impl.h b/quicksync_encoder_impl.h
+index bc84e0a..2135cda 100644
+--- a/quicksync_encoder_impl.h
++++ b/quicksync_encoder_impl.h
+@@ -201,8 +201,8 @@ private:
+ 	// Static quality settings.
+ 	static constexpr unsigned int frame_bitrate = 15000000 / 60;  // Doesn't really matter; only initial_qp does.
+ 	static constexpr unsigned int num_ref_frames = 2;
+-	static constexpr int initial_qp = 15;
+-	static constexpr int minimal_qp = 0;
++	static constexpr int initial_qp = 20;
++	static constexpr int minimal_qp = 18;
+ 	static constexpr int intra_period = 30;
+ 	static constexpr int intra_idr_period = MAX_FPS;  // About a second; more at lower frame rates. Not ideal.
+ 

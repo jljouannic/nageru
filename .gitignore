@@ -12,3 +12,4 @@ ui_mainwindow.h
 ui_midi_mapping.h
 nageru
 benchmark_audio_mixer
+.pc

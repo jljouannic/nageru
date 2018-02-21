@@ -1,1 +1,5 @@
+0010-Change-default-frame-rate-for-cards-without-valid-si.patch
+0011-Option-to-specify-input-delay-per-card.patch
+0012-Reduce-QuickSync-encoding-bitrate.patch
 prefix-usr.diff
+0015-Fix-build-in-artful.patch
