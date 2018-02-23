@@ -25,6 +25,7 @@
 
 #include <movit/image_format.h>
 
+#include "DeckLinkAPI.h"
 #include "audio_mixer.h"
 #include "bmusb/bmusb.h"
 #include "defs.h"
@@ -440,7 +441,7 @@ private:
 	std::atomic<unsigned> audio_source_channel{0};
 	std::atomic<int> master_clock_channel{0};  // Gets overridden by <output_card_index> if set.
 	int output_card_index = -1;  // -1 for none.
-	uint32_t output_video_mode = -1;
+	uint32_t output_video_mode = bmdModeHD720p50;
 
 	// The mechanics of changing the output card and modes are so intricately connected
 	// with the work the mixer thread is doing. Thus, we don't change it directly,
