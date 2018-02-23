@@ -14,6 +14,7 @@ struct Flags {
 	int width = 1280, height = 720;
 	int num_cards = 2;
 	std::map<int, int> card_delay;
+        int alsa_delay;
 	std::string va_display;
 	bool fake_cards_audio = false;
 	bool uncompressed_video_to_http = false;

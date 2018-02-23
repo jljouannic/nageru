@@ -61,6 +61,7 @@ enum LongOption {
 	OPTION_10_BIT_INPUT,
 	OPTION_10_BIT_OUTPUT,
 	OPTION_INPUT_YCBCR_INTERPRETATION,
+        OPTION_ALSA_DELAY,
 };
 
 void usage(Program program)
@@ -77,6 +78,7 @@ void usage(Program program)
 	if (program == PROGRAM_NAGERU) {
 		fprintf(stderr, "  -c, --num-cards                 set number of input cards (default 2)\n");
 		fprintf(stderr, "  -d, --card-delay=CARD,DEPLAY    set input delay in milliseconds for the given card (can be given multiple times)\n");
+		fprintf(stderr, "      --alsa-delay=DELAY          set input delay in milliseconds for all ALSA input\n");
 		fprintf(stderr, "  -o, --output-card=CARD          also output signal to the given card (default none)\n");
 		fprintf(stderr, "  -t, --theme=FILE                choose theme (default theme.lua)\n");
 		fprintf(stderr, "  -I, --theme-dir=DIR             search for theme in this directory (can be given multiple times)\n");
@@ -168,6 +170,7 @@ void parse_flags(Program program, int argc, char * const argv[])
 		{ "height", required_argument, 0, 'h' },
 		{ "num-cards", required_argument, 0, 'c' },
 		{ "card-delay", required_argument, 0, 'd' },
+		{ "alsa-delay", required_argument, 0, OPTION_ALSA_DELAY },
 		{ "output-card", required_argument, 0, 'o' },
 		{ "theme", required_argument, 0, 't' },
 		{ "theme-dir", required_argument, 0, 'I' },
@@ -491,6 +494,9 @@ void parse_flags(Program program, int argc, char * const argv[])
 			global_flags.ycbcr_interpretation[card_num] = interpretation;
 			break;
 		}
+		case OPTION_ALSA_DELAY:
+			global_flags.alsa_delay = atoi(optarg);
+			break;
 		case OPTION_HELP:
 			usage(program);
 			exit(0);

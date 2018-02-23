@@ -10,6 +10,7 @@
 #include "alsa_pool.h"
 #include "bmusb/bmusb.h"
 #include "timebase.h"
+#include "flags.h"
 
 using namespace std;
 using namespace std::chrono;
@@ -247,7 +248,7 @@ ALSAInput::CaptureEndReason ALSAInput::do_capture()
 
 		const int64_t prev_pts = frames_to_pts(num_frames_output);
 		const int64_t pts = frames_to_pts(num_frames_output + frames);
-		const steady_clock::time_point now = steady_clock::now();
+		const steady_clock::time_point now = steady_clock::now() + milliseconds(global_flags.alsa_delay);
 		bool success;
 		do {
 			if (should_quit.should_quit()) return CaptureEndReason::REQUESTED_QUIT;
