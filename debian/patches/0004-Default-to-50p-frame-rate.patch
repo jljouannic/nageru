@@ -21,7 +21,7 @@ index 6dba068..0dd808e 100644
  	input->SetCallback(this);
  }
 diff --git a/decklink_output.cpp b/decklink_output.cpp
-index a3d220b..8603bad 100644
+index a3d220b..5e5f5f4 100644
 --- a/decklink_output.cpp
 +++ b/decklink_output.cpp
 @@ -415,8 +415,8 @@ uint32_t DeckLinkOutput::pick_video_mode(uint32_t mode) const
@@ -31,7 +31,7 @@ index a3d220b..8603bad 100644
 -	// Prioritize 59.94 > 60 > 29.97. If none of those are found, then pick the highest one.
 -	for (const pair<int, int> &desired : vector<pair<int, int>>{ { 60000, 1001 }, { 60, 0 }, { 30000, 1001 } }) {
 +	// Prioritize 50 > 59.94 > 60 > 29.97. If none of those are found, then pick the highest one.
-+	for (const pair<int, int> &desired : vector<pair<int, int>>{ { 50, 0 }, { 60000, 1001 }, { 60, 0 }, { 30000, 1001 } }) {
++	for (const pair<int, int> &desired : vector<pair<int, int>>{ { 50, 1 }, { 60000, 1001 }, { 60, 1 }, { 30000, 1001 } }) {
  		for (const auto &it : video_modes) {
  			if (it.second.frame_rate_num * desired.second == desired.first * it.second.frame_rate_den) {
  				return it.first;

@@ -4,5 +4,4 @@
 0006-Reduce-QuickSync-encoding-bitrate.patch
 0007-Fix-build-in-artful.patch
 0008-Flag-for-ALSA-delay.patch
-0009-Default-output-to-720x50p.patch
 0010-Stop-trying-to-re-probe-ALSA-cards-if-they-are-not-c.patch
