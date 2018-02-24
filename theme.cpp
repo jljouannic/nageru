@@ -28,6 +28,7 @@
 #include <utility>
 
 #include "defs.h"
+#include "cef_capture.h"
 #include "ffmpeg_capture.h"
 #include "flags.h"
 #include "image_input.h"
@@ -227,7 +228,29 @@ int EffectChain_add_video_input(lua_State* L)
 	if (ret == 1) {
 		Theme *theme = get_theme_updata(L);
 		LiveInputWrapper **live_input = (LiveInputWrapper **)lua_touserdata(L, -1);
-		theme->register_signal_connection(*live_input, *capture);
+		theme->register_video_signal_connection(*live_input, *capture);
+	}
+	return ret;
+}
+
+int EffectChain_add_html_input(lua_State* L)
+{
+	assert(lua_gettop(L) == 2);
+	Theme *theme = get_theme_updata(L);
+	EffectChain *chain = (EffectChain *)luaL_checkudata(L, 1, "EffectChain");
+	CEFCapture **capture = (CEFCapture **)luaL_checkudata(L, 2, "HTMLInput");
+
+	// These need to be nonowned, so that the LiveInputWrapper still exists
+	// and can feed frames to the right EffectChain even if the Lua code
+	// doesn't care about the object anymore. (If we change this, we'd need
+	// to also unregister the signal connection on __gc.)
+	int ret = wrap_lua_object_nonowned<LiveInputWrapper>(
+		L, "LiveInputWrapper", theme, chain, (*capture)->get_current_pixel_format(),
+		/*override_bounce=*/false, /*deinterlace=*/false);
+	if (ret == 1) {
+		Theme *theme = get_theme_updata(L);
+		LiveInputWrapper **live_input = (LiveInputWrapper **)lua_touserdata(L, -1);
+		theme->register_html_signal_connection(*live_input, *capture);
 	}
 	return ret;
 }
@@ -382,6 +405,27 @@ int VideoInput_get_signal_num(lua_State* L)
 {
 	assert(lua_gettop(L) == 1);
 	FFmpegCapture **video_input = (FFmpegCapture **)luaL_checkudata(L, 1, "VideoInput");
+	lua_pushnumber(L, -1 - (*video_input)->get_card_index());
+	return 1;
+}
+
+int HTMLInput_new(lua_State* L)
+{
+	assert(lua_gettop(L) == 1);
+	string url = checkstdstring(L, 1);
+	int ret = wrap_lua_object_nonowned<CEFCapture>(L, "HTMLInput", url, global_flags.width, global_flags.height);
+	if (ret == 1) {
+		CEFCapture **capture = (CEFCapture **)lua_touserdata(L, -1);
+		Theme *theme = get_theme_updata(L);
+		theme->register_html_input(*capture);
+	}
+	return ret;
+}
+
+int HTMLInput_get_signal_num(lua_State* L)
+{
+	assert(lua_gettop(L) == 1);
+	CEFCapture **video_input = (CEFCapture **)luaL_checkudata(L, 1, "HTMLInput");
 	lua_pushnumber(L, -1 - (*video_input)->get_card_index());
 	return 1;
 }
@@ -566,6 +610,7 @@ const luaL_Reg EffectChain_funcs[] = {
 	{ "__gc", EffectChain_gc },
 	{ "add_live_input", EffectChain_add_live_input },
 	{ "add_video_input", EffectChain_add_video_input },
+	{ "add_html_input", EffectChain_add_html_input },
 	{ "add_effect", EffectChain_add_effect },
 	{ "finalize", EffectChain_finalize },
 	{ NULL, NULL }
@@ -590,6 +635,13 @@ const luaL_Reg VideoInput_funcs[] = {
 	{ "rewind", VideoInput_rewind },
 	{ "change_rate", VideoInput_change_rate },
 	{ "get_signal_num", VideoInput_get_signal_num },
+	{ NULL, NULL }
+};
+
+const luaL_Reg HTMLInput_funcs[] = {
+	// TODO: reload, set_url, execute_javascript, perhaps change_framerate?
+	{ "new", HTMLInput_new },
+	{ "get_signal_num", HTMLInput_get_signal_num },
 	{ NULL, NULL }
 };
 
@@ -906,6 +958,7 @@ Theme::Theme(const string &filename, const vector<string> &search_dirs, Resource
 	register_class("LiveInputWrapper", LiveInputWrapper_funcs); 
 	register_class("ImageInput", ImageInput_funcs);
 	register_class("VideoInput", VideoInput_funcs);
+	register_class("HTMLInput", HTMLInput_funcs);
 	register_class("WhiteBalanceEffect", WhiteBalanceEffect_funcs);
 	register_class("ResampleEffect", ResampleEffect_funcs);
 	register_class("PaddingEffect", PaddingEffect_funcs);

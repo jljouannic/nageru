@@ -33,6 +33,7 @@
 #include "basic_stats.h"
 #include "bmusb/bmusb.h"
 #include "bmusb/fake_capture.h"
+#include "cef_capture.h"
 #include "chroma_subsampler.h"
 #include "context.h"
 #include "decklink_capture.h"
@@ -427,10 +428,22 @@ Mixer::Mixer(const QSurfaceFormat &format, unsigned num_cards)
 	}
 	num_video_inputs = video_inputs.size();
 
+	// Same, for HTML inputs.
+	std::vector<CEFCapture *> html_inputs = theme->get_html_inputs();
+	for (unsigned html_card_index = 0; html_card_index < html_inputs.size(); ++card_index, ++html_card_index) {
+		if (card_index >= MAX_VIDEO_CARDS) {
+			fprintf(stderr, "ERROR: Not enough card slots available for the HTML inputs the theme requested.\n");
+			exit(1);
+		}
+		configure_card(card_index, html_inputs[html_card_index], CardType::CEF_INPUT, /*output=*/nullptr);
+		html_inputs[html_card_index]->set_card_index(card_index);
+	}
+	num_html_inputs = html_inputs.size();
+
 	BMUSBCapture::set_card_connected_callback(bind(&Mixer::bm_hotplug_add, this, _1));
 	BMUSBCapture::start_bm_thread();
 
-	for (unsigned card_index = 0; card_index < num_cards + num_video_inputs; ++card_index) {
+	for (unsigned card_index = 0; card_index < num_cards + num_video_inputs + num_html_inputs; ++card_index) {
 		cards[card_index].queue_length_policy.reset(card_index);
 	}
 
@@ -480,7 +493,7 @@ Mixer::~Mixer()
 {
 	BMUSBCapture::stop_bm_thread();
 
-	for (unsigned card_index = 0; card_index < num_cards + num_video_inputs; ++card_index) {
+	for (unsigned card_index = 0; card_index < num_cards + num_video_inputs + num_html_inputs; ++card_index) {
 		{
 			unique_lock<mutex> lock(card_mutex);
 			cards[card_index].should_quit = true;  // Unblock thread.
@@ -514,6 +527,8 @@ void Mixer::configure_card(unsigned card_index, CaptureInterface *capture, CardT
 	PixelFormat pixel_format;
 	if (card_type == CardType::FFMPEG_INPUT) {
 		pixel_format = capture->get_current_pixel_format();
+	} else if (card_type == CardType::CEF_INPUT) {
+		pixel_format = PixelFormat_8BitBGRA;
 	} else if (global_flags.ten_bit_input) {
 		pixel_format = PixelFormat_10BitYCbCr;
 	} else {
@@ -577,6 +592,9 @@ void Mixer::configure_card(unsigned card_index, CaptureInterface *capture, CardT
 		break;
 	case CardType::FFMPEG_INPUT:
 		labels.emplace_back("cardtype", "ffmpeg");
+		break;
+	case CardType::CEF_INPUT:
+		labels.emplace_back("cardtype", "cef");
 		break;
 	default:
 		assert(false);
@@ -947,7 +965,7 @@ void Mixer::thread_func()
 
 	// Start the actual capture. (We don't want to do it before we're actually ready
 	// to process output frames.)
-	for (unsigned card_index = 0; card_index < num_cards + num_video_inputs; ++card_index) {
+	for (unsigned card_index = 0; card_index < num_cards + num_video_inputs + num_html_inputs; ++card_index) {
 		if (int(card_index) != output_card_index) {
 			cards[card_index].capture->start_bm_capture();
 		}
@@ -988,7 +1006,7 @@ void Mixer::thread_func()
 
 		handle_hotplugged_cards();
 
-		for (unsigned card_index = 0; card_index < num_cards + num_video_inputs; ++card_index) {
+		for (unsigned card_index = 0; card_index < num_cards + num_video_inputs + num_html_inputs; ++card_index) {
 			if (card_index == master_card_index || !has_new_frame[card_index]) {
 				continue;
 			}
@@ -1009,7 +1027,7 @@ void Mixer::thread_func()
 			continue;
 		}
 
-		for (unsigned card_index = 0; card_index < num_cards + num_video_inputs; ++card_index) {
+		for (unsigned card_index = 0; card_index < num_cards + num_video_inputs + num_html_inputs; ++card_index) {
 			if (!has_new_frame[card_index] || new_frames[card_index].frame->len == 0)
 				continue;
 
@@ -1154,7 +1172,7 @@ start:
 		goto start;
 	}
 
-	for (unsigned card_index = 0; card_index < num_cards + num_video_inputs; ++card_index) {
+	for (unsigned card_index = 0; card_index < num_cards + num_video_inputs + num_html_inputs; ++card_index) {
 		CaptureCard *card = &cards[card_index];
 		if (card->new_frames.empty()) {  // Starvation.
 			++card->metric_input_duped_frames;
@@ -1176,7 +1194,7 @@ start:
 		output_jitter_history.frame_arrived(output_frame_info.frame_timestamp, output_frame_info.frame_duration, output_frame_info.dropped_frames);
 	}
 
-	for (unsigned card_index = 0; card_index < num_cards + num_video_inputs; ++card_index) {
+	for (unsigned card_index = 0; card_index < num_cards + num_video_inputs + num_html_inputs; ++card_index) {
 		CaptureCard *card = &cards[card_index];
 		if (has_new_frame[card_index] &&
 		    !input_card_is_master_clock(card_index, master_card_index) &&
@@ -1310,8 +1328,11 @@ void Mixer::render_one_frame(int64_t duration)
 	//theme_main_chain.chain->enable_phase_timing(true);
 
 	// The theme can't (or at least shouldn't!) call connect_signal() on
-	// each FFmpeg input, so we'll do it here.
-	for (const pair<LiveInputWrapper *, FFmpegCapture *> &conn : theme->get_signal_connections()) {
+	// each FFmpeg or CEF input, so we'll do it here.
+	for (const pair<LiveInputWrapper *, FFmpegCapture *> &conn : theme->get_video_signal_connections()) {
+		conn.first->connect_signal_raw(conn.second->get_card_index(), input_state);
+	}
+	for (const pair<LiveInputWrapper *, CEFCapture *> &conn : theme->get_html_signal_connections()) {
 		conn.first->connect_signal_raw(conn.second->get_card_index(), input_state);
 	}
 

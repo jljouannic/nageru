@@ -13,15 +13,40 @@ extern "C" {
 #include <QSurfaceFormat>
 #include <string>
 
+#include <cef_app.h>
+#include <cef_browser.h>
+#include <cef_client.h>
+#include <cef_version.h>
+
 #include "basic_stats.h"
+#include "nageru_cef_app.h"
 #include "context.h"
 #include "flags.h"
 #include "image_input.h"
 #include "mainwindow.h"
 #include "mixer.h"
 
+CefRefPtr<NageruCefApp> cef_app;
+
 int main(int argc, char *argv[])
 {
+#ifdef HAVE_CEF
+	// Let CEF have first priority on parsing the command line, because we might be
+	// launched as a CEF sub-process.
+	CefMainArgs main_args(argc, argv);
+	cef_app = CefRefPtr<NageruCefApp>(new NageruCefApp());
+	int err = CefExecuteProcess(main_args, cef_app.get(), nullptr);
+	if (err >= 0) {
+		return err;
+	}
+
+	// CEF wants to use GLib for its main loop, which interferes with Qt's use of it.
+	// The alternative is trying to integrate CEF into Qt's main loop, but that requires
+	// fairly extensive cross-thread communication and that parts of CEF runs on Qt's UI
+	// thread.
+	setenv("QT_NO_GLIB", "1", 0);
+#endif
+
 	parse_flags(PROGRAM_NAGERU, argc, argv);
 
 	if (global_flags.va_display.empty() ||

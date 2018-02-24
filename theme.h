@@ -15,6 +15,7 @@
 #include "ref_counted_frame.h"
 #include "tweaked_inputs.h"
 
+class CEFCapture;
 class FFmpegCapture;
 class LiveInputWrapper;
 struct InputState;
@@ -68,14 +69,35 @@ public:
 		return video_inputs;
 	}
 
-	void register_signal_connection(LiveInputWrapper *live_input, FFmpegCapture *capture)
+	// Should be called as part of HTMLInput.new() only.
+	void register_html_input(CEFCapture *capture)
 	{
-		signal_connections.emplace_back(live_input, capture);
+		html_inputs.push_back(capture);
 	}
 
-	std::vector<std::pair<LiveInputWrapper *, FFmpegCapture *>> get_signal_connections() const
+	std::vector<CEFCapture *> get_html_inputs() const
 	{
-		return signal_connections;
+		return html_inputs;
+	}
+
+	void register_video_signal_connection(LiveInputWrapper *live_input, FFmpegCapture *capture)
+	{
+		video_signal_connections.emplace_back(live_input, capture);
+	}
+
+	std::vector<std::pair<LiveInputWrapper *, FFmpegCapture *>> get_video_signal_connections() const
+	{
+		return video_signal_connections;
+	}
+
+	void register_html_signal_connection(LiveInputWrapper *live_input, CEFCapture *capture)
+	{
+		html_signal_connections.emplace_back(live_input, capture);
+	}
+
+	std::vector<std::pair<LiveInputWrapper *, CEFCapture *>> get_html_signal_connections() const
+	{
+		return html_signal_connections;
 	}
 
 private:
@@ -93,7 +115,9 @@ private:
 	std::map<int, int> signal_to_card_mapping;  // Protected by <map_m>.
 
 	std::vector<FFmpegCapture *> video_inputs;
-	std::vector<std::pair<LiveInputWrapper *, FFmpegCapture *>> signal_connections;
+	std::vector<std::pair<LiveInputWrapper *, FFmpegCapture *>> video_signal_connections;
+	std::vector<CEFCapture *> html_inputs;
+	std::vector<std::pair<LiveInputWrapper *, CEFCapture *>> html_signal_connections;
 
 	friend class LiveInputWrapper;
 };
