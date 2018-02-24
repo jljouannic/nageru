@@ -4,6 +4,7 @@
 *.pb.cc
 *.moc.cpp
 ui_aboutdialog.h
+ui_analyzer.h
 ui_audio_expanded_view.h
 ui_audio_miniview.h
 ui_display.h
