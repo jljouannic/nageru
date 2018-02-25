@@ -17,6 +17,7 @@
 #include <set>
 #include <string>
 #include <thread>
+#include <vector>
 
 #undef CHECK
 #include <cef_client.h>
@@ -31,7 +32,7 @@ class CEFCapture;
 
 // A helper class for CEFCapture to proxy information to CEF, without becoming
 // CEF-refcounted itself.
-class NageruCEFClient : public CefClient, public CefRenderHandler
+class NageruCEFClient : public CefClient, public CefRenderHandler, public CefLoadHandler
 {
 public:
 	NageruCEFClient(int width, int height, CEFCapture *parent)
@@ -42,9 +43,20 @@ public:
 		return this;
 	}
 
+	CefRefPtr<CefLoadHandler> GetLoadHandler() override
+	{
+		return this;
+	}
+
+	// CefRenderHandler.
+
 	void OnPaint(CefRefPtr<CefBrowser> browser, PaintElementType type, const RectList &dirtyRects, const void *buffer, int width, int height) override;
 
 	bool GetViewRect(CefRefPtr<CefBrowser> browser, CefRect &rect);
+
+	// CefLoadHandler.
+
+	void OnLoadEnd(CefRefPtr<CefBrowser> browser, CefRefPtr<CefFrame> frame, int httpStatusCode) override;
 
 private:
 	int width, height;
@@ -75,6 +87,8 @@ public:
 	void execute_javascript_async(const std::string &js);
 
 	void OnPaint(const void *buffer, int width, int height);
+
+	void OnLoadEnd();
 
 	// CaptureInterface.
 	void set_video_frame_allocator(bmusb::FrameAllocator *allocator) override
@@ -172,6 +186,14 @@ private:
 
 	// Tasks waiting for <browser> to get ready. Under <browser_mutex>.
 	std::vector<std::function<void()>> deferred_tasks;
+
+	// Whether the last set_url() (includes the implicit one in the constructor)
+	// has loaded yet. Accessed from the CEF thread only.
+	bool loaded = false;
+
+	// JavaScript waiting for the first page (well, any page) to have loaded.
+	// Accessed from the CEF thread only.
+	std::vector<std::string> deferred_javascript;
 
 	int timecode = 0;
 };

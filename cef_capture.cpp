@@ -52,6 +52,7 @@ void CEFCapture::post_to_cef_ui_thread(std::function<void()> &&func)
 void CEFCapture::set_url(const string &url)
 {
 	post_to_cef_ui_thread([this, url] {
+		loaded = false;
 		browser->GetMainFrame()->LoadURL(url);
 	});
 }
@@ -74,9 +75,13 @@ void CEFCapture::set_max_fps(int max_fps)
 void CEFCapture::execute_javascript_async(const string &js)
 {
 	post_to_cef_ui_thread([this, js] {
-		CefString script_url("<theme eval>");
-		int start_line = 1;
-		browser->GetMainFrame()->ExecuteJavaScript(js, script_url, start_line);
+		if (loaded) {
+			CefString script_url("<theme eval>");
+			int start_line = 1;
+			browser->GetMainFrame()->ExecuteJavaScript(js, script_url, start_line);
+		} else {
+			deferred_javascript.push_back(js);
+		}
 	});
 }
 
@@ -104,6 +109,19 @@ void CEFCapture::OnPaint(const void *buffer, int width, int height)
 	frame_callback(timecode++,
 		video_frame, 0, video_format,
 		FrameAllocator::Frame(), 0, AudioFormat());
+}
+
+void CEFCapture::OnLoadEnd()
+{
+	post_to_cef_ui_thread([this] {
+		loaded = true;
+		for (const string &js : deferred_javascript) {
+			CefString script_url("<theme eval>");
+			int start_line = 1;
+			browser->GetMainFrame()->ExecuteJavaScript(js, script_url, start_line);
+		}
+		deferred_javascript.clear();
+	});
 }
 
 #define FRAME_SIZE (8 << 20)  // 8 MB.
@@ -198,4 +216,9 @@ bool NageruCEFClient::GetViewRect(CefRefPtr<CefBrowser> browser, CefRect &rect)
 {
 	rect = CefRect(0, 0, width, height);
 	return true;
+}
+
+void NageruCEFClient::OnLoadEnd(CefRefPtr<CefBrowser> browser, CefRefPtr<CefFrame> frame, int httpStatusCode)
+{
+	parent->OnLoadEnd();
 }
