@@ -14,3 +14,13 @@ ui_midi_mapping.h
 nageru
 benchmark_audio_mixer
 kaeru
+
+# CEF
+*.bin
+*.pak
+icudtl.dat
+libcef.so
+libEGL.so
+libGLESv2.so
+swiftshader/
+locales/

@@ -11,9 +11,9 @@ CXXFLAGS += -std=gnu++11 -fPIC $(shell pkg-config --cflags $(PKG_MODULES)) -pthr
 CEF_DIR=
 CEF_BUILD_TYPE=Release
 ifneq ($(CEF_DIR),)
-  CEF_LIBS=$(CEF_DIR)/$(CEF_BUILD_TYPE)/libcef.so $(CEF_DIR)/libcef_dll_wrapper/libcef_dll_wrapper.a
+  CEF_LIBS = $(CEF_DIR)/libcef_dll_wrapper/libcef_dll_wrapper.a
   CPPFLAGS += -DHAVE_CEF=1 -I$(CEF_DIR) -I$(CEF_DIR)/include
-  LDFLAGS += -L$(CEF_DIR)/$(CEF_BUILD_TYPE) -Wl,-rpath $(CEF_DIR)/$(CEF_BUILD_TYPE)
+  LDFLAGS += -L$(CEF_DIR)/$(CEF_BUILD_TYPE) -Wl,-rpath,\$$ORIGIN
 endif
 
 ifeq ($(EMBEDDED_BMUSB),yes)
@@ -22,6 +22,9 @@ else
   PKG_MODULES += bmusb
 endif
 LDLIBS=$(shell pkg-config --libs $(PKG_MODULES)) -pthread -lva -lva-drm -lva-x11 -lX11 -lavformat -lavcodec -lavutil -lswscale -lavresample -lzita-resampler -lasound -ldl -lqcustomplot
+ifneq ($(CEF_DIR),)
+  LDLIBS += -lcef
+endif
 
 # Qt objects
 OBJS_WITH_MOC = glwidget.o mainwindow.o vumeter.o lrameter.o compression_reduction_meter.o correlation_meter.o aboutdialog.o analyzer.o input_mapping_dialog.o midi_mapping_dialog.o nonlinear_fader.o
@@ -72,7 +75,14 @@ BM_OBJS = benchmark_audio_mixer.o $(AUDIO_MIXER_OBJS) flags.o metrics.o
 %.moc.cpp: %.h
 	moc $< -o $@
 
-all: nageru kaeru benchmark_audio_mixer
+ifneq ($(CEF_DIR),)
+CEF_RESOURCES=libcef.so icudtl.dat natives_blob.bin snapshot_blob.bin v8_context_snapshot.bin
+CEF_RESOURCES += cef.pak cef_100_percent.pak cef_200_percent.pak cef_extensions.pak devtools_resources.pak
+CEF_RESOURCES += libEGL.so libGLESv2.so swiftshader/libEGL.so swiftshader/libGLESv2.so
+CEF_RESOURCES += locales/en-US.pak locales/en-US.pak.info
+endif
+
+all: nageru kaeru benchmark_audio_mixer $(CEF_RESOURCES)
 
 nageru: $(OBJS) $(CEF_LIBS)
 	$(CXX) -o $@ $^ $(LDFLAGS) $(LDLIBS) $(CEF_LIBS)
@@ -80,6 +90,35 @@ kaeru: $(KAERU_OBJS)
 	$(CXX) -o $@ $^ $(LDFLAGS) $(LDLIBS)
 benchmark_audio_mixer: $(BM_OBJS)
 	$(CXX) -o $@ $^ $(LDFLAGS) $(LDLIBS)
+
+ifneq ($(CEF_DIR),)
+# A lot of these unfortunately have to be in the same directory as the binary;
+# some can be given paths, but not all.
+libcef.so: $(CEF_DIR)/$(CEF_BUILD_TYPE)/libcef.so
+	cp -a $< $@
+libEGL.so: $(CEF_DIR)/$(CEF_BUILD_TYPE)/libEGL.so
+	cp -a $< $@
+libGLESv2.so: $(CEF_DIR)/$(CEF_BUILD_TYPE)/libGLESv2.so
+	cp -a $< $@
+swiftshader/:
+	mkdir swiftshader/
+swiftshader/libEGL.so: | swiftshader/ $(CEF_DIR)/$(CEF_BUILD_TYPE)/swiftshader/libEGL.so
+	cp -a $(CEF_DIR)/$(CEF_BUILD_TYPE)/swiftshader/libEGL.so $@
+swiftshader/libGLESv2.so: | swiftshader/ $(CEF_DIR)/$(CEF_BUILD_TYPE)/swiftshader/libGLESv2.so
+	cp -a $(CEF_DIR)/$(CEF_BUILD_TYPE)/swiftshader/libGLESv2.so $@
+locales/:
+	mkdir locales/
+locales/en-US.pak: | locales/ $(CEF_DIR)/Resources/locales/en-US.pak
+	cp -a $(CEF_DIR)/Resources/locales/en-US.pak $@
+locales/en-US.pak.info: | locales/ $(CEF_DIR)/Resources/locales/en-US.pak.info
+	cp -a $(CEF_DIR)/Resources/locales/en-US.pak.info $@
+icudtl.dat: $(CEF_DIR)/Resources/icudtl.dat
+	cp -a $< $@
+%.bin: $(CEF_DIR)/$(CEF_BUILD_TYPE)/%.bin
+	cp -a $< $@
+%.pak: $(CEF_DIR)/Resources/%.pak
+	cp -a $< $@
+endif
 
 # Extra dependencies that need to be generated.
 aboutdialog.o: ui_aboutdialog.h
@@ -105,14 +144,24 @@ DEPS=$(OBJS:.o=.d) $(BM_OBJS:.o=.d) $(KAERU_OBJS:.o=.d)
 -include $(DEPS)
 
 clean:
-	$(RM) $(OBJS) $(BM_OBJS) $(KAERU_OBJS) $(DEPS) nageru benchmark_audio_mixer ui_aboutdialog.h ui_analyzer.h ui_mainwindow.h ui_display.h ui_about.h ui_audio_miniview.h ui_audio_expanded_view.h ui_input_mapping.h ui_midi_mapping.h chain-*.frag *.dot *.pb.cc *.pb.h $(OBJS_WITH_MOC:.o=.moc.cpp) ellipsis_label.moc.cpp clickable_label.moc.cpp
+	$(RM) $(OBJS) $(BM_OBJS) $(KAERU_OBJS) $(DEPS) nageru benchmark_audio_mixer ui_aboutdialog.h ui_analyzer.h ui_mainwindow.h ui_display.h ui_about.h ui_audio_miniview.h ui_audio_expanded_view.h ui_input_mapping.h ui_midi_mapping.h chain-*.frag *.dot *.pb.cc *.pb.h $(OBJS_WITH_MOC:.o=.moc.cpp) ellipsis_label.moc.cpp clickable_label.moc.cpp $(CEF_RESOURCES)
 
 PREFIX=/usr/local
-install:
-	$(INSTALL) -m 755 -o root -g root -d $(DESTDIR)$(PREFIX)/bin $(DESTDIR)$(PREFIX)/share/nageru
-	$(INSTALL) -m 755 -o root -g root nageru $(DESTDIR)$(PREFIX)/bin/nageru
+install: install-cef
+	$(INSTALL) -m 755 -o root -g root -d $(DESTDIR)$(PREFIX)/bin $(DESTDIR)$(PREFIX)/share/nageru $(DESTDIR)$(PREFIX)/lib/nageru
+	$(INSTALL) -m 755 -o root -g root nageru $(DESTDIR)$(PREFIX)/lib/nageru/nageru
+	ln -s $(PREFIX)/lib/nageru/nageru $(DESTDIR)$(PREFIX)/bin/nageru
 	$(INSTALL) -m 755 -o root -g root kaeru $(DESTDIR)$(PREFIX)/bin/kaeru
 	$(INSTALL) -m 644 -o root -g root theme.lua $(DESTDIR)$(PREFIX)/share/nageru/theme.lua
 	$(INSTALL) -m 644 -o root -g root simple.lua $(DESTDIR)$(PREFIX)/share/nageru/simple.lua
 	$(INSTALL) -m 644 -o root -g root bg.jpeg $(DESTDIR)$(PREFIX)/share/nageru/bg.jpeg
 	$(INSTALL) -m 644 -o root -g root akai_midimix.midimapping $(DESTDIR)$(PREFIX)/share/nageru/akai_midimix.midimapping
+
+ifneq ($(CEF_DIR),)
+install-cef:
+	for FILE in $(CEF_RESOURCES); do \
+		$(INSTALL) -D -m 644 -o root -g root $$FILE $(DESTDIR)$(PREFIX)/lib/nageru/$$FILE; \
+	done
+else
+install-cef:
+endif
