@@ -63,6 +63,14 @@ void CEFCapture::reload()
 	});
 }
 
+void CEFCapture::set_max_fps(int max_fps)
+{
+	post_to_cef_ui_thread([this, max_fps] {
+		browser->GetHost()->SetWindowlessFrameRate(max_fps);
+		this->max_fps = max_fps;
+	});
+}
+
 void CEFCapture::OnPaint(const void *buffer, int width, int height)
 {
 	steady_clock::time_point timestamp = steady_clock::now();
@@ -71,7 +79,7 @@ void CEFCapture::OnPaint(const void *buffer, int width, int height)
 	video_format.width = width;
 	video_format.height = height;
 	video_format.stride = width * 4;
-	video_format.frame_rate_nom = 60;  // FIXME
+	video_format.frame_rate_nom = max_fps;
 	video_format.frame_rate_den = 1;
 	video_format.has_signal = true;
 	video_format.is_connected = true;
@@ -109,7 +117,7 @@ void CEFCapture::start_bm_capture()
 		CefBrowserSettings browser_settings;
 		browser_settings.web_security = cef_state_t::STATE_DISABLED;
 		browser_settings.webgl = cef_state_t::STATE_ENABLED;
-		browser_settings.windowless_frame_rate = 60;
+		browser_settings.windowless_frame_rate = max_fps;
 
 		CefWindowInfo window_info;
 		window_info.SetAsWindowless(0);
@@ -140,7 +148,7 @@ std::map<uint32_t, VideoMode> CEFCapture::get_available_video_modes() const
 	mode.autodetect = false;
 	mode.width = width;
 	mode.height = height;
-	mode.frame_rate_num = 60;  // FIXME
+	mode.frame_rate_num = max_fps;
 	mode.frame_rate_den = 1;
 	mode.interlaced = false;
 

@@ -71,6 +71,7 @@ public:
 
 	void set_url(const std::string &url);
 	void reload();
+	void set_max_fps(int max_fps);
 
 	void OnPaint(const void *buffer, int width, int height);
 
@@ -163,6 +164,7 @@ private:
 	bmusb::frame_callback_t frame_callback = nullptr;
 
 	std::string description, start_url;
+	std::atomic<int> max_fps{60};
 
 	std::mutex browser_mutex;
 	CefRefPtr<CefBrowser> browser;  // Under <browser_mutex>.
