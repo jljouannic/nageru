@@ -71,6 +71,15 @@ void CEFCapture::set_max_fps(int max_fps)
 	});
 }
 
+void CEFCapture::execute_javascript_async(const string &js)
+{
+	post_to_cef_ui_thread([this, js] {
+		CefString script_url("<theme eval>");
+		int start_line = 1;
+		browser->GetMainFrame()->ExecuteJavaScript(js, script_url, start_line);
+	});
+}
+
 void CEFCapture::OnPaint(const void *buffer, int width, int height)
 {
 	steady_clock::time_point timestamp = steady_clock::now();
