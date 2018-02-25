@@ -70,6 +70,7 @@ public:
 	}
 
 	void set_url(const std::string &url);
+	void reload();
 
 	void OnPaint(const void *buffer, int width, int height);
 

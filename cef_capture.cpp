@@ -56,6 +56,13 @@ void CEFCapture::set_url(const string &url)
 	});
 }
 
+void CEFCapture::reload()
+{
+	post_to_cef_ui_thread([this] {
+		browser->Reload();
+	});
+}
+
 void CEFCapture::OnPaint(const void *buffer, int width, int height)
 {
 	steady_clock::time_point timestamp = steady_clock::now();

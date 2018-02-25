@@ -431,6 +431,14 @@ int HTMLInput_set_url(lua_State* L)
 	return 0;
 }
 
+int HTMLInput_reload(lua_State* L)
+{
+	assert(lua_gettop(L) == 1);
+	CEFCapture **video_input = (CEFCapture **)luaL_checkudata(L, 1, "HTMLInput");
+	(*video_input)->reload();
+	return 0;
+}
+
 int HTMLInput_get_signal_num(lua_State* L)
 {
 	assert(lua_gettop(L) == 1);
@@ -648,9 +656,10 @@ const luaL_Reg VideoInput_funcs[] = {
 };
 
 const luaL_Reg HTMLInput_funcs[] = {
-	// TODO: reload, execute_javascript, perhaps set_max_fps?
+	// TODO: execute_javascript, perhaps set_max_fps?
 	{ "new", HTMLInput_new },
 	{ "set_url", HTMLInput_set_url },
+	{ "reload", HTMLInput_reload },
 	{ "get_signal_num", HTMLInput_get_signal_num },
 	{ NULL, NULL }
 };
