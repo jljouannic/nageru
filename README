@@ -22,6 +22,9 @@ Features:
    pipelines, running transitions etc., so that the visual look is
    consistent between operators.
 
+ - HTML rendering (through Chromium Embedded Framework), for high-quality
+   and flexible overlay or other graphics.
+
  - Comprehensive monitoring through Prometheus metrics.
 
 [1] For reference, that is: Core i7 4600U (dualcore 2.10GHz, clocks down
@@ -71,6 +74,16 @@ Nageru is in beta stage. It currently needs:
 
  - libpci, for printing friendly PCI device names in an error message.
 
+ - Optional: CEF (Chromium Embedded Framework), for HTML graphics.
+   If you build without CEF, the HTMLInput class will not be available from
+   the theme. You can get binary downloads of CEF from
+
+     http://opensource.spotify.com/cefbuilds/index.html
+
+   Simply download the right build for your platform (the “minimal” build
+   is fine) and add CEF_DIR=<path>/cef_binary_X.XXXX.XXXX.XXXXXXXX_linux64
+   on the make command line (substituting X with the real version as required).
+
 
 If on Debian stretch or something similar, you can install everything you need
 with:
@@ -82,11 +95,13 @@ with:
     libasound2-dev libx264-dev libbmusb-dev protobuf-compiler \
     libprotobuf-dev libpci-dev
 
-Exceptions as of July 2017:
+Exceptions as of February 2018:
 
   - You will need Movit from unstable; stretch only has 1.4.0.
 
   - You will need bmusb from unstable; stretch only has 0.5.4.
+
+  - Debian does not carry CEF (but it is optional).
 
 The patches/ directory contains a patch that helps zita-resampler performance.
 It is meant for upstream, but was not in at the time Nageru was released.
