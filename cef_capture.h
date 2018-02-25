@@ -69,6 +69,8 @@ public:
 		return card_index;
 	}
 
+	void set_url(const std::string &url);
+
 	void OnPaint(const void *buffer, int width, int height);
 
 	// CaptureInterface.
@@ -145,6 +147,8 @@ public:
 	uint32_t get_current_audio_input() const override { return 0; }
 
 private:
+	void post_to_cef_ui_thread(std::function<void()> &&func);
+
 	CefRefPtr<NageruCEFClient> cef_client;
 	unsigned width, height;
 	int card_index = -1;
@@ -158,6 +162,12 @@ private:
 	bmusb::frame_callback_t frame_callback = nullptr;
 
 	std::string description, start_url;
+
+	std::mutex browser_mutex;
+	CefRefPtr<CefBrowser> browser;  // Under <browser_mutex>.
+
+	// Tasks waiting for <browser> to get ready. Under <browser_mutex>.
+	std::vector<std::function<void()>> deferred_tasks;
 
 	int timecode = 0;
 };

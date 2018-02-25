@@ -39,6 +39,23 @@ CEFCapture::~CEFCapture()
 	}
 }
 
+void CEFCapture::post_to_cef_ui_thread(std::function<void()> &&func)
+{
+	lock_guard<mutex> lock(browser_mutex);
+	if (browser != nullptr) {
+		CefPostTask(TID_UI, new CEFTaskAdapter(std::move(func)));
+	} else {
+		deferred_tasks.push_back(std::move(func));
+	}
+}
+
+void CEFCapture::set_url(const string &url)
+{
+	post_to_cef_ui_thread([this, url] {
+		browser->GetMainFrame()->LoadURL(url);
+	});
+}
+
 void CEFCapture::OnPaint(const void *buffer, int width, int height)
 {
 	steady_clock::time_point timestamp = steady_clock::now();
@@ -79,14 +96,22 @@ void CEFCapture::start_bm_capture()
 {
 	cef_app->initialize_cef();
 
-	CefBrowserSettings browser_settings;
-	browser_settings.web_security = cef_state_t::STATE_DISABLED;
-	browser_settings.webgl = cef_state_t::STATE_ENABLED;
-	browser_settings.windowless_frame_rate = 60;
+	CefPostTask(TID_UI, new CEFTaskAdapter([this]{
+		lock_guard<mutex> lock(browser_mutex);
 
-	CefWindowInfo window_info;
-	window_info.SetAsWindowless(0);
-	CefBrowserHost::CreateBrowser(window_info, cef_client, start_url, browser_settings, nullptr);
+		CefBrowserSettings browser_settings;
+		browser_settings.web_security = cef_state_t::STATE_DISABLED;
+		browser_settings.webgl = cef_state_t::STATE_ENABLED;
+		browser_settings.windowless_frame_rate = 60;
+
+		CefWindowInfo window_info;
+		window_info.SetAsWindowless(0);
+		browser = CefBrowserHost::CreateBrowserSync(window_info, cef_client, start_url, browser_settings, nullptr);
+		for (function<void()> &task : deferred_tasks) {
+			task();
+		}
+		deferred_tasks.clear();
+	}));
 }
 
 void CEFCapture::stop_dequeue_thread()

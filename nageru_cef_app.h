@@ -33,8 +33,8 @@
 class CEFTaskAdapter : public CefTask
 {
 public:
-	CEFTaskAdapter(const std::function<void()>& func)
-		: func(func) {}
+	CEFTaskAdapter(const std::function<void()>&& func)
+		: func(std::move(func)) {}
 	void Execute() override { func(); }
 
 private:
