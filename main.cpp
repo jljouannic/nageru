@@ -13,20 +13,26 @@ extern "C" {
 #include <QSurfaceFormat>
 #include <string>
 
+#ifdef HAVE_CEF
 #include <cef_app.h>
 #include <cef_browser.h>
 #include <cef_client.h>
 #include <cef_version.h>
+#endif
 
 #include "basic_stats.h"
+#ifdef HAVE_CEF
 #include "nageru_cef_app.h"
+#endif
 #include "context.h"
 #include "flags.h"
 #include "image_input.h"
 #include "mainwindow.h"
 #include "mixer.h"
 
+#ifdef HAVE_CEF
 CefRefPtr<NageruCefApp> cef_app;
+#endif
 
 int main(int argc, char *argv[])
 {

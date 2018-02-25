@@ -6,11 +6,15 @@ PKG_MODULES := Qt5Core Qt5Gui Qt5Widgets Qt5OpenGLExtensions Qt5OpenGL Qt5PrintS
 CXXFLAGS ?= -O2 -g -Wall  # Will be overridden by environment.
 CXXFLAGS += -std=gnu++11 -fPIC $(shell pkg-config --cflags $(PKG_MODULES)) -pthread -DMOVIT_SHADER_DIR=\"$(shell pkg-config --variable=shaderdir movit)\" -Idecklink/
 
-CEF_DIR=/home/sesse/nmu/cef_binary_3.3282.1734.g8f26fe0_linux64
+# Override CEF_DIR on the command line to build with CEF.
+# E.g.: make CEF_DIR=/home/sesse/cef_binary_3.3282.1734.g8f26fe0_linux64
+CEF_DIR=
 CEF_BUILD_TYPE=Release
-CEF_LIBS=$(CEF_DIR)/$(CEF_BUILD_TYPE)/libcef.so $(CEF_DIR)/libcef_dll_wrapper/libcef_dll_wrapper.a
-CPPFLAGS += -DHAVE_CEF=1 -I$(CEF_DIR) -I$(CEF_DIR)/include
-LDFLAGS += -L$(CEF_DIR)/$(CEF_BUILD_TYPE) -Wl,-rpath $(CEF_DIR)/$(CEF_BUILD_TYPE)
+ifneq ($(CEF_DIR),)
+  CEF_LIBS=$(CEF_DIR)/$(CEF_BUILD_TYPE)/libcef.so $(CEF_DIR)/libcef_dll_wrapper/libcef_dll_wrapper.a
+  CPPFLAGS += -DHAVE_CEF=1 -I$(CEF_DIR) -I$(CEF_DIR)/include
+  LDFLAGS += -L$(CEF_DIR)/$(CEF_BUILD_TYPE) -Wl,-rpath $(CEF_DIR)/$(CEF_BUILD_TYPE)
+endif
 
 ifeq ($(EMBEDDED_BMUSB),yes)
   CPPFLAGS += -Ibmusb/
@@ -47,8 +51,10 @@ endif
 # FFmpeg input
 OBJS += ffmpeg_capture.o
 
-# CEF input
-OBJS += nageru_cef_app.o cef_capture.o
+ifneq ($(CEF_DIR),)
+  # CEF input
+  OBJS += nageru_cef_app.o cef_capture.o
+endif
 
 # Benchmark program.
 BM_OBJS = benchmark_audio_mixer.o $(AUDIO_MIXER_OBJS) flags.o metrics.o
@@ -88,6 +94,7 @@ midi_mapper.o: midi_mapping.pb.h
 midi_mapping_dialog.o: ui_midi_mapping.h midi_mapping.pb.h
 mixer.o: json.pb.h
 
+# CEF wrapper library; typically not built as part of the binary distribution.
 $(CEF_DIR)/libcef_dll_wrapper/libcef_dll_wrapper.a: $(CEF_DIR)/Makefile
 	cd $(CEF_DIR) && $(MAKE) libcef_dll_wrapper
 

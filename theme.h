@@ -69,6 +69,7 @@ public:
 		return video_inputs;
 	}
 
+#ifdef HAVE_CEF
 	// Should be called as part of HTMLInput.new() only.
 	void register_html_input(CEFCapture *capture)
 	{
@@ -79,6 +80,7 @@ public:
 	{
 		return html_inputs;
 	}
+#endif
 
 	void register_video_signal_connection(LiveInputWrapper *live_input, FFmpegCapture *capture)
 	{
@@ -90,6 +92,7 @@ public:
 		return video_signal_connections;
 	}
 
+#ifdef HAVE_CEF
 	void register_html_signal_connection(LiveInputWrapper *live_input, CEFCapture *capture)
 	{
 		html_signal_connections.emplace_back(live_input, capture);
@@ -99,6 +102,7 @@ public:
 	{
 		return html_signal_connections;
 	}
+#endif
 
 private:
 	void register_constants();
@@ -116,8 +120,10 @@ private:
 
 	std::vector<FFmpegCapture *> video_inputs;
 	std::vector<std::pair<LiveInputWrapper *, FFmpegCapture *>> video_signal_connections;
+#ifdef HAVE_CEF
 	std::vector<CEFCapture *> html_inputs;
 	std::vector<std::pair<LiveInputWrapper *, CEFCapture *>> html_signal_connections;
+#endif
 
 	friend class LiveInputWrapper;
 };

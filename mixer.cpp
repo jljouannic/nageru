@@ -33,7 +33,9 @@
 #include "basic_stats.h"
 #include "bmusb/bmusb.h"
 #include "bmusb/fake_capture.h"
+#ifdef HAVE_CEF
 #include "cef_capture.h"
+#endif
 #include "chroma_subsampler.h"
 #include "context.h"
 #include "decklink_capture.h"
@@ -428,6 +430,7 @@ Mixer::Mixer(const QSurfaceFormat &format, unsigned num_cards)
 	}
 	num_video_inputs = video_inputs.size();
 
+#ifdef HAVE_CEF
 	// Same, for HTML inputs.
 	std::vector<CEFCapture *> html_inputs = theme->get_html_inputs();
 	for (unsigned html_card_index = 0; html_card_index < html_inputs.size(); ++card_index, ++html_card_index) {
@@ -439,6 +442,7 @@ Mixer::Mixer(const QSurfaceFormat &format, unsigned num_cards)
 		html_inputs[html_card_index]->set_card_index(card_index);
 	}
 	num_html_inputs = html_inputs.size();
+#endif
 
 	BMUSBCapture::set_card_connected_callback(bind(&Mixer::bm_hotplug_add, this, _1));
 	BMUSBCapture::start_bm_thread();
@@ -1332,9 +1336,11 @@ void Mixer::render_one_frame(int64_t duration)
 	for (const pair<LiveInputWrapper *, FFmpegCapture *> &conn : theme->get_video_signal_connections()) {
 		conn.first->connect_signal_raw(conn.second->get_card_index(), input_state);
 	}
+#ifdef HAVE_CEF
 	for (const pair<LiveInputWrapper *, CEFCapture *> &conn : theme->get_html_signal_connections()) {
 		conn.first->connect_signal_raw(conn.second->get_card_index(), input_state);
 	}
+#endif
 
 	// If HDMI/SDI output is active and the user has requested auto mode,
 	// its mode overrides the existing Y'CbCr setting for the chain.

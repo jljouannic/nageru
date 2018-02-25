@@ -28,7 +28,9 @@
 #include <utility>
 
 #include "defs.h"
+#ifdef HAVE_CEF
 #include "cef_capture.h"
+#endif
 #include "ffmpeg_capture.h"
 #include "flags.h"
 #include "image_input.h"
@@ -233,6 +235,7 @@ int EffectChain_add_video_input(lua_State* L)
 	return ret;
 }
 
+#ifdef HAVE_CEF
 int EffectChain_add_html_input(lua_State* L)
 {
 	assert(lua_gettop(L) == 2);
@@ -254,6 +257,7 @@ int EffectChain_add_html_input(lua_State* L)
 	}
 	return ret;
 }
+#endif
 
 int EffectChain_add_effect(lua_State* L)
 {
@@ -411,6 +415,7 @@ int VideoInput_get_signal_num(lua_State* L)
 
 int HTMLInput_new(lua_State* L)
 {
+#ifdef HAVE_CEF
 	assert(lua_gettop(L) == 1);
 	string url = checkstdstring(L, 1);
 	int ret = wrap_lua_object_nonowned<CEFCapture>(L, "HTMLInput", url, global_flags.width, global_flags.height);
@@ -420,8 +425,14 @@ int HTMLInput_new(lua_State* L)
 		theme->register_html_input(*capture);
 	}
 	return ret;
+#else
+	fprintf(stderr, "This version of Nageru has been compiled without CEF support.\n");
+	fprintf(stderr, "HTMLInput is not available.\n");
+	exit(1);
+#endif
 }
 
+#ifdef HAVE_CEF
 int HTMLInput_set_url(lua_State* L)
 {
 	assert(lua_gettop(L) == 2);
@@ -464,6 +475,7 @@ int HTMLInput_get_signal_num(lua_State* L)
 	lua_pushnumber(L, -1 - (*video_input)->get_card_index());
 	return 1;
 }
+#endif
 
 int WhiteBalanceEffect_new(lua_State* L)
 {
@@ -645,7 +657,9 @@ const luaL_Reg EffectChain_funcs[] = {
 	{ "__gc", EffectChain_gc },
 	{ "add_live_input", EffectChain_add_live_input },
 	{ "add_video_input", EffectChain_add_video_input },
+#ifdef HAVE_CEF
 	{ "add_html_input", EffectChain_add_html_input },
+#endif
 	{ "add_effect", EffectChain_add_effect },
 	{ "finalize", EffectChain_finalize },
 	{ NULL, NULL }
@@ -675,11 +689,13 @@ const luaL_Reg VideoInput_funcs[] = {
 
 const luaL_Reg HTMLInput_funcs[] = {
 	{ "new", HTMLInput_new },
+#ifdef HAVE_CEF
 	{ "set_url", HTMLInput_set_url },
 	{ "reload", HTMLInput_reload },
 	{ "set_max_fps", HTMLInput_set_max_fps },
 	{ "execute_javascript_async", HTMLInput_execute_javascript_async },
 	{ "get_signal_num", HTMLInput_get_signal_num },
+#endif
 	{ NULL, NULL }
 };
 
