@@ -33,7 +33,7 @@ to 800 MHz after 30 seconds due to thermal constraints), Intel HD Graphics
 (so 12.8 GB/sec theoretical memory bandwidth, shared between CPU and GPU).
 
 
-Nageru is in beta stage. It currently needs:
+Nageru currently needs:
 
  - An Intel processor with Intel Quick Sync, or otherwise some hardware
    H.264 encoder exposed through VA-API. Note that you can use VA-API over
@@ -64,8 +64,7 @@ Nageru is in beta stage. It currently needs:
  - Working OpenGL; Movit works with almost any modern OpenGL implementation.
    Nageru has been tested with Intel on Mesa (you want 11.2 or newer, due
    to critical stability bugfixes), and with NVIDIA's proprietary drivers.
-   AMD's proprietary drivers (fglrx) are known not to work due to driver bugs;
-   I am in contact with AMD to try to get this resolved.
+   The status of AMD's proprietary drivers is currently unknown.
 
  - libzita-resampler, for resampling sound sources so that they are in sync
    between sources, and also for oversampling for the peak meter.
@@ -150,7 +149,7 @@ give up, but that's not the intended meaning.)
 
 
 Nageru's home page is at https://nageru.sesse.net/, where you can also find
-contact information and link to the latest version.
+contact information, full documentation and link to the latest version.
 
 
 Legalese: TL;DR: Everything is GPLv3-or-newer compatible, and see
