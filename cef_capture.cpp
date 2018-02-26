@@ -99,16 +99,25 @@ void CEFCapture::OnPaint(const void *buffer, int width, int height)
 	video_format.is_connected = true;
 
 	FrameAllocator::Frame video_frame = video_frame_allocator->alloc_frame();
-	if (video_frame.data != nullptr) {
+	if (video_frame.data == nullptr) {
+		// We lost a frame, so we need to invalidate the entire thing.
+		// (CEF only sends OnPaint when there are actual changes,
+		// so we need to do this explicitly, or we could be stuck on an
+		// old frame forever if the image doesn't change.)
+		post_to_cef_ui_thread([this] {
+			browser->GetHost()->Invalidate(PET_VIEW);
+		});
+		++timecode;
+	} else {
 		assert(video_frame.size >= unsigned(width * height * 4));
 		assert(!video_frame.interleaved);
 		memcpy(video_frame.data, buffer, width * height * 4);
 		video_frame.len = video_format.stride * height;
 		video_frame.received_timestamp = timestamp;
+		frame_callback(timecode++,
+			video_frame, 0, video_format,
+			FrameAllocator::Frame(), 0, AudioFormat());
 	}
-	frame_callback(timecode++,
-		video_frame, 0, video_format,
-		FrameAllocator::Frame(), 0, AudioFormat());
 }
 
 void CEFCapture::OnLoadEnd()
