@@ -414,6 +414,9 @@ void MainWindow::mixer_created(Mixer *mixer)
 
 	analyzer.reset(new Analyzer);
 
+	global_mixer->set_theme_menu_callback(bind(&MainWindow::setup_theme_menu, this));
+	setup_theme_menu();
+
 	struct sigaction act;
 	memset(&act, 0, sizeof(act));
 	act.sa_handler = schedule_cut_signal;
@@ -805,6 +808,27 @@ void MainWindow::update_eq_label(unsigned bus_index, EQBand band, float gain_db)
 		break;
 	default:
 		assert(false);
+	}
+}
+
+void MainWindow::setup_theme_menu()
+{
+	std::vector<Theme::MenuEntry> theme_menu_entries = global_mixer->get_theme_menu();
+
+	if (theme_menu != nullptr) {
+		ui->menuBar->removeAction(theme_menu->menuAction());
+		theme_menu = nullptr;
+	}
+
+	if (!theme_menu_entries.empty()) {
+		theme_menu = new QMenu("&Theme");
+		for (const Theme::MenuEntry &entry : theme_menu_entries) {
+			QAction *action = theme_menu->addAction(QString::fromStdString(entry.text));
+			connect(action, &QAction::triggered, [entry] {
+				global_mixer->theme_menu_entry_clicked(entry.lua_ref);
+			});
+		}
+		ui->menuBar->insertMenu(ui->menu_Help->menuAction(), theme_menu);
 	}
 }
 

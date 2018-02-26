@@ -403,6 +403,15 @@ public:
 		return httpd.get_num_connected_clients();
 	}
 
+	std::vector<Theme::MenuEntry> get_theme_menu() { return theme->get_theme_menu(); }
+
+	void theme_menu_entry_clicked(int lua_ref) { return theme->theme_menu_entry_clicked(lua_ref); }
+
+	void set_theme_menu_callback(std::function<void()> callback)
+	{
+		theme->set_theme_menu_callback(callback);
+	}
+
 private:
 	struct CaptureCard;
 

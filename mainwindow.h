@@ -128,6 +128,7 @@ private:
 	void set_white_balance(int channel_number, int x, int y);
 	void update_cutoff_labels(float cutoff_hz);
 	void update_eq_label(unsigned bus_index, EQBand band, float gain_db);
+	void setup_theme_menu();
 
 	// Called from DiskSpaceEstimator.
 	void report_disk_space(off_t free_bytes, double estimated_seconds_left);
@@ -158,6 +159,7 @@ private:
 
 	Ui::MainWindow *ui;
 	QLabel *disk_free_label;
+	QMenu *theme_menu = nullptr;
 	QPushButton *transition_btn1, *transition_btn2, *transition_btn3;
 	std::vector<Ui::Display *> previews;
 	std::vector<Ui::AudioMiniView *> audio_miniviews;

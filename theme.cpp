@@ -48,6 +48,18 @@ using namespace movit;
 
 extern Mixer *global_mixer;
 
+Theme *get_theme_updata(lua_State* L)
+{
+	luaL_checktype(L, lua_upvalueindex(1), LUA_TLIGHTUSERDATA);
+	return (Theme *)lua_touserdata(L, lua_upvalueindex(1));
+}
+
+int ThemeMenu_set(lua_State *L)
+{
+	Theme *theme = get_theme_updata(L);
+	return theme->set_theme_menu(L);
+}
+
 namespace {
 
 // Contains basically the same data as InputState, but does not hold on to
@@ -134,12 +146,6 @@ int wrap_lua_object_nonowned(lua_State* L, const char *class_name, Args&&... arg
 	lua_setmetatable(L, -2);
 
 	return 1;
-}
-
-Theme *get_theme_updata(lua_State* L)
-{	
-	luaL_checktype(L, lua_upvalueindex(1), LUA_TLIGHTUSERDATA);
-	return (Theme *)lua_touserdata(L, lua_upvalueindex(1));
 }
 
 Effect *get_effect(lua_State *L, int idx)
@@ -782,6 +788,11 @@ const luaL_Reg InputStateInfo_funcs[] = {
 	{ NULL, NULL }
 };
 
+const luaL_Reg ThemeMenu_funcs[] = {
+	{ "set", ThemeMenu_set },
+	{ NULL, NULL }
+};
+
 }  // namespace
 
 LiveInputWrapper::LiveInputWrapper(Theme *theme, EffectChain *chain, bmusb::PixelFormat pixel_format, bool override_bounce, bool deinterlace)
@@ -1022,6 +1033,7 @@ Theme::Theme(const string &filename, const vector<string> &search_dirs, Resource
 	register_class("MultiplyEffect", MultiplyEffect_funcs);
 	register_class("MixEffect", MixEffect_funcs);
 	register_class("InputStateInfo", InputStateInfo_funcs);
+	register_class("ThemeMenu", ThemeMenu_funcs);
 
 	// Run script. Search through all directories until we find a file that will load
 	// (as in, does not return LUA_ERRFILE); then run it. We store load errors
@@ -1339,4 +1351,42 @@ void Theme::channel_clicked(int preview_num)
 		exit(1);
 	}
 	assert(lua_gettop(L) == 0);
+}
+
+int Theme::set_theme_menu(lua_State *L)
+{
+	for (const Theme::MenuEntry &entry : theme_menu) {
+		luaL_unref(L, LUA_REGISTRYINDEX, entry.lua_ref);
+	}
+	theme_menu.clear();
+
+	int num_elements = lua_gettop(L);
+	for (int i = 1; i <= num_elements; ++i) {
+		lua_rawgeti(L, i, 1);
+		const string text = checkstdstring(L, -1);
+		lua_pop(L, 1);
+
+		lua_rawgeti(L, i, 2);
+		luaL_checktype(L, -1, LUA_TFUNCTION);
+		int ref = luaL_ref(L, LUA_REGISTRYINDEX);
+
+		theme_menu.push_back(MenuEntry{ text, ref });
+	}
+	lua_pop(L, num_elements);
+	assert(lua_gettop(L) == 0);
+
+	if (theme_menu_callback != nullptr) {
+		theme_menu_callback();
+	}
+
+	return 0;
+}
+
+void Theme::theme_menu_entry_clicked(int lua_ref)
+{
+	lua_rawgeti(L, LUA_REGISTRYINDEX, lua_ref);
+	if (lua_pcall(L, 0, 0, 0) != 0) {
+		fprintf(stderr, "error running menu callback: %s\n", lua_tostring(L, -1));
+		exit(1);
+	}
 }

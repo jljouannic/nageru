@@ -104,9 +104,24 @@ public:
 	}
 #endif
 
+	struct MenuEntry {
+		std::string text;
+		int lua_ref;
+	};
+	std::vector<MenuEntry> get_theme_menu() { return theme_menu; }  // Can be empty for no menu.
+	void theme_menu_entry_clicked(int lua_ref);
+
+	// Will be invoked every time the theme sets a new menu.
+	// Is not invoked for a menu that exists at the time of the callback.
+	void set_theme_menu_callback(std::function<void()> callback)
+	{
+		theme_menu_callback = callback;
+	}
+
 private:
 	void register_constants();
 	void register_class(const char *class_name, const luaL_Reg *funcs);
+	int set_theme_menu(lua_State *L);
 
 	std::mutex m;
 	lua_State *L;  // Protected by <m>.
@@ -125,7 +140,11 @@ private:
 	std::vector<std::pair<LiveInputWrapper *, CEFCapture *>> html_signal_connections;
 #endif
 
+	std::vector<MenuEntry> theme_menu;
+	std::function<void()> theme_menu_callback;
+
 	friend class LiveInputWrapper;
+	friend int ThemeMenu_set(lua_State *L);
 };
 
 // LiveInputWrapper is a facade on top of an YCbCrInput, exposed to
