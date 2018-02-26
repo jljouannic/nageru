@@ -60,6 +60,7 @@ void CEFCapture::set_url(const string &url)
 void CEFCapture::reload()
 {
 	post_to_cef_ui_thread([this] {
+		loaded = false;
 		browser->Reload();
 	});
 }
