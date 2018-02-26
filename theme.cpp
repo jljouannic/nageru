@@ -1041,8 +1041,21 @@ Theme::Theme(const string &filename, const vector<string> &search_dirs, Resource
 	lua_settop(L, 0);
 	vector<string> errors;
 	bool success = false;
-	for (size_t i = 0; i < search_dirs.size(); ++i) {
-		string path = search_dirs[i] + "/" + filename;
+
+	vector<string> real_search_dirs;
+	if (!filename.empty() && filename[0] == '/') {
+		real_search_dirs.push_back("");
+	} else {
+		real_search_dirs = search_dirs;
+	}
+
+	for (const string &dir : real_search_dirs) {
+		string path;
+		if (dir.empty()) {
+			path = filename;
+		} else {
+			path = dir + "/" + filename;
+		}
 		int err = luaL_loadfile(L, path.c_str());
 		if (err == 0) {
 			// Success; actually call the code.
