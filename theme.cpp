@@ -535,6 +535,16 @@ int HTMLInput_execute_javascript_async(lua_State* L)
 	return 0;
 }
 
+int HTMLInput_resize(lua_State* L)
+{
+	assert(lua_gettop(L) == 3);
+	CEFCapture **video_input = (CEFCapture **)luaL_checkudata(L, 1, "HTMLInput");
+	unsigned width = lrint(luaL_checknumber(L, 2));
+	unsigned height = lrint(luaL_checknumber(L, 3));
+	(*video_input)->resize(width, height);
+	return 0;
+}
+
 int HTMLInput_get_signal_num(lua_State* L)
 {
 	assert(lua_gettop(L) == 1);
@@ -761,6 +771,7 @@ const luaL_Reg HTMLInput_funcs[] = {
 	{ "reload", HTMLInput_reload },
 	{ "set_max_fps", HTMLInput_set_max_fps },
 	{ "execute_javascript_async", HTMLInput_execute_javascript_async },
+	{ "resize", HTMLInput_resize },
 	{ "get_signal_num", HTMLInput_get_signal_num },
 #endif
 	{ NULL, NULL }

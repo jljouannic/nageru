@@ -85,9 +85,11 @@ public:
 	void reload();
 	void set_max_fps(int max_fps);
 	void execute_javascript_async(const std::string &js);
+	void resize(unsigned width, unsigned height);
 
+	// Callbacks from NageruCEFClient.
 	void OnPaint(const void *buffer, int width, int height);
-
+	bool GetViewRect(CefRect &rect);
 	void OnLoadEnd();
 
 	// CaptureInterface.
@@ -167,7 +169,13 @@ private:
 	void post_to_cef_ui_thread(std::function<void()> &&func);
 
 	CefRefPtr<NageruCEFClient> cef_client;
-	unsigned width, height;
+
+	// Needs to be different from browser_mutex below, since GetViewRect
+	// can be called unpredictably from when we are already holding
+	// <browser_mutex>.
+	std::mutex resolution_mutex;
+	unsigned width, height;  // Under <resolution_mutex>.
+
 	int card_index = -1;
 
 	bool has_dequeue_callbacks = false;

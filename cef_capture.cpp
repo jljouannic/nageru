@@ -86,6 +86,13 @@ void CEFCapture::execute_javascript_async(const string &js)
 	});
 }
 
+void CEFCapture::resize(unsigned width, unsigned height)
+{
+	lock_guard<mutex> lock(resolution_mutex);
+	this->width = width;
+	this->height = height;
+}
+
 void CEFCapture::OnPaint(const void *buffer, int width, int height)
 {
 	steady_clock::time_point timestamp = steady_clock::now();
@@ -224,6 +231,12 @@ void NageruCEFClient::OnPaint(CefRefPtr<CefBrowser> browser, PaintElementType ty
 
 bool NageruCEFClient::GetViewRect(CefRefPtr<CefBrowser> browser, CefRect &rect)
 {
+	return parent->GetViewRect(rect);
+}
+
+bool CEFCapture::GetViewRect(CefRect &rect)
+{
+	lock_guard<mutex> lock(resolution_mutex);
 	rect = CefRect(0, 0, width, height);
 	return true;
 }
