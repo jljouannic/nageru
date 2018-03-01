@@ -2,6 +2,6 @@
 0004-Default-to-50p-frame-rate.patch
 0005-Option-to-specify-input-delay-per-card.patch
 0006-Reduce-QuickSync-encoding-bitrate.patch
-0007-Fix-build-in-artful.patch
 0008-Flag-for-ALSA-delay.patch
 0010-Stop-trying-to-re-probe-ALSA-cards-if-they-are-not-c.patch
+0008-Fix-compilation-with-LuaJIT-2.0-which-Debian-stretch.patch
