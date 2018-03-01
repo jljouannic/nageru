@@ -123,6 +123,8 @@ private:
 	void register_class(const char *class_name, const luaL_Reg *funcs);
 	int set_theme_menu(lua_State *L);
 
+	std::string theme_path;
+
 	std::mutex m;
 	lua_State *L;  // Protected by <m>.
 	const InputState *input_state = nullptr;  // Protected by <m>. Only set temporarily, during chain setup.

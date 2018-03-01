@@ -1090,24 +1090,7 @@ Theme::Theme(const string &filename, const vector<string> &search_dirs, Resource
 	L = luaL_newstate();
         luaL_openlibs(L);
 
-	register_constants();
-	register_class("EffectChain", EffectChain_funcs); 
-	register_class("LiveInputWrapper", LiveInputWrapper_funcs); 
-	register_class("ImageInput", ImageInput_funcs);
-	register_class("VideoInput", VideoInput_funcs);
-	register_class("HTMLInput", HTMLInput_funcs);
-	register_class("WhiteBalanceEffect", WhiteBalanceEffect_funcs);
-	register_class("ResampleEffect", ResampleEffect_funcs);
-	register_class("PaddingEffect", PaddingEffect_funcs);
-	register_class("IntegralPaddingEffect", IntegralPaddingEffect_funcs);
-	register_class("OverlayEffect", OverlayEffect_funcs);
-	register_class("ResizeEffect", ResizeEffect_funcs);
-	register_class("MultiplyEffect", MultiplyEffect_funcs);
-	register_class("MixEffect", MixEffect_funcs);
-	register_class("InputStateInfo", InputStateInfo_funcs);
-	register_class("ThemeMenu", ThemeMenu_funcs);
-
-	// Run script. Search through all directories until we find a file that will load
+	// Search through all directories until we find a file that will load
 	// (as in, does not return LUA_ERRFILE); then run it. We store load errors
 	// from all the attempts, and show them once we know we can't find any of them.
 	lua_settop(L, 0);
@@ -1121,8 +1104,9 @@ Theme::Theme(const string &filename, const vector<string> &search_dirs, Resource
 		real_search_dirs = search_dirs;
 	}
 
+	string path;
+	int theme_code_ref;
 	for (const string &dir : real_search_dirs) {
-		string path;
 		if (dir.empty()) {
 			path = filename;
 		} else {
@@ -1130,11 +1114,13 @@ Theme::Theme(const string &filename, const vector<string> &search_dirs, Resource
 		}
 		int err = luaL_loadfile(L, path.c_str());
 		if (err == 0) {
-			// Success; actually call the code.
-			if (lua_pcall(L, 0, LUA_MULTRET, 0)) {
-				fprintf(stderr, "Error when running %s: %s\n", path.c_str(), lua_tostring(L, -1));
-				exit(1);
-			}
+			// Save the theme for when we're actually going to run it
+			// (we need to set up the right environment below first,
+			// and we couldn't do that before, because we didn't know the
+			// path to put in Nageru.THEME_PATH).
+			theme_code_ref = luaL_ref(L, LUA_REGISTRYINDEX);
+			assert(lua_gettop(L) == 0);
+
 			success = true;
 			break;
 		}
@@ -1154,6 +1140,46 @@ Theme::Theme(const string &filename, const vector<string> &search_dirs, Resource
 	}
 	assert(lua_gettop(L) == 0);
 
+	// Make sure the path exposed to the theme (as Nageru.THEME_PATH;
+	// can be useful for locating files when talking to CEF) is absolute.
+	// In a sense, it would be nice if realpath() had a mode not to
+	// resolve symlinks, but it doesn't, so we only call it if we don't
+	// already have an absolute path (which may leave ../ elements etc.).
+	if (path[0] == '/') {
+		theme_path = path;
+	} else {
+		char *absolute_theme_path = realpath(path.c_str(), nullptr);
+		theme_path = absolute_theme_path;
+		free(absolute_theme_path);
+	}
+
+	// Set up the API we provide.
+	register_constants();
+	register_class("EffectChain", EffectChain_funcs);
+	register_class("LiveInputWrapper", LiveInputWrapper_funcs);
+	register_class("ImageInput", ImageInput_funcs);
+	register_class("VideoInput", VideoInput_funcs);
+	register_class("HTMLInput", HTMLInput_funcs);
+	register_class("WhiteBalanceEffect", WhiteBalanceEffect_funcs);
+	register_class("ResampleEffect", ResampleEffect_funcs);
+	register_class("PaddingEffect", PaddingEffect_funcs);
+	register_class("IntegralPaddingEffect", IntegralPaddingEffect_funcs);
+	register_class("OverlayEffect", OverlayEffect_funcs);
+	register_class("ResizeEffect", ResizeEffect_funcs);
+	register_class("MultiplyEffect", MultiplyEffect_funcs);
+	register_class("MixEffect", MixEffect_funcs);
+	register_class("InputStateInfo", InputStateInfo_funcs);
+	register_class("ThemeMenu", ThemeMenu_funcs);
+
+	// Now actually run the theme to get everything set up.
+	lua_rawgeti(L, LUA_REGISTRYINDEX, theme_code_ref);
+	luaL_unref(L, LUA_REGISTRYINDEX, theme_code_ref);
+	if (lua_pcall(L, 0, 0, 0)) {
+		fprintf(stderr, "Error when running %s: %s\n", path.c_str(), lua_tostring(L, -1));
+		exit(1);
+	}
+	assert(lua_gettop(L) == 0);
+
 	// Ask it for the number of channels.
 	num_channels = call_num_channels(L);
 }
@@ -1166,16 +1192,24 @@ Theme::~Theme()
 void Theme::register_constants()
 {
 	// Set Nageru.VIDEO_FORMAT_BGRA = bmusb::PixelFormat_8BitBGRA, etc.
-	const vector<pair<string, int>> constants = {
+	const vector<pair<string, int>> num_constants = {
 		{ "VIDEO_FORMAT_BGRA", bmusb::PixelFormat_8BitBGRA },
 		{ "VIDEO_FORMAT_YCBCR", bmusb::PixelFormat_8BitYCbCrPlanar },
+	};
+	const vector<pair<string, string>> str_constants = {
+		{ "THEME_PATH", theme_path },
 	};
 
 	lua_newtable(L);  // t = {}
 
-	for (const pair<string, int> &constant : constants) {
+	for (const pair<string, int> &constant : num_constants) {
 		lua_pushstring(L, constant.first.c_str());
 		lua_pushinteger(L, constant.second);
+		lua_settable(L, 1);  // t[key] = value
+	}
+	for (const pair<string, string> &constant : str_constants) {
+		lua_pushstring(L, constant.first.c_str());
+		lua_pushstring(L, constant.second.c_str());
 		lua_settable(L, 1);  // t[key] = value
 	}
 
