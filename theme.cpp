@@ -1458,6 +1458,7 @@ int Theme::set_theme_menu(lua_State *L)
 
 void Theme::theme_menu_entry_clicked(int lua_ref)
 {
+	unique_lock<mutex> lock(m);
 	lua_rawgeti(L, LUA_REGISTRYINDEX, lua_ref);
 	if (lua_pcall(L, 0, 0, 0) != 0) {
 		fprintf(stderr, "error running menu callback: %s\n", lua_tostring(L, -1));
