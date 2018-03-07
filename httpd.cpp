@@ -101,6 +101,17 @@ int HTTPD::answer_to_connection(MHD_Connection *connection,
 		return ret;
 	}
 
+	// Small hack; reject unknown /channels/foo.
+	if (string(url).find("/channels/") == 0) {
+		string contents = "Not found.";
+		MHD_Response *response = MHD_create_response_from_buffer(
+			contents.size(), &contents[0], MHD_RESPMEM_MUST_COPY);
+		MHD_add_response_header(response, "Content-type", "text/plain");
+		int ret = MHD_queue_response(connection, MHD_HTTP_NOT_FOUND, response);
+		MHD_destroy_response(response);  // Only decreases the refcount; actual free is after the request is done.
+		return ret;
+	}
+
 	HTTPD::Stream *stream = new HTTPD::Stream(this, framing);
 	stream->add_data(header.data(), header.size(), Stream::DATA_TYPE_HEADER);
 	{
