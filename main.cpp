@@ -13,15 +13,46 @@ extern "C" {
 #include <QSurfaceFormat>
 #include <string>
 
+#ifdef HAVE_CEF
+#include <cef_app.h>
+#include <cef_browser.h>
+#include <cef_client.h>
+#include <cef_version.h>
+#endif
+
 #include "basic_stats.h"
+#ifdef HAVE_CEF
+#include "nageru_cef_app.h"
+#endif
 #include "context.h"
 #include "flags.h"
 #include "image_input.h"
 #include "mainwindow.h"
 #include "mixer.h"
 
+#ifdef HAVE_CEF
+CefRefPtr<NageruCefApp> cef_app;
+#endif
+
 int main(int argc, char *argv[])
 {
+#ifdef HAVE_CEF
+	// Let CEF have first priority on parsing the command line, because we might be
+	// launched as a CEF sub-process.
+	CefMainArgs main_args(argc, argv);
+	cef_app = CefRefPtr<NageruCefApp>(new NageruCefApp());
+	int err = CefExecuteProcess(main_args, cef_app.get(), nullptr);
+	if (err >= 0) {
+		return err;
+	}
+
+	// CEF wants to use GLib for its main loop, which interferes with Qt's use of it.
+	// The alternative is trying to integrate CEF into Qt's main loop, but that requires
+	// fairly extensive cross-thread communication and that parts of CEF runs on Qt's UI
+	// thread.
+	setenv("QT_NO_GLIB", "1", 0);
+#endif
+
 	parse_flags(PROGRAM_NAGERU, argc, argv);
 
 	if (global_flags.va_display.empty() ||
@@ -35,7 +66,6 @@ int main(int argc, char *argv[])
 	av_register_all();
 
 	QCoreApplication::setAttribute(Qt::AA_ShareOpenGLContexts, true);
-	QApplication app(argc, argv);
 
 	QSurfaceFormat fmt;
 	fmt.setDepthBufferSize(0);
@@ -52,6 +82,7 @@ int main(int argc, char *argv[])
 
 	QGLFormat::setDefaultFormat(QGLFormat::fromSurfaceFormat(fmt));
 
+	QApplication app(argc, argv);
 	global_share_widget = new QGLWidget();
 	if (!global_share_widget->isValid()) {
 		fprintf(stderr, "Failed to initialize OpenGL. Nageru needs at least OpenGL 3.1 to function properly.\n");

@@ -1,3 +1,25 @@
+Nageru 1.7.0, March 8th, 2018
+
+  - Support for HTML5 graphics directly in Nageru, through CEF
+    (Chromium Embedded Framework). This performs better and is more
+    flexible than integrating with CasparCG over a socket. Note that
+    CEF is an optional component; see the documentation for more
+    information.
+
+  - Add an HTTP endpoint for enumerating channels and one for getting
+    only their colors. Intended for remote tally applications;
+    set the documentation.
+
+  - Add a video grid display that removes the audio controls and shows
+    the video channels only, potentially in multiple rows if that makes
+    for a larger viewing area.
+
+  - Themes can now present simple menus in the Nageru UI. See the
+    documentation for more information.
+
+  - Various bugfixes.
+
+
 Nageru 1.6.4, January 25th, 2018
 
   - Fix compilation with the upcoming FFmpeg 3.5.

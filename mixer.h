@@ -403,13 +403,23 @@ public:
 		return httpd.get_num_connected_clients();
 	}
 
+	std::vector<Theme::MenuEntry> get_theme_menu() { return theme->get_theme_menu(); }
+
+	void theme_menu_entry_clicked(int lua_ref) { return theme->theme_menu_entry_clicked(lua_ref); }
+
+	void set_theme_menu_callback(std::function<void()> callback)
+	{
+		theme->set_theme_menu_callback(callback);
+	}
+
 private:
 	struct CaptureCard;
 
 	enum class CardType {
 		LIVE_CARD,
 		FAKE_CAPTURE,
-		FFMPEG_INPUT
+		FFMPEG_INPUT,
+		CEF_INPUT,
 	};
 	void configure_card(unsigned card_index, bmusb::CaptureInterface *capture, CardType card_type, DeckLinkOutput *output);
 	void set_output_card_internal(int card_index);  // Should only be called from the mixer thread.
@@ -428,9 +438,11 @@ private:
 	void release_display_frame(DisplayFrame *frame);
 	double pts() { return double(pts_int) / TIMEBASE; }
 	void trim_queue(CaptureCard *card, size_t safe_queue_length);
+	std::pair<std::string, std::string> get_channels_json();
+	std::pair<std::string, std::string> get_channel_color_http(unsigned channel_idx);
 
 	HTTPD httpd;
-	unsigned num_cards, num_video_inputs;
+	unsigned num_cards, num_video_inputs, num_html_inputs;
 
 	QSurface *mixer_surface, *h264_encoder_surface, *decklink_output_surface;
 	std::unique_ptr<movit::ResourcePool> resource_pool;

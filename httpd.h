@@ -9,21 +9,36 @@
 #include <atomic>
 #include <condition_variable>
 #include <deque>
+#include <functional>
 #include <mutex>
 #include <set>
 #include <string>
+#include <unordered_map>
+#include <utility>
 
 struct MHD_Connection;
 struct MHD_Daemon;
 
 class HTTPD {
 public:
+	// Returns a pair of content and content-type.
+	using EndpointCallback = std::function<std::pair<std::string, std::string>()>;
+
 	HTTPD();
 	~HTTPD();
 
 	// Should be called before start().
 	void set_header(const std::string &data) {
 		header = data;
+	}
+
+	// Should be called before start() (due to threading issues).
+	enum CORSPolicy {
+		NO_CORS_POLICY,
+		ALLOW_ALL_ORIGINS
+	};
+	void add_endpoint(const std::string &url, const EndpointCallback &callback, CORSPolicy cors_policy) {
+		endpoints[url] = Endpoint{ callback, cors_policy };
 	}
 
 	void start(int port);
@@ -81,6 +96,11 @@ private:
 	MHD_Daemon *mhd = nullptr;
 	std::mutex streams_mutex;
 	std::set<Stream *> streams;  // Not owned.
+	struct Endpoint {
+		EndpointCallback callback;
+		CORSPolicy cors_policy;
+	};
+	std::unordered_map<std::string, Endpoint> endpoints;
 	std::string header;
 
 	// Metrics.

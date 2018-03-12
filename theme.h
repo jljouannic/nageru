@@ -15,6 +15,7 @@
 #include "ref_counted_frame.h"
 #include "tweaked_inputs.h"
 
+class CEFCapture;
 class FFmpegCapture;
 class LiveInputWrapper;
 struct InputState;
@@ -68,19 +69,61 @@ public:
 		return video_inputs;
 	}
 
-	void register_signal_connection(LiveInputWrapper *live_input, FFmpegCapture *capture)
+#ifdef HAVE_CEF
+	// Should be called as part of HTMLInput.new() only.
+	void register_html_input(CEFCapture *capture)
 	{
-		signal_connections.emplace_back(live_input, capture);
+		html_inputs.push_back(capture);
 	}
 
-	std::vector<std::pair<LiveInputWrapper *, FFmpegCapture *>> get_signal_connections() const
+	std::vector<CEFCapture *> get_html_inputs() const
 	{
-		return signal_connections;
+		return html_inputs;
+	}
+#endif
+
+	void register_video_signal_connection(LiveInputWrapper *live_input, FFmpegCapture *capture)
+	{
+		video_signal_connections.emplace_back(live_input, capture);
+	}
+
+	std::vector<std::pair<LiveInputWrapper *, FFmpegCapture *>> get_video_signal_connections() const
+	{
+		return video_signal_connections;
+	}
+
+#ifdef HAVE_CEF
+	void register_html_signal_connection(LiveInputWrapper *live_input, CEFCapture *capture)
+	{
+		html_signal_connections.emplace_back(live_input, capture);
+	}
+
+	std::vector<std::pair<LiveInputWrapper *, CEFCapture *>> get_html_signal_connections() const
+	{
+		return html_signal_connections;
+	}
+#endif
+
+	struct MenuEntry {
+		std::string text;
+		int lua_ref;
+	};
+	std::vector<MenuEntry> get_theme_menu() { return theme_menu; }  // Can be empty for no menu.
+	void theme_menu_entry_clicked(int lua_ref);
+
+	// Will be invoked every time the theme sets a new menu.
+	// Is not invoked for a menu that exists at the time of the callback.
+	void set_theme_menu_callback(std::function<void()> callback)
+	{
+		theme_menu_callback = callback;
 	}
 
 private:
 	void register_constants();
 	void register_class(const char *class_name, const luaL_Reg *funcs);
+	int set_theme_menu(lua_State *L);
+
+	std::string theme_path;
 
 	std::mutex m;
 	lua_State *L;  // Protected by <m>.
@@ -93,9 +136,17 @@ private:
 	std::map<int, int> signal_to_card_mapping;  // Protected by <map_m>.
 
 	std::vector<FFmpegCapture *> video_inputs;
-	std::vector<std::pair<LiveInputWrapper *, FFmpegCapture *>> signal_connections;
+	std::vector<std::pair<LiveInputWrapper *, FFmpegCapture *>> video_signal_connections;
+#ifdef HAVE_CEF
+	std::vector<CEFCapture *> html_inputs;
+	std::vector<std::pair<LiveInputWrapper *, CEFCapture *>> html_signal_connections;
+#endif
+
+	std::vector<MenuEntry> theme_menu;
+	std::function<void()> theme_menu_callback;
 
 	friend class LiveInputWrapper;
+	friend int ThemeMenu_set(lua_State *L);
 };
 
 // LiveInputWrapper is a facade on top of an YCbCrInput, exposed to

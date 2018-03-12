@@ -59,6 +59,7 @@ public slots:
 	void channel_clicked(int channel_number);
 	void quick_cut_activated(int channel_number);
 	void wb_button_clicked(int channel_number);
+	void audio_view_changed(int audio_view);
 	void set_transition_names(std::vector<std::string> transition_names);
 	void update_channel_name(Mixer::Output output, const std::string &name);
 	void update_channel_color(Mixer::Output output, const std::string &color);
@@ -127,6 +128,7 @@ private:
 	void set_white_balance(int channel_number, int x, int y);
 	void update_cutoff_labels(float cutoff_hz);
 	void update_eq_label(unsigned bus_index, EQBand band, float gain_db);
+	void setup_theme_menu();
 
 	// Called from DiskSpaceEstimator.
 	void report_disk_space(off_t free_bytes, double estimated_seconds_left);
@@ -157,11 +159,13 @@ private:
 
 	Ui::MainWindow *ui;
 	QLabel *disk_free_label;
+	QMenu *theme_menu = nullptr;
 	QPushButton *transition_btn1, *transition_btn2, *transition_btn3;
 	std::vector<Ui::Display *> previews;
 	std::vector<Ui::AudioMiniView *> audio_miniviews;
 	std::vector<Ui::AudioExpandedView *> audio_expanded_views;
 	int current_wb_pick_display = -1;
+	int current_audio_view = -1;
 	MIDIMapper midi_mapper;
 	std::unique_ptr<Analyzer> analyzer;
 };

@@ -185,18 +185,23 @@ ALSAPool::ProbeResult ALSAPool::probe_device_once(unsigned card_index, unsigned 
 	}
 	unique_ptr<snd_ctl_t, decltype(snd_ctl_close)*> ctl_closer(ctl, snd_ctl_close);
 
+	snprintf(address, sizeof(address), "hw:%d,%d", card_index, dev_index);
+
 	snd_pcm_info_t *pcm_info;
 	snd_pcm_info_alloca(&pcm_info);
 	snd_pcm_info_set_device(pcm_info, dev_index);
 	snd_pcm_info_set_subdevice(pcm_info, 0);
 	snd_pcm_info_set_stream(pcm_info, SND_PCM_STREAM_CAPTURE);
-	if (snd_ctl_pcm_info(ctl, pcm_info) < 0) {
+	err = snd_ctl_pcm_info(ctl, pcm_info);
+	if (err == -ENOENT) {
+		// Not a capture card.
+		return ALSAPool::ProbeResult::FAILURE;
+	}
+	if (err < 0) {
 		// Not available for capture.
 		printf("%s: Not available for capture.\n", address);
 		return ALSAPool::ProbeResult::DEFER;
 	}
-
-	snprintf(address, sizeof(address), "hw:%d,%d", card_index, dev_index);
 
 	unsigned num_channels = 0;
 

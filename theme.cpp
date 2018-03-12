@@ -28,11 +28,75 @@
 #include <utility>
 
 #include "defs.h"
+#ifdef HAVE_CEF
+#include "cef_capture.h"
+#endif
 #include "ffmpeg_capture.h"
 #include "flags.h"
 #include "image_input.h"
 #include "input_state.h"
 #include "pbo_frame_allocator.h"
+
+#if !defined LUA_VERSION_NUM || LUA_VERSION_NUM==501
+
+// Compatibility shims for LuaJIT 2.0 (LuaJIT 2.1 implements the entire Lua 5.2 API).
+// Adapted from https://github.com/keplerproject/lua-compat-5.2/blob/master/c-api/compat-5.2.c
+// and licensed as follows:
+//
+// The MIT License (MIT)
+//
+// Copyright (c) 2013 Hisham Muhammad
+//
+// Permission is hereby granted, free of charge, to any person obtaining a copy of
+// this software and associated documentation files (the "Software"), to deal in
+// the Software without restriction, including without limitation the rights to
+// use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of
+// the Software, and to permit persons to whom the Software is furnished to do so,
+// subject to the following conditions:
+//
+// The above copyright notice and this permission notice shall be included in all
+// copies or substantial portions of the Software.
+//
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS
+// FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR
+// COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER
+// IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
+// CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+
+/*
+** Adapted from Lua 5.2.0
+*/
+void luaL_setfuncs(lua_State *L, const luaL_Reg *l, int nup) {
+	luaL_checkstack(L, nup+1, "too many upvalues");
+	for (; l->name != NULL; l++) {  /* fill the table with given functions */
+		int i;
+		lua_pushstring(L, l->name);
+		for (i = 0; i < nup; i++)  /* copy upvalues to the top */
+			lua_pushvalue(L, -(nup + 1));
+		lua_pushcclosure(L, l->func, nup);  /* closure with those upvalues */
+		lua_settable(L, -(nup + 3)); /* table must be below the upvalues, the name and the closure */
+	}
+	lua_pop(L, nup);  /* remove upvalues */
+}
+
+void *luaL_testudata(lua_State *L, int i, const char *tname) {
+	void *p = lua_touserdata(L, i);
+	luaL_checkstack(L, 2, "not enough stack slots");
+	if (p == NULL || !lua_getmetatable(L, i))
+		return NULL;
+	else {
+		int res = 0;
+		luaL_getmetatable(L, tname);
+		res = lua_rawequal(L, -1, -2);
+		lua_pop(L, 2);
+		if (!res)
+			p = NULL;
+	}
+	return p;
+}
+
+#endif
 
 class Mixer;
 
@@ -44,6 +108,18 @@ using namespace std;
 using namespace movit;
 
 extern Mixer *global_mixer;
+
+Theme *get_theme_updata(lua_State* L)
+{
+	luaL_checktype(L, lua_upvalueindex(1), LUA_TLIGHTUSERDATA);
+	return (Theme *)lua_touserdata(L, lua_upvalueindex(1));
+}
+
+int ThemeMenu_set(lua_State *L)
+{
+	Theme *theme = get_theme_updata(L);
+	return theme->set_theme_menu(L);
+}
 
 namespace {
 
@@ -131,12 +207,6 @@ int wrap_lua_object_nonowned(lua_State* L, const char *class_name, Args&&... arg
 	lua_setmetatable(L, -2);
 
 	return 1;
-}
-
-Theme *get_theme_updata(lua_State* L)
-{	
-	luaL_checktype(L, lua_upvalueindex(1), LUA_TLIGHTUSERDATA);
-	return (Theme *)lua_touserdata(L, lua_upvalueindex(1));
 }
 
 Effect *get_effect(lua_State *L, int idx)
@@ -227,10 +297,34 @@ int EffectChain_add_video_input(lua_State* L)
 	if (ret == 1) {
 		Theme *theme = get_theme_updata(L);
 		LiveInputWrapper **live_input = (LiveInputWrapper **)lua_touserdata(L, -1);
-		theme->register_signal_connection(*live_input, *capture);
+		theme->register_video_signal_connection(*live_input, *capture);
 	}
 	return ret;
 }
+
+#ifdef HAVE_CEF
+int EffectChain_add_html_input(lua_State* L)
+{
+	assert(lua_gettop(L) == 2);
+	Theme *theme = get_theme_updata(L);
+	EffectChain *chain = (EffectChain *)luaL_checkudata(L, 1, "EffectChain");
+	CEFCapture **capture = (CEFCapture **)luaL_checkudata(L, 2, "HTMLInput");
+
+	// These need to be nonowned, so that the LiveInputWrapper still exists
+	// and can feed frames to the right EffectChain even if the Lua code
+	// doesn't care about the object anymore. (If we change this, we'd need
+	// to also unregister the signal connection on __gc.)
+	int ret = wrap_lua_object_nonowned<LiveInputWrapper>(
+		L, "LiveInputWrapper", theme, chain, (*capture)->get_current_pixel_format(),
+		/*override_bounce=*/false, /*deinterlace=*/false);
+	if (ret == 1) {
+		Theme *theme = get_theme_updata(L);
+		LiveInputWrapper **live_input = (LiveInputWrapper **)lua_touserdata(L, -1);
+		theme->register_html_signal_connection(*live_input, *capture);
+	}
+	return ret;
+}
+#endif
 
 int EffectChain_add_effect(lua_State* L)
 {
@@ -385,6 +479,80 @@ int VideoInput_get_signal_num(lua_State* L)
 	lua_pushnumber(L, -1 - (*video_input)->get_card_index());
 	return 1;
 }
+
+int HTMLInput_new(lua_State* L)
+{
+#ifdef HAVE_CEF
+	assert(lua_gettop(L) == 1);
+	string url = checkstdstring(L, 1);
+	int ret = wrap_lua_object_nonowned<CEFCapture>(L, "HTMLInput", url, global_flags.width, global_flags.height);
+	if (ret == 1) {
+		CEFCapture **capture = (CEFCapture **)lua_touserdata(L, -1);
+		Theme *theme = get_theme_updata(L);
+		theme->register_html_input(*capture);
+	}
+	return ret;
+#else
+	fprintf(stderr, "This version of Nageru has been compiled without CEF support.\n");
+	fprintf(stderr, "HTMLInput is not available.\n");
+	exit(1);
+#endif
+}
+
+#ifdef HAVE_CEF
+int HTMLInput_set_url(lua_State* L)
+{
+	assert(lua_gettop(L) == 2);
+	CEFCapture **video_input = (CEFCapture **)luaL_checkudata(L, 1, "HTMLInput");
+	string new_url = checkstdstring(L, 2);
+	(*video_input)->set_url(new_url);
+	return 0;
+}
+
+int HTMLInput_reload(lua_State* L)
+{
+	assert(lua_gettop(L) == 1);
+	CEFCapture **video_input = (CEFCapture **)luaL_checkudata(L, 1, "HTMLInput");
+	(*video_input)->reload();
+	return 0;
+}
+
+int HTMLInput_set_max_fps(lua_State* L)
+{
+	assert(lua_gettop(L) == 2);
+	CEFCapture **video_input = (CEFCapture **)luaL_checkudata(L, 1, "HTMLInput");
+	int max_fps = lrint(luaL_checknumber(L, 2));
+	(*video_input)->set_max_fps(max_fps);
+	return 0;
+}
+
+int HTMLInput_execute_javascript_async(lua_State* L)
+{
+	assert(lua_gettop(L) == 2);
+	CEFCapture **video_input = (CEFCapture **)luaL_checkudata(L, 1, "HTMLInput");
+	string js = checkstdstring(L, 2);
+	(*video_input)->execute_javascript_async(js);
+	return 0;
+}
+
+int HTMLInput_resize(lua_State* L)
+{
+	assert(lua_gettop(L) == 3);
+	CEFCapture **video_input = (CEFCapture **)luaL_checkudata(L, 1, "HTMLInput");
+	unsigned width = lrint(luaL_checknumber(L, 2));
+	unsigned height = lrint(luaL_checknumber(L, 3));
+	(*video_input)->resize(width, height);
+	return 0;
+}
+
+int HTMLInput_get_signal_num(lua_State* L)
+{
+	assert(lua_gettop(L) == 1);
+	CEFCapture **video_input = (CEFCapture **)luaL_checkudata(L, 1, "HTMLInput");
+	lua_pushnumber(L, -1 - (*video_input)->get_card_index());
+	return 1;
+}
+#endif
 
 int WhiteBalanceEffect_new(lua_State* L)
 {
@@ -566,6 +734,9 @@ const luaL_Reg EffectChain_funcs[] = {
 	{ "__gc", EffectChain_gc },
 	{ "add_live_input", EffectChain_add_live_input },
 	{ "add_video_input", EffectChain_add_video_input },
+#ifdef HAVE_CEF
+	{ "add_html_input", EffectChain_add_html_input },
+#endif
 	{ "add_effect", EffectChain_add_effect },
 	{ "finalize", EffectChain_finalize },
 	{ NULL, NULL }
@@ -590,6 +761,19 @@ const luaL_Reg VideoInput_funcs[] = {
 	{ "rewind", VideoInput_rewind },
 	{ "change_rate", VideoInput_change_rate },
 	{ "get_signal_num", VideoInput_get_signal_num },
+	{ NULL, NULL }
+};
+
+const luaL_Reg HTMLInput_funcs[] = {
+	{ "new", HTMLInput_new },
+#ifdef HAVE_CEF
+	{ "set_url", HTMLInput_set_url },
+	{ "reload", HTMLInput_reload },
+	{ "set_max_fps", HTMLInput_set_max_fps },
+	{ "execute_javascript_async", HTMLInput_execute_javascript_async },
+	{ "resize", HTMLInput_resize },
+	{ "get_signal_num", HTMLInput_get_signal_num },
+#endif
 	{ NULL, NULL }
 };
 
@@ -673,6 +857,11 @@ const luaL_Reg InputStateInfo_funcs[] = {
 	{ "get_is_connected", InputStateInfo_get_is_connected },
 	{ "get_frame_rate_nom", InputStateInfo_get_frame_rate_nom },
 	{ "get_frame_rate_den", InputStateInfo_get_frame_rate_den },
+	{ NULL, NULL }
+};
+
+const luaL_Reg ThemeMenu_funcs[] = {
+	{ "set", ThemeMenu_set },
 	{ NULL, NULL }
 };
 
@@ -901,36 +1090,37 @@ Theme::Theme(const string &filename, const vector<string> &search_dirs, Resource
 	L = luaL_newstate();
         luaL_openlibs(L);
 
-	register_constants();
-	register_class("EffectChain", EffectChain_funcs); 
-	register_class("LiveInputWrapper", LiveInputWrapper_funcs); 
-	register_class("ImageInput", ImageInput_funcs);
-	register_class("VideoInput", VideoInput_funcs);
-	register_class("WhiteBalanceEffect", WhiteBalanceEffect_funcs);
-	register_class("ResampleEffect", ResampleEffect_funcs);
-	register_class("PaddingEffect", PaddingEffect_funcs);
-	register_class("IntegralPaddingEffect", IntegralPaddingEffect_funcs);
-	register_class("OverlayEffect", OverlayEffect_funcs);
-	register_class("ResizeEffect", ResizeEffect_funcs);
-	register_class("MultiplyEffect", MultiplyEffect_funcs);
-	register_class("MixEffect", MixEffect_funcs);
-	register_class("InputStateInfo", InputStateInfo_funcs);
-
-	// Run script. Search through all directories until we find a file that will load
+	// Search through all directories until we find a file that will load
 	// (as in, does not return LUA_ERRFILE); then run it. We store load errors
 	// from all the attempts, and show them once we know we can't find any of them.
 	lua_settop(L, 0);
 	vector<string> errors;
 	bool success = false;
-	for (size_t i = 0; i < search_dirs.size(); ++i) {
-		string path = search_dirs[i] + "/" + filename;
+
+	vector<string> real_search_dirs;
+	if (!filename.empty() && filename[0] == '/') {
+		real_search_dirs.push_back("");
+	} else {
+		real_search_dirs = search_dirs;
+	}
+
+	string path;
+	int theme_code_ref;
+	for (const string &dir : real_search_dirs) {
+		if (dir.empty()) {
+			path = filename;
+		} else {
+			path = dir + "/" + filename;
+		}
 		int err = luaL_loadfile(L, path.c_str());
 		if (err == 0) {
-			// Success; actually call the code.
-			if (lua_pcall(L, 0, LUA_MULTRET, 0)) {
-				fprintf(stderr, "Error when running %s: %s\n", path.c_str(), lua_tostring(L, -1));
-				exit(1);
-			}
+			// Save the theme for when we're actually going to run it
+			// (we need to set up the right environment below first,
+			// and we couldn't do that before, because we didn't know the
+			// path to put in Nageru.THEME_PATH).
+			theme_code_ref = luaL_ref(L, LUA_REGISTRYINDEX);
+			assert(lua_gettop(L) == 0);
+
 			success = true;
 			break;
 		}
@@ -950,6 +1140,46 @@ Theme::Theme(const string &filename, const vector<string> &search_dirs, Resource
 	}
 	assert(lua_gettop(L) == 0);
 
+	// Make sure the path exposed to the theme (as Nageru.THEME_PATH;
+	// can be useful for locating files when talking to CEF) is absolute.
+	// In a sense, it would be nice if realpath() had a mode not to
+	// resolve symlinks, but it doesn't, so we only call it if we don't
+	// already have an absolute path (which may leave ../ elements etc.).
+	if (path[0] == '/') {
+		theme_path = path;
+	} else {
+		char *absolute_theme_path = realpath(path.c_str(), nullptr);
+		theme_path = absolute_theme_path;
+		free(absolute_theme_path);
+	}
+
+	// Set up the API we provide.
+	register_constants();
+	register_class("EffectChain", EffectChain_funcs);
+	register_class("LiveInputWrapper", LiveInputWrapper_funcs);
+	register_class("ImageInput", ImageInput_funcs);
+	register_class("VideoInput", VideoInput_funcs);
+	register_class("HTMLInput", HTMLInput_funcs);
+	register_class("WhiteBalanceEffect", WhiteBalanceEffect_funcs);
+	register_class("ResampleEffect", ResampleEffect_funcs);
+	register_class("PaddingEffect", PaddingEffect_funcs);
+	register_class("IntegralPaddingEffect", IntegralPaddingEffect_funcs);
+	register_class("OverlayEffect", OverlayEffect_funcs);
+	register_class("ResizeEffect", ResizeEffect_funcs);
+	register_class("MultiplyEffect", MultiplyEffect_funcs);
+	register_class("MixEffect", MixEffect_funcs);
+	register_class("InputStateInfo", InputStateInfo_funcs);
+	register_class("ThemeMenu", ThemeMenu_funcs);
+
+	// Now actually run the theme to get everything set up.
+	lua_rawgeti(L, LUA_REGISTRYINDEX, theme_code_ref);
+	luaL_unref(L, LUA_REGISTRYINDEX, theme_code_ref);
+	if (lua_pcall(L, 0, 0, 0)) {
+		fprintf(stderr, "Error when running %s: %s\n", path.c_str(), lua_tostring(L, -1));
+		exit(1);
+	}
+	assert(lua_gettop(L) == 0);
+
 	// Ask it for the number of channels.
 	num_channels = call_num_channels(L);
 }
@@ -962,16 +1192,24 @@ Theme::~Theme()
 void Theme::register_constants()
 {
 	// Set Nageru.VIDEO_FORMAT_BGRA = bmusb::PixelFormat_8BitBGRA, etc.
-	const vector<pair<string, int>> constants = {
+	const vector<pair<string, int>> num_constants = {
 		{ "VIDEO_FORMAT_BGRA", bmusb::PixelFormat_8BitBGRA },
 		{ "VIDEO_FORMAT_YCBCR", bmusb::PixelFormat_8BitYCbCrPlanar },
+	};
+	const vector<pair<string, string>> str_constants = {
+		{ "THEME_PATH", theme_path },
 	};
 
 	lua_newtable(L);  // t = {}
 
-	for (const pair<string, int> &constant : constants) {
+	for (const pair<string, int> &constant : num_constants) {
 		lua_pushstring(L, constant.first.c_str());
 		lua_pushinteger(L, constant.second);
+		lua_settable(L, 1);  // t[key] = value
+	}
+	for (const pair<string, string> &constant : str_constants) {
+		lua_pushstring(L, constant.first.c_str());
+		lua_pushstring(L, constant.second.c_str());
 		lua_settable(L, 1);  // t[key] = value
 	}
 
@@ -1232,4 +1470,43 @@ void Theme::channel_clicked(int preview_num)
 		exit(1);
 	}
 	assert(lua_gettop(L) == 0);
+}
+
+int Theme::set_theme_menu(lua_State *L)
+{
+	for (const Theme::MenuEntry &entry : theme_menu) {
+		luaL_unref(L, LUA_REGISTRYINDEX, entry.lua_ref);
+	}
+	theme_menu.clear();
+
+	int num_elements = lua_gettop(L);
+	for (int i = 1; i <= num_elements; ++i) {
+		lua_rawgeti(L, i, 1);
+		const string text = checkstdstring(L, -1);
+		lua_pop(L, 1);
+
+		lua_rawgeti(L, i, 2);
+		luaL_checktype(L, -1, LUA_TFUNCTION);
+		int ref = luaL_ref(L, LUA_REGISTRYINDEX);
+
+		theme_menu.push_back(MenuEntry{ text, ref });
+	}
+	lua_pop(L, num_elements);
+	assert(lua_gettop(L) == 0);
+
+	if (theme_menu_callback != nullptr) {
+		theme_menu_callback();
+	}
+
+	return 0;
+}
+
+void Theme::theme_menu_entry_clicked(int lua_ref)
+{
+	unique_lock<mutex> lock(m);
+	lua_rawgeti(L, LUA_REGISTRYINDEX, lua_ref);
+	if (lua_pcall(L, 0, 0, 0) != 0) {
+		fprintf(stderr, "error running menu callback: %s\n", lua_tostring(L, -1));
+		exit(1);
+	}
 }
