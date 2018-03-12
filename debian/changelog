@@ -1,8 +1,8 @@
-nageru (1.6.4-3breizhcamp) UNRELEASED; urgency=medium
+nageru (1.7.0-breizhcamp0) UNRELEASED; urgency=medium
 
   * Breizhcamp patches
 
- -- Yoann Dubreuil <yoann.dubreuil@gmail.com> Wed, 21 Feb 2018 11:10:00 +0100
+ -- Yoann Dubreuil <yoann.dubreuil@gmail.com>  Wed, 21 Feb 2018 11:10:00 +0100
 
 nageru (1.6.4-2build2) bionic; urgency=medium
 
