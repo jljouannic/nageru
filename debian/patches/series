@@ -9,3 +9,4 @@
 0010-Tentative-Decklink-capture-RGB-4-4-4-support.patch
 0010-Fix-a-thread-race-in-QuickSyncEncoder.-Found-by-GCC-.patch
 0011-Fix-a-thread-race-in-X264Encoder.-Found-by-GCC-TSan.patch
+0012-Fix-a-buffer-overrun-when-compiled-without-CEF.patch
