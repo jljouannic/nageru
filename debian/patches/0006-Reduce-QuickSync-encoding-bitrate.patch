@@ -4,21 +4,24 @@ Subject: Reduce QuickSync encoding bitrate
 
 Would have been better to add flags, but it's too late for tonight
 ---
- quicksync_encoder_impl.h | 4 ++--
- 1 file changed, 2 insertions(+), 2 deletions(-)
+ quicksync_encoder_impl.h | 6 +++---
+ 1 file changed, 3 insertions(+), 3 deletions(-)
 
 diff --git a/quicksync_encoder_impl.h b/quicksync_encoder_impl.h
-index bc84e0a..2135cda 100644
+index bc84e0a..5c77ec7 100644
 --- a/quicksync_encoder_impl.h
 +++ b/quicksync_encoder_impl.h
-@@ -201,8 +201,8 @@ private:
+@@ -199,10 +199,10 @@ private:
+ 	std::deque<ReferenceFrame> reference_frames;
+ 
  	// Static quality settings.
- 	static constexpr unsigned int frame_bitrate = 15000000 / 60;  // Doesn't really matter; only initial_qp does.
+-	static constexpr unsigned int frame_bitrate = 15000000 / 60;  // Doesn't really matter; only initial_qp does.
++	static constexpr unsigned int frame_bitrate = 10000000 / 60;  // Doesn't really matter; only initial_qp does.
  	static constexpr unsigned int num_ref_frames = 2;
 -	static constexpr int initial_qp = 15;
 -	static constexpr int minimal_qp = 0;
-+	static constexpr int initial_qp = 15;
-+	static constexpr int minimal_qp = 12;
++	static constexpr int initial_qp = 6;
++	static constexpr int minimal_qp = 6;
  	static constexpr int intra_period = 30;
  	static constexpr int intra_idr_period = MAX_FPS;  // About a second; more at lower frame rates. Not ideal.
  

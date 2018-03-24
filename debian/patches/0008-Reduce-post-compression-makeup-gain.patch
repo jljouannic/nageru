@@ -7,7 +7,7 @@ Subject: Reduce post compression makeup gain
  1 file changed, 2 insertions(+), 2 deletions(-)
 
 diff --git a/audio_mixer.cpp b/audio_mixer.cpp
-index 468edd5..71b7138 100644
+index 468edd5..d1600d4 100644
 --- a/audio_mixer.cpp
 +++ b/audio_mixer.cpp
 @@ -344,7 +344,7 @@ AudioMixer::BusSettings AudioMixer::get_default_bus_settings()

@@ -9,7 +9,7 @@ Subject: Option to choose SDI over HDMI by default
  3 files changed, 22 insertions(+), 7 deletions(-)
 
 diff --git a/decklink_util.cpp b/decklink_util.cpp
-index d808196..6f2a61a 100644
+index d808196..e9f6c82 100644
 --- a/decklink_util.cpp
 +++ b/decklink_util.cpp
 @@ -4,6 +4,7 @@
