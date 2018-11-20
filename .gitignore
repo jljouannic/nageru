@@ -25,3 +25,6 @@ libEGL.so
 libGLESv2.so
 swiftshader/
 locales/
+
+/.idea
+*.iml
